@@ -20,8 +20,9 @@ namespace {
         const std::string lower = to_lower_copy(std::string(value));
         if (lower == "mjpeg") return V4l2PixelFormat::mjpeg;
         if (lower == "yuyv") return V4l2PixelFormat::yuyv;
+        if (lower == "bgr24") return V4l2PixelFormat::bgr24;
 
-        throw std::runtime_error("v4l2.pixel_format must be one of: mjpeg, yuyv");
+        throw std::runtime_error("v4l2.pixel_format must be one of: mjpeg, yuyv, bgr24");
     }
 
     auto parse_inference_backend(const std::string_view value) -> InferenceBackendKind {

@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstring>
+#include <expected>
 #include <optional>
 #include <string>
 #include <utility>
@@ -13,15 +14,38 @@
 namespace rmcs_laser_guidance {
 namespace {
 
+constexpr int kWarmupFrameCount = 8;
+constexpr int kReadRetryCount   = 10;
+
 auto requested_fourcc(const V4l2PixelFormat pixel_format) -> int {
     switch (pixel_format) {
     case V4l2PixelFormat::mjpeg:
         return cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
     case V4l2PixelFormat::yuyv:
         return cv::VideoWriter::fourcc('Y', 'U', 'Y', 'V');
+    case V4l2PixelFormat::bgr24:
+        return cv::VideoWriter::fourcc('B', 'G', 'R', '3');
     default:
         return 0;
     }
+}
+
+auto try_read_capture_frame(cv::VideoCapture& capture) -> std::expected<cv::Mat, std::string> {
+    try {
+        cv::Mat image;
+        if (!capture.read(image))
+            return std::unexpected("capture.read() returned false");
+        if (image.empty())
+            return std::unexpected("capture.read() returned an empty frame");
+        return image;
+    } catch (const cv::Exception& e) {
+        return std::unexpected(std::string("OpenCV capture exception: ") + e.what());
+    }
+}
+
+auto discard_startup_frames(cv::VideoCapture& capture) -> void {
+    for (int i = 0; i < kWarmupFrameCount; ++i)
+        (void)try_read_capture_frame(capture);
 }
 
 auto maybe_device_index(const std::filesystem::path& device_path) -> std::optional<int> {
@@ -76,6 +100,8 @@ auto V4l2Capture::open() -> std::expected<V4l2NegotiatedFormat, std::string> {
         .fourcc = fourcc_string_from_int(static_cast<int>(capture_.get(cv::CAP_PROP_FOURCC))),
     };
 
+    discard_startup_frames(capture_);
+
     return negotiated_;
 }
 
@@ -83,19 +109,26 @@ auto V4l2Capture::read_frame() -> std::expected<Frame, std::string> {
     if (!capture_.isOpened())
         return std::unexpected("V4L2 device is not open");
 
-    cv::Mat image;
-    if (!capture_.read(image) || image.empty()) {
-        return std::unexpected(
-            "failed to read frame from V4L2 device " + config_.device_path.string());
+    std::string last_error;
+    for (int attempt = 0; attempt < kReadRetryCount; ++attempt) {
+        auto image = try_read_capture_frame(capture_);
+        if (!image) {
+            last_error = image.error();
+            continue;
+        }
+
+        if (config_.invert_image)
+            cv::bitwise_not(*image, *image);
+
+        return Frame{
+            .image = std::move(*image),
+            .timestamp = Clock::now(),
+        };
     }
 
-    if (config_.invert_image)
-        cv::bitwise_not(image, image);
-
-    return Frame{
-        .image = image,
-        .timestamp = Clock::now(),
-    };
+    return std::unexpected(
+        "failed to read valid frame from V4L2 device " + config_.device_path.string()
+        + " after " + std::to_string(kReadRetryCount) + " attempts; last error: " + last_error);
 }
 
 auto V4l2Capture::close() noexcept -> void {

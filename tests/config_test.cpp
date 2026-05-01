@@ -31,7 +31,7 @@ int main() {
             rmcs_laser_guidance::examples::load_record_session_options(default_config_path());
         require(default_record_options.output_root == default_video_session_root(),
             "default record output root mismatch");
-        require_near(static_cast<float>(default_record_options.duration_seconds), 30.0F, 1e-3F,
+        require_near(static_cast<float>(default_record_options.duration_seconds), 60.0F, 1e-3F,
             "default record duration mismatch");
         require(default_record_options.lighting_tag == "unspecified",
             "default record lighting tag mismatch");
@@ -64,13 +64,13 @@ int main() {
         const auto capture_profile_path =
             default_config_path().parent_path() / "capture_red_20m.yaml";
         const auto capture_profile = rmcs_laser_guidance::load_config(capture_profile_path);
-        require(capture_profile.v4l2.device_path == std::filesystem::path("/dev/video2"),
+        require(capture_profile.v4l2.device_path == std::filesystem::path("/dev/video3"),
             "capture profile device path mismatch");
         require(capture_profile.v4l2.width == 1920, "capture profile width mismatch");
         require(capture_profile.v4l2.height == 1080, "capture profile height mismatch");
         require_near(
             capture_profile.v4l2.framerate, 60.0F, 1e-3F, "capture profile framerate mismatch");
-        require(capture_profile.v4l2.pixel_format == rmcs_laser_guidance::V4l2PixelFormat::yuyv,
+        require(capture_profile.v4l2.pixel_format == rmcs_laser_guidance::V4l2PixelFormat::mjpeg,
             "capture profile pixel format mismatch");
         require(capture_profile.debug.show_window, "capture profile show_window mismatch");
         require(capture_profile.debug.draw_overlay, "capture profile draw_overlay mismatch");
@@ -78,7 +78,7 @@ int main() {
             rmcs_laser_guidance::examples::load_record_session_options(capture_profile_path);
         require(capture_record_options.output_root == std::filesystem::path("./videos"),
             "capture record output root mismatch");
-        require_near(static_cast<float>(capture_record_options.duration_seconds), 30.0F, 1e-3F,
+        require_near(static_cast<float>(capture_record_options.duration_seconds), 120.0F, 1e-3F,
             "capture record duration mismatch");
         require(capture_record_options.lighting_tag == "indoor_lab",
             "capture record lighting tag mismatch");

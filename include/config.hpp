@@ -7,6 +7,7 @@ namespace rmcs_laser_guidance {
 enum class V4l2PixelFormat {
     mjpeg = 0,
     yuyv,
+    bgr24,
 };
 
 enum class InferenceBackendKind {
