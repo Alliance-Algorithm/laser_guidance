@@ -13,7 +13,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake QUIET)
-find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio)
+find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc videoio)
 find_package(yaml-cpp REQUIRED)
 
 include(GNUInstallDirs)
@@ -26,6 +26,7 @@ else()
   message(STATUS "Configuring rmcs_laser_guidance in standalone CMake mode")
 endif()
 
+# ---- ONNX Runtime (optional) --------------------------------------------------
 if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   find_path(
     RMCS_LASER_GUIDANCE_ONNXRUNTIME_INCLUDE_DIR
@@ -57,26 +58,14 @@ if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   message(STATUS "ONNX Runtime model backend enabled")
 endif()
 
+# ---- default paths ------------------------------------------------------------
 set(default_config_path "${CMAKE_CURRENT_SOURCE_DIR}/config/default.yaml")
 set(default_sample_replay_path "${CMAKE_CURRENT_SOURCE_DIR}/test_data/sample_images")
 set(default_video_session_root "${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
-add_library(
-  ${PROJECT_NAME}_core
-  SHARED
-  src/config.cpp
-  src/debug_renderer.cpp
-  src/detector.cpp
-  src/frame_format.cpp
-  src/model_adapter.cpp
-  src/model_infer.cpp
-  src/model_runtime.cpp
-  src/pipeline.cpp
-  src/red_target_refiner.cpp
-  src/replay.cpp
-  src/training_data.cpp
-  src/v4l2_capture.cpp
-)
+# ---- core library -------------------------------------------------------------
+file(GLOB RMCS_LASER_GUIDANCE_CORE_SOURCES src/*.cpp)
+add_library(${PROJECT_NAME}_core SHARED ${RMCS_LASER_GUIDANCE_CORE_SOURCES})
 
 target_include_directories(
   ${PROJECT_NAME}_core
@@ -95,6 +84,12 @@ if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=1)
 endif()
 
+# ---- shared helpers -----------------------------------------------------------
+define_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS
+  BRIEF_DOCS "Example targets" FULL_DOCS "Accumulated example executable names")
+
+set_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS "")
+
 function(rmcs_laser_guidance_add_default_paths target_name)
   target_compile_definitions(
     ${target_name}
@@ -110,6 +105,8 @@ function(rmcs_laser_guidance_add_example target_name source_path)
   rmcs_laser_guidance_add_default_paths(${target_name})
   target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(${target_name} PRIVATE ${PROJECT_NAME}_core ${OpenCV_LIBS})
+  set_property(GLOBAL APPEND PROPERTY
+    RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS ${target_name})
 endfunction()
 
 function(rmcs_laser_guidance_add_test target_name source_path)
@@ -120,82 +117,69 @@ function(rmcs_laser_guidance_add_test target_name source_path)
   add_test(NAME ${target_name} COMMAND ${target_name})
 endfunction()
 
+# ---- examples -----------------------------------------------------------------
 enable_testing()
 
-rmcs_laser_guidance_add_example(example_offline_smoke examples/offline_smoke.cpp)
-rmcs_laser_guidance_add_example(example_v4l2_preview examples/v4l2_preview.cpp)
-rmcs_laser_guidance_add_example(example_v4l2_capture examples/v4l2_capture.cpp)
-rmcs_laser_guidance_add_example(
-  example_v4l2_record_session
-  examples/v4l2_record_session.cpp
-)
-rmcs_laser_guidance_add_example(
-  example_export_training_frames
-  examples/export_training_frames.cpp
-)
-rmcs_laser_guidance_add_example(example_replay_preview examples/replay_preview.cpp)
-rmcs_laser_guidance_add_example(
-  example_detector_benchmark
-  examples/detector_benchmark.cpp
-)
-rmcs_laser_guidance_add_example(example_model_infer examples/model_infer.cpp)
-rmcs_laser_guidance_add_example(
-  example_transcode_recorded_session
-  examples/transcode_recorded_session.cpp
+set(RMCS_LASER_GUIDANCE_EXAMPLES
+    example_offline_smoke              examples/offline_smoke.cpp
+    example_v4l2_preview               examples/v4l2_preview.cpp
+    example_v4l2_capture               examples/v4l2_capture.cpp
+    example_v4l2_record_session        examples/v4l2_record_session.cpp
+    example_export_training_frames     examples/export_training_frames.cpp
+    example_replay_preview             examples/replay_preview.cpp
+    example_detector_benchmark         examples/detector_benchmark.cpp
+    example_model_infer                examples/model_infer.cpp
+    example_transcode_recorded_session examples/transcode_recorded_session.cpp
+    example_camera_calibration         examples/camera_calibration.cpp
 )
 
-rmcs_laser_guidance_add_test(config_test tests/config_test.cpp)
-rmcs_laser_guidance_add_test(pipeline_test tests/pipeline_test.cpp)
-rmcs_laser_guidance_add_test(frame_format_test tests/frame_format_test.cpp)
-rmcs_laser_guidance_add_test(detector_test tests/detector_test.cpp)
-rmcs_laser_guidance_add_test(debug_renderer_test tests/debug_renderer_test.cpp)
-rmcs_laser_guidance_add_test(sample_images_test tests/sample_images_test.cpp)
-rmcs_laser_guidance_add_test(model_infer_test tests/model_infer_test.cpp)
-rmcs_laser_guidance_add_test(model_adapter_test tests/model_adapter_test.cpp)
-rmcs_laser_guidance_add_test(red_target_refiner_test tests/red_target_refiner_test.cpp)
-rmcs_laser_guidance_add_test(training_data_test tests/training_data_test.cpp)
+list(LENGTH RMCS_LASER_GUIDANCE_EXAMPLES _num_pairs)
+math(EXPR _last "${_num_pairs} - 1")
+foreach(_i RANGE 0 ${_last} 2)
+  math(EXPR _j "${_i} + 1")
+  list(GET RMCS_LASER_GUIDANCE_EXAMPLES ${_i} _target)
+  list(GET RMCS_LASER_GUIDANCE_EXAMPLES ${_j} _source)
+  rmcs_laser_guidance_add_example(${_target} ${_source})
+endforeach()
+
+# ---- tests --------------------------------------------------------------------
+set(RMCS_LASER_GUIDANCE_TESTS
+    config_test              tests/config_test.cpp
+    pipeline_test            tests/pipeline_test.cpp
+    frame_format_test        tests/frame_format_test.cpp
+    detector_test            tests/detector_test.cpp
+    debug_renderer_test      tests/debug_renderer_test.cpp
+    sample_images_test       tests/sample_images_test.cpp
+    model_infer_test         tests/model_infer_test.cpp
+    model_adapter_test       tests/model_adapter_test.cpp
+    red_target_refiner_test  tests/red_target_refiner_test.cpp
+    training_data_test       tests/training_data_test.cpp
+)
+
+list(LENGTH RMCS_LASER_GUIDANCE_TESTS _num_pairs)
+math(EXPR _last "${_num_pairs} - 1")
+foreach(_i RANGE 0 ${_last} 2)
+  math(EXPR _j "${_i} + 1")
+  list(GET RMCS_LASER_GUIDANCE_TESTS ${_i} _target)
+  list(GET RMCS_LASER_GUIDANCE_TESTS ${_j} _source)
+  rmcs_laser_guidance_add_test(${_target} ${_source})
+endforeach()
+
+# ---- install ------------------------------------------------------------------
+get_property(_examples GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS)
 
 install(
-  TARGETS
-    ${PROJECT_NAME}_core
-    example_offline_smoke
-    example_v4l2_preview
-    example_v4l2_capture
-    example_v4l2_record_session
-    example_export_training_frames
-    example_replay_preview
-    example_detector_benchmark
-    example_model_infer
-    example_transcode_recorded_session
+  TARGETS ${PROJECT_NAME}_core ${_examples}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
-install(
-  DIRECTORY include/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(
-  DIRECTORY config
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY models
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY test_data
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY docs
-  DESTINATION share/${PROJECT_NAME}
-)
+foreach(_dir config models test_data docs)
+  install(DIRECTORY ${_dir} DESTINATION share/${PROJECT_NAME})
+endforeach()
 
 install(
   FILES README.md AGENTS.md plan.md

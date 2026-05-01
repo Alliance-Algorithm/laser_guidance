@@ -1,0 +1,16 @@
+# Camera calibration parameters
+# Z50 HDMI + NIKKOR Z DX 18-140mm @140mm
+# Camera matrix & distortion from checkerboard calibration (Python tool)
+# Timestamp: 2026-05-01T01:31:41+0800
+
+calibration:
+  image_width: 1920
+  image_height: 1080
+  chessboard:
+    cols: 11
+    rows: 8
+    square_size_mm: 15
+  camera_matrix: [[13055.972447149546, 0.0, 993.2992783775658], [0.0, 13037.605202822904, 486.4834543706054], [0.0, 0.0, 1.0]]
+  dist_coeffs: [0.027063164378486784, 33.16121463197024, 0.005315405061627465, -0.0008957644180254777, 0.2798349217587527]
+  rms_reprojection_error: 0.0
+  num_samples: 0
