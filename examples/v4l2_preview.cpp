@@ -6,7 +6,6 @@
 
 #include "example_support.hpp"
 #include "config.hpp"
-#include "pipeline.hpp"
 #include "internal/v4l2_capture.hpp"
 
 namespace {
@@ -51,7 +50,6 @@ int main(int argc, char** argv) {
 
         print_mode(config.v4l2, *open_result);
 
-        rmcs_laser_guidance::Pipeline pipeline(config);
         while (true) {
             auto frame = capture.read_frame();
             if (!frame) {
@@ -59,13 +57,8 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            const auto observation = pipeline.process(*frame);
-
-            cv::Mat display = frame->image.clone();
-            pipeline.draw_debug_overlay(display, observation);
-
             if (config.debug.show_window) {
-                cv::imshow("rmcs_laser_guidance_v4l2", display);
+                cv::imshow("rmcs_laser_guidance_v4l2", frame->image);
                 if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
                     break;
             }

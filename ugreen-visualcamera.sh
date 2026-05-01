@@ -115,12 +115,12 @@ normalize_source_format() {
 
     case "$requested" in
         auto)
-            if v4l2-ctl --device="$dev" --list-formats-ext | grep -q "'MJPG'"; then
-                echo "mjpeg"
-            elif v4l2-ctl --device="$dev" --list-formats-ext | grep -q "'YUYV'"; then
+            if v4l2-ctl --device="$dev" --list-formats-ext | grep -q "'YUYV'"; then
                 echo "yuyv"
+            elif v4l2-ctl --device="$dev" --list-formats-ext | grep -q "'MJPG'"; then
+                echo "mjpeg"
             else
-                fail "$dev 不支持 MJPG 或 YUYV，无法为当前脚本自动选择输入格式"
+                fail "$dev 不支持 YUYV 或 MJPG，无法为当前脚本自动选择输入格式"
             fi
             ;;
         mjpeg|MJPG|mjpg)

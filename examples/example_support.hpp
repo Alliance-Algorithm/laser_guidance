@@ -45,7 +45,7 @@ inline auto default_video_session_root() -> std::filesystem::path {
 inline auto default_record_session_options() -> RecordSessionOptions {
     return RecordSessionOptions {
         .output_root      = default_video_session_root(),
-        .duration_seconds = 30.0,
+        .duration_seconds = 60.0,
         .lighting_tag     = "unspecified",
         .background_tag   = "unspecified",
         .distance_tag     = "unspecified",
@@ -95,6 +95,8 @@ inline auto pixel_format_name(const rmcs_laser_guidance::V4l2PixelFormat pixel_f
         return "mjpeg";
     case rmcs_laser_guidance::V4l2PixelFormat::yuyv:
         return "yuyv";
+    case rmcs_laser_guidance::V4l2PixelFormat::bgr24:
+        return "bgr24";
     default:
         return "unknown";
     }
