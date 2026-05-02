@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -22,8 +23,19 @@ namespace {
 
     struct DecodedDetection {
         float score = 0.0F;
+        std::int32_t class_id = -1;
         cv::Rect2f bbox { };
     };
+
+    auto format_tensor_metadata(const ModelTensorData& tensor) -> std::string {
+        std::string metadata = "name=" + tensor.name + " shape=[";
+        for (std::size_t index = 0; index < tensor.shape.size(); ++index) {
+            if (index != 0) metadata += ", ";
+            metadata += std::to_string(tensor.shape[index]);
+        }
+        metadata += "] dtype=" + tensor.element_type;
+        return metadata;
+    }
 
     auto tensor_shape_element_count(const std::vector<std::int64_t>& shape) -> std::size_t {
         std::size_t count = 1;
@@ -121,8 +133,9 @@ namespace {
 
     auto candidate_from_detection(const DecodedDetection& detection) -> ModelCandidate {
         return ModelCandidate {
-            .score = detection.score,
-            .bbox  = detection.bbox,
+            .score    = detection.score,
+            .class_id = detection.class_id,
+            .bbox     = detection.bbox,
             .center =
                 cv::Point2f {
                     detection.bbox.x + detection.bbox.width * 0.5F,
@@ -203,12 +216,19 @@ namespace {
     auto decode_raw_output(const Frame& frame, const ModelRunResult& run_result,
         const ModelTensorData& tensor) -> ModelAdapterResult {
         const auto rows_cols = reshape_rows_cols(tensor);
-        if (!rows_cols) return failure_result("YOLOv5 raw output must be [1,N,5+C] or [N,5+C]");
+        if (!rows_cols) {
+            return failure_result("YOLOv5 raw output must be [1,N,5+C] or [N,5+C] ("
+                + format_tensor_metadata(tensor) + ")");
+        }
 
         const auto [rows, cols] = *rows_cols;
-        if (cols < 6) return failure_result("YOLOv5 raw output last dimension must be at least 6");
+        if (cols < 6) {
+            return failure_result("YOLOv5 raw output last dimension must be at least 6 ("
+                + format_tensor_metadata(tensor) + ")");
+        }
         if (tensor_shape_element_count(tensor.shape) != rows * cols)
-            return failure_result("YOLOv5 raw output size does not match its shape");
+            return failure_result("YOLOv5 raw output size does not match its shape ("
+                + format_tensor_metadata(tensor) + ")");
 
         std::vector<DecodedDetection> detections;
         detections.reserve(rows);
@@ -216,8 +236,13 @@ namespace {
             const float* values    = tensor.values.data() + row * cols;
             const float objectness = values[4];
             float class_confidence = cols == 6 ? values[5] : 0.0F;
+            std::int32_t class_id  = 0;
             if (cols > 6) {
-                class_confidence = *std::max_element(values + 5, values + cols);
+                const auto class_begin = values + 5;
+                const auto class_end   = values + cols;
+                const auto best_class   = std::max_element(class_begin, class_end);
+                class_confidence        = *best_class;
+                class_id = static_cast<std::int32_t>(std::distance(class_begin, best_class));
             }
             const float score = objectness * class_confidence;
             if (score < kConfidenceThreshold) continue;
@@ -237,8 +262,9 @@ namespace {
             const auto bbox = unletterbox_box(input_bbox, run_result.transform, frame);
             if (!bbox) continue;
             detections.push_back(DecodedDetection {
-                .score = score,
-                .bbox  = *bbox,
+                .score    = score,
+                .class_id = class_id,
+                .bbox     = *bbox,
             });
         }
 
@@ -265,11 +291,15 @@ namespace {
     auto decode_nms_rows(const Frame& frame, const ModelRunResult& run_result,
         const ModelTensorData& tensor) -> ModelAdapterResult {
         const auto rows_cols = reshape_rows_cols(tensor);
-        if (!rows_cols) return failure_result("YOLOv5 NMS output must be [1,N,6/7] or [N,6/7]");
+        if (!rows_cols) {
+            return failure_result("YOLOv5 NMS output must be [1,N,6/7] or [N,6/7] ("
+                + format_tensor_metadata(tensor) + ")");
+        }
 
         const auto [rows, cols] = *rows_cols;
         if (cols != 6 && cols != 7)
-            return failure_result("YOLOv5 NMS output last dimension must be 6 or 7");
+            return failure_result("YOLOv5 NMS output last dimension must be 6 or 7 ("
+                + format_tensor_metadata(tensor) + ")");
 
         std::vector<DecodedDetection> detections;
         detections.reserve(rows);
@@ -281,6 +311,7 @@ namespace {
             float x2    = 0.0F;
             float y2    = 0.0F;
             float score = 0.0F;
+            std::int32_t class_id = 0;
 
             if (cols == 6) {
                 x1    = values[0];
@@ -288,18 +319,21 @@ namespace {
                 x2    = values[2];
                 y2    = values[3];
                 score = values[4];
+                class_id = static_cast<std::int32_t>(values[5]);
             } else if (values[5] >= 0.0F && values[5] <= 1.0F) {
                 x1    = values[1];
                 y1    = values[2];
                 x2    = values[3];
                 y2    = values[4];
                 score = values[5];
+                class_id = static_cast<std::int32_t>(values[0]);
             } else if (values[2] >= 0.0F && values[2] <= 1.0F) {
                 score = values[2];
                 x1    = values[3];
                 y1    = values[4];
                 x2    = values[5];
                 y2    = values[6];
+                class_id = static_cast<std::int32_t>(values[0]);
             } else {
                 return failure_result("YOLOv5 NMS output with 7 columns is not a supported layout");
             }
@@ -311,8 +345,9 @@ namespace {
             const auto bbox = unletterbox_box(input_bbox, run_result.transform, frame);
             if (!bbox) continue;
             detections.push_back(DecodedDetection {
-                .score = score,
-                .bbox  = *bbox,
+                .score    = score,
+                .class_id = class_id,
+                .bbox     = *bbox,
             });
         }
 
@@ -356,8 +391,9 @@ namespace {
             const auto bbox = unletterbox_box(input_bbox, run_result.transform, frame);
             if (!bbox) continue;
             detections.push_back(DecodedDetection {
-                .score = score,
-                .bbox  = *bbox,
+                .score    = score,
+                .class_id = static_cast<std::int32_t>(classes.values[index]),
+                .bbox     = *bbox,
             });
         }
 
@@ -394,8 +430,10 @@ auto adapt_yolov5_outputs(const Frame& frame, const ModelRunResult& run_result)
 
     const auto& tensor   = run_result.outputs.front();
     const auto rows_cols = reshape_rows_cols(tensor);
-    if (!rows_cols)
-        return failure_result("model output contract is unsupported for the primary output shape");
+    if (!rows_cols) {
+        return failure_result("model output contract is unsupported for the primary output shape ("
+            + format_tensor_metadata(tensor) + ")");
+    }
 
     const auto [rows, cols] = *rows_cols;
     if (rows == 0 || cols == 0) return failure_result("model output tensor is empty");

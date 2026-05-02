@@ -1,5 +1,5 @@
 v4l2:
-  device_path: /dev/video3
+  device_path: /dev/video2
   width: 1920
   height: 1080
   framerate: 60.0
@@ -16,7 +16,7 @@ inference:
 
 record:
   output_root: ./videos
-  duration_seconds: 120
+  duration_seconds: 240
   lighting_tag: indoor_lab
   background_tag: plain_wall
   distance_tag: 20m

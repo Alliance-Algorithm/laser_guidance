@@ -116,9 +116,6 @@ set(default_video_session_root "${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
 # ---- core library -------------------------------------------------------------
 file(GLOB RMCS_LASER_GUIDANCE_CORE_SOURCES src/*.cpp)
-if(NOT RMCS_LASER_GUIDANCE_WITH_TENSORRT)
-  list(REMOVE_ITEM RMCS_LASER_GUIDANCE_CORE_SOURCES src/tensorrt_engine.cpp)
-endif()
 add_library(${PROJECT_NAME}_core SHARED ${RMCS_LASER_GUIDANCE_CORE_SOURCES})
 
 target_include_directories(

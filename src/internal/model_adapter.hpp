@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -13,21 +14,27 @@ namespace rmcs_laser_guidance {
 
 struct ModelCandidate {
     float score = 0.0F;
-    cv::Rect2f bbox { };
+    std::int32_t class_id = -1;
+    cv::Rect2f bbox;
     cv::Point2f center { -1.0F, -1.0F };
 };
 
 struct ModelAdapterResult {
     bool success            = false;
     bool contract_supported = false;
-    TargetObservation observation { };
-    std::vector<ModelCandidate> candidates { };
-    std::string message { };
+    TargetObservation observation;
+    std::vector<ModelCandidate> candidates;
+    std::string message;
 };
 
 class ModelAdapter {
 public:
     virtual ~ModelAdapter() = default;
+    ModelAdapter()                                  = default;
+    ModelAdapter(const ModelAdapter&)               = delete;
+    auto operator=(const ModelAdapter&) -> ModelAdapter& = delete;
+    ModelAdapter(ModelAdapter&&) noexcept            = delete;
+    auto operator=(ModelAdapter&&) noexcept -> ModelAdapter& = delete;
 
     virtual auto adapt(const Frame& frame, const ModelRuntime& runtime) const
         -> ModelAdapterResult = 0;

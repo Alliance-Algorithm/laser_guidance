@@ -39,6 +39,81 @@ int main() {
 
         const auto frame = make_frame();
 
+        // [DECISION NEEDED: exact YOLO output tensor contract after export]
+        // Placeholder fixtures freeze the current adapter behavior until export details land.
+        const auto three_class_raw_result = rmcs_laser_guidance::adapt_yolov5_outputs(frame,
+            rmcs_laser_guidance::ModelRunResult{
+                .success = true,
+                .message = {},
+                .transform = identity_transform(),
+                .outputs = {
+                    rmcs_laser_guidance::ModelTensorData{
+                        .name = "output0",
+                        .shape = {1, 3, 8},
+                        .element_type = "float32",
+                        .values = {
+                            50.0F, 50.0F, 20.0F, 20.0F, 0.90F, 0.90F, 0.05F, 0.05F,
+                            20.0F, 20.0F, 10.0F, 10.0F, 0.80F, 0.10F, 0.90F, 0.00F,
+                            80.0F, 80.0F, 12.0F, 12.0F, 0.95F, 0.10F, 0.05F, 0.90F,
+                        },
+                    },
+                },
+            });
+        require(three_class_raw_result.success, "three-class raw adapter result should succeed");
+        require(three_class_raw_result.contract_supported,
+            "three-class raw adapter contract should be supported");
+        require(three_class_raw_result.candidates.size() == 3,
+            "three-class raw adapter candidate count mismatch");
+        require(three_class_raw_result.candidates[0].class_id == 2,
+            "three-class raw adapter top candidate should be Purple class id");
+        require(three_class_raw_result.candidates[1].class_id == 0,
+            "three-class raw adapter second candidate should be Red class id");
+        require(three_class_raw_result.candidates[2].class_id == 1,
+            "three-class raw adapter third candidate should be Blue class id");
+
+        const auto empty_output_result = rmcs_laser_guidance::adapt_yolov5_outputs(frame,
+            rmcs_laser_guidance::ModelRunResult{
+                .success = true,
+                .message = {},
+                .transform = identity_transform(),
+                .outputs = {
+                    rmcs_laser_guidance::ModelTensorData{
+                        .name = "output0",
+                        .shape = {1, 1, 8},
+                        .element_type = "float32",
+                        .values = {10.0F, 10.0F, 12.0F, 12.0F, 0.05F, 0.10F, 0.20F, 0.70F},
+                    },
+                },
+            });
+        require(empty_output_result.success, "empty output result should still succeed");
+        require(empty_output_result.contract_supported,
+            "empty output result should still support the contract");
+        require(!empty_output_result.observation.detected,
+            "empty output result should not detect");
+
+        const auto shape_mismatch_result = rmcs_laser_guidance::adapt_yolov5_outputs(frame,
+            rmcs_laser_guidance::ModelRunResult{
+                .success = true,
+                .message = {},
+                .transform = identity_transform(),
+                .outputs = {
+                    rmcs_laser_guidance::ModelTensorData{
+                        .name = "output0",
+                        .shape = {1, 3, 5},
+                        .element_type = "float32",
+                        .values = std::vector<float>(15, 0.0F),
+                    },
+                },
+            });
+        require(!shape_mismatch_result.success,
+            "shape mismatch result should fail explicitly");
+        require(!shape_mismatch_result.contract_supported,
+            "shape mismatch result should not support the contract");
+        require_contains(shape_mismatch_result.message, "model output contract is unsupported",
+            "shape mismatch failure reason");
+        require_contains(shape_mismatch_result.message, "last_dim=5",
+            "shape mismatch last dimension");
+
         const auto raw_result = rmcs_laser_guidance::adapt_yolov5_outputs(frame,
             rmcs_laser_guidance::ModelRunResult{
                 .success = true,
@@ -149,26 +224,6 @@ int main() {
         require(!unsupported_result.contract_supported,
             "unsupported adapter contract should not be supported");
         require_contains(unsupported_result.message, "unsupported", "unsupported adapter message");
-
-        const auto empty_detection_result = rmcs_laser_guidance::adapt_yolov5_outputs(frame,
-            rmcs_laser_guidance::ModelRunResult{
-                .success = true,
-                .message = {},
-                .transform = identity_transform(),
-                .outputs = {
-                    rmcs_laser_guidance::ModelTensorData{
-                        .name = "output0",
-                        .shape = {1, 1, 6},
-                        .element_type = "float32",
-                        .values = {20.0F, 20.0F, 10.0F, 10.0F, 0.05F, 0.90F},
-                    },
-                },
-            });
-        require(empty_detection_result.success, "empty detection result should still succeed");
-        require(empty_detection_result.contract_supported,
-            "empty detection result should still support the contract");
-        require(!empty_detection_result.observation.detected,
-            "empty detection result should not detect");
 
         return 0;
     } catch (const std::exception& e) {
