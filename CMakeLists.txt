@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME "Enable ONNX Runtime model backend support." OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to an ONNX Runtime installation root")
+option(RMCS_LASER_GUIDANCE_WITH_TENSORRT "Enable TensorRT engine backend support." OFF)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O2 -Wall -Wextra -Wpedantic)
@@ -58,6 +59,56 @@ if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   message(STATUS "ONNX Runtime model backend enabled")
 endif()
 
+# ---- TensorRT (optional) ------------------------------------------------------
+if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
+  find_path(
+    RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR
+    NAMES NvInfer.h NvOnnxParser.h
+    PATHS /usr/include /usr/local/include
+  )
+  find_library(
+    RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY
+    NAMES nvinfer
+    PATHS /usr/lib /usr/local/lib
+  )
+  find_library(
+    RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY
+    NAMES nvonnxparser
+    PATHS /usr/lib /usr/local/lib
+  )
+  find_library(
+    RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY
+    NAMES nvinfer_plugin
+    PATHS /usr/lib /usr/local/lib
+  )
+
+  if(NOT RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR
+     OR NOT RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY
+     OR NOT RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY
+     OR NOT RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY)
+    message(FATAL_ERROR
+      "RMCS_LASER_GUIDANCE_WITH_TENSORRT=ON requires TensorRT. "
+      "Install tensorrt or set CMAKE_PREFIX_PATH to the installation root.")
+  endif()
+
+  add_library(TensorRT::nvinfer UNKNOWN IMPORTED)
+  set_target_properties(TensorRT::nvinfer PROPERTIES
+    IMPORTED_LOCATION "${RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR}")
+
+  add_library(TensorRT::nvonnxparser UNKNOWN IMPORTED)
+  set_target_properties(TensorRT::nvonnxparser PROPERTIES
+    IMPORTED_LOCATION "${RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR}")
+
+  add_library(TensorRT::nvinfer_plugin UNKNOWN IMPORTED)
+  set_target_properties(TensorRT::nvinfer_plugin PROPERTIES
+    IMPORTED_LOCATION "${RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR}")
+
+  message(STATUS "TensorRT engine backend enabled")
+endif()
+
 # ---- default paths ------------------------------------------------------------
 set(default_config_path "${CMAKE_CURRENT_SOURCE_DIR}/config/default.yaml")
 set(default_sample_replay_path "${CMAKE_CURRENT_SOURCE_DIR}/test_data/sample_images")
@@ -65,6 +116,9 @@ set(default_video_session_root "${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
 # ---- core library -------------------------------------------------------------
 file(GLOB RMCS_LASER_GUIDANCE_CORE_SOURCES src/*.cpp)
+if(NOT RMCS_LASER_GUIDANCE_WITH_TENSORRT)
+  list(REMOVE_ITEM RMCS_LASER_GUIDANCE_CORE_SOURCES src/tensorrt_engine.cpp)
+endif()
 add_library(${PROJECT_NAME}_core SHARED ${RMCS_LASER_GUIDANCE_CORE_SOURCES})
 
 target_include_directories(
@@ -82,6 +136,12 @@ target_link_libraries(${PROJECT_NAME}_core PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LI
 if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   target_link_libraries(${PROJECT_NAME}_core PRIVATE onnxruntime::onnxruntime)
   target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=1)
+endif()
+
+if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
+  target_link_libraries(${PROJECT_NAME}_core
+    PRIVATE TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin)
+  target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
 endif()
 
 # ---- shared helpers -----------------------------------------------------------
@@ -154,6 +214,7 @@ set(RMCS_LASER_GUIDANCE_TESTS
     model_adapter_test       tests/model_adapter_test.cpp
     red_target_refiner_test  tests/red_target_refiner_test.cpp
     training_data_test       tests/training_data_test.cpp
+    freshness_queue_test     tests/freshness_queue_test.cpp
 )
 
 list(LENGTH RMCS_LASER_GUIDANCE_TESTS _num_pairs)
