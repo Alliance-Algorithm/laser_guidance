@@ -52,8 +52,8 @@ or
 - `TargetObservation` 是最小视觉结果
 - `Detector` 负责最小亮点检测
 - `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime` 与 `ModelAdapter`
-- `ModelRuntime` 负责 ONNX Runtime session、输入输出元数据读取和实际推理执行
-- `ModelAdapter` 负责把具体模型契约映射到仓库内部结果；当前优先支持单类 YOLOv5 ONNX 常见输出
+- `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
+- `ModelAdapter` 负责把具体模型契约映射到仓库内部结果；当前契约是 3 class YOLO（Red=0, Blue=1, Purple=2），Purple 命中由 `HitStateMachine` 单独判定
 - `RedTargetRefiner` 负责对红色 ROI 做灯条几何精修，给后续模型 ROI 后处理预留接缝
 - `DebugRenderer` 负责最小调试绘制
 - `Pipeline` 组合“已选视觉后端”与 `DebugRenderer`
@@ -71,6 +71,8 @@ or
   - 当前支持 `bright_spot` 与 `model`
 - `inference.model_path`
   - 指向 `.onnx` 模型文件；只有启用 ONNX Runtime 构建时才会实际加载
+
+`model` 后端还能在构建时选择额外的 TensorRT 支持，但它和 ONNX Runtime 一样都只是可选运行时；TensorRT engine 需要离线预先生成，运行时不会现场构建。
 
 ### Frame
 
@@ -95,10 +97,30 @@ or
 当前 `model` 路径的约束是：
 
 - 未启用 ONNX Runtime 时，明确报错
+- 未启用 TensorRT 时，TensorRT engine 路径不会被选中
 - `model_path` 为空或文件不存在时，明确报错
 - 模型加载成功后会执行预处理、推理和契约识别
 - 当前优先支持 YOLOv5 原始输出、单张量 NMS 输出和 split-NMS 输出
 - 输出契约未适配时，明确报错并保留输入输出元数据
+
+### Freshness Runtime Primitives
+
+运行时链路按“最新帧优先”设计，核心原语包括：
+
+- `LatestValue<T>` 队列
+  - 只保留最新值，旧值可被新值覆盖
+  - 适合 Capture→Worker、debug、record 这类不允许积压的链路
+- `StaleFramePolicy`
+  - 定义帧是否因过期被丢弃
+  - 新鲜度优先，过旧帧直接 drop，不允许排队等待
+- `RuntimeMetrics`
+  - 记录输入年龄、推理耗时、丢帧计数、覆盖计数等运行时观测值
+- `HitStateMachine`
+  - 负责 Purple HIT 状态判定
+  - 通过连续帧迟滞确认/释放，避免 Purple 检测抖动导致状态频繁翻转
+- `MockRuntime`
+  - 用于无硬件、无模型或纯软件测试场景
+  - 提供与真实 runtime 对齐的最小接口，便于验证 freshness 逻辑与状态机行为
 
 ### Replay
 
@@ -121,6 +143,25 @@ or
   - 把单个视频会话离线抽成待标注图片；当前作为备用链路保留
 - `write_export_manifest`
   - 为单次导出写出时间戳、split、blur score 等元数据
+
+### Model Contract
+
+当前 `model` 后端按 3 类目标检测契约工作：
+
+- `0 = Red`
+- `1 = Blue`
+- `2 = Purple`
+
+运行时会根据 `match_color` 做颜色过滤：
+
+- `match_color=red`
+  - 接受 `Blue` 与 `Purple`
+  - 拒绝 `Red`
+- `match_color=blue`
+  - 接受 `Red` 与 `Purple`
+  - 拒绝 `Blue`
+
+其中 `Purple` 不是单独的控制支路，而是由 `HitStateMachine` 基于连续帧迟滞判定的 HIT 状态输入。
 
 ### Examples
 
@@ -161,6 +202,13 @@ Examples 只负责运行流程，不负责视觉算法本身。
 - 输入输出 tensor 名称
 - 输入输出 tensor shape
 - 输入输出 tensor element type
+
+运行时还会暴露 freshness 相关元数据：
+
+- 输入帧年龄
+- stale drop 计数
+- 队列覆盖计数
+- HIT 状态机当前状态
 
 视频会话与可选导出链路当前还会保留：
 
