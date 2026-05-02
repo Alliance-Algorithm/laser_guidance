@@ -10,6 +10,19 @@ debug:
   show_window: true
   draw_overlay: true
 
+runtime:
+  max_input_age_ms: 25
+  max_observation_age_ms: 35
+  max_infer_fps: 60
+  warmup_frames: 30
+  engine_path: ""
+  hit_confirm_frames: 3
+  hit_release_frames: 5
+  debug_enabled: false
+  debug_max_fps: 30
+  record_enabled: false
+  record_queue_size: 16
+
 inference:
   backend: bright_spot
   model_path: ""

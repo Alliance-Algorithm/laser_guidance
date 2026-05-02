@@ -215,6 +215,9 @@ set(RMCS_LASER_GUIDANCE_TESTS
     red_target_refiner_test  tests/red_target_refiner_test.cpp
     training_data_test       tests/training_data_test.cpp
     freshness_queue_test     tests/freshness_queue_test.cpp
+    runtime_metrics_test     tests/runtime_metrics_test.cpp
+    hit_state_test           tests/hit_state_test.cpp
+    mock_runtime_test        tests/mock_runtime_test.cpp
 )
 
 list(LENGTH RMCS_LASER_GUIDANCE_TESTS _num_pairs)

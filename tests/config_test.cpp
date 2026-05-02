@@ -20,6 +20,21 @@ int main() {
         require(!default_config.v4l2.invert_image, "default invert_image mismatch");
         require(default_config.debug.show_window, "default show_window mismatch");
         require(default_config.debug.draw_overlay, "default draw_overlay mismatch");
+        require(default_config.runtime.max_input_age_ms == 25, "default max_input_age_ms mismatch");
+        require(default_config.runtime.max_observation_age_ms == 35,
+            "default max_observation_age_ms mismatch");
+        require(default_config.runtime.max_infer_fps == 60, "default max_infer_fps mismatch");
+        require(default_config.runtime.warmup_frames == 30, "default warmup_frames mismatch");
+        require(default_config.runtime.engine_path.empty(), "default engine_path mismatch");
+        require(default_config.runtime.hit_confirm_frames == 3,
+            "default hit_confirm_frames mismatch");
+        require(default_config.runtime.hit_release_frames == 5,
+            "default hit_release_frames mismatch");
+        require(!default_config.runtime.debug_enabled, "default debug_enabled mismatch");
+        require(default_config.runtime.debug_max_fps == 30, "default debug_max_fps mismatch");
+        require(!default_config.runtime.record_enabled, "default record_enabled mismatch");
+        require(default_config.runtime.record_queue_size == 16,
+            "default record_queue_size mismatch");
         require(default_config.inference.backend
                 == rmcs_laser_guidance::InferenceBackendKind::bright_spot,
             "default inference backend mismatch");
@@ -101,6 +116,18 @@ int main() {
             "debug:\n"
             "  show_window: false\n"
             "  draw_overlay: false\n"
+            "runtime:\n"
+            "  max_input_age_ms: 10\n"
+            "  max_observation_age_ms: 20\n"
+            "  max_infer_fps: 120\n"
+            "  warmup_frames: 5\n"
+            "  engine_path: /tmp/model.engine\n"
+            "  hit_confirm_frames: 7\n"
+            "  hit_release_frames: 9\n"
+            "  debug_enabled: true\n"
+            "  debug_max_fps: 15\n"
+            "  record_enabled: true\n"
+            "  record_queue_size: 8\n"
             "inference:\n"
             "  backend: model\n"
             "  model_path: models/mock_detector.onnx\n");
@@ -115,6 +142,24 @@ int main() {
         require(override_config.v4l2.invert_image, "override invert_image mismatch");
         require(!override_config.debug.show_window, "override show_window mismatch");
         require(!override_config.debug.draw_overlay, "override draw_overlay mismatch");
+        require(override_config.runtime.max_input_age_ms == 10,
+            "override max_input_age_ms mismatch");
+        require(override_config.runtime.max_observation_age_ms == 20,
+            "override max_observation_age_ms mismatch");
+        require(override_config.runtime.max_infer_fps == 120,
+            "override max_infer_fps mismatch");
+        require(override_config.runtime.warmup_frames == 5, "override warmup_frames mismatch");
+        require(override_config.runtime.engine_path == std::filesystem::path("/tmp/model.engine"),
+            "override engine_path mismatch");
+        require(override_config.runtime.hit_confirm_frames == 7,
+            "override hit_confirm_frames mismatch");
+        require(override_config.runtime.hit_release_frames == 9,
+            "override hit_release_frames mismatch");
+        require(override_config.runtime.debug_enabled, "override debug_enabled mismatch");
+        require(override_config.runtime.debug_max_fps == 15, "override debug_max_fps mismatch");
+        require(override_config.runtime.record_enabled, "override record_enabled mismatch");
+        require(override_config.runtime.record_queue_size == 8,
+            "override record_queue_size mismatch");
         require(
             override_config.inference.backend == rmcs_laser_guidance::InferenceBackendKind::model,
             "override inference backend mismatch");
@@ -182,6 +227,25 @@ int main() {
             bad_pixel_format_threw = true;
         }
         require(bad_pixel_format_threw, "bad pixel format should throw");
+
+        const auto bad_runtime_path = make_temp_path("rmcs_laser_guidance_bad_runtime");
+        write_text_file(bad_runtime_path,
+            "runtime:\n"
+            "  max_input_age_ms: 0\n"
+            "  max_observation_age_ms: 35\n"
+            "  max_infer_fps: 60\n"
+            "  warmup_frames: 30\n"
+            "  hit_confirm_frames: 3\n"
+            "  hit_release_frames: 5\n"
+            "  debug_max_fps: 30\n"
+            "  record_queue_size: 16\n");
+        bool bad_runtime_threw = false;
+        try {
+            (void)rmcs_laser_guidance::load_config(bad_runtime_path);
+        } catch (const std::exception&) {
+            bad_runtime_threw = true;
+        }
+        require(bad_runtime_threw, "bad runtime config should throw");
 
         const auto bad_backend = make_temp_path("rmcs_laser_guidance_bad_backend");
         write_text_file(bad_backend,

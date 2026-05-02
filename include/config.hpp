@@ -29,6 +29,20 @@ struct DebugConfig {
     bool draw_overlay = true;
 };
 
+struct RuntimeConfig {
+    int max_input_age_ms       = 25;
+    int max_observation_age_ms = 35;
+    int max_infer_fps          = 60;
+    int warmup_frames          = 30;
+    std::filesystem::path engine_path { };
+    int hit_confirm_frames     = 3;
+    int hit_release_frames     = 5;
+    bool debug_enabled         = false;
+    int debug_max_fps          = 30;
+    bool record_enabled        = false;
+    int record_queue_size      = 16;
+};
+
 struct InferenceConfig {
     InferenceBackendKind backend = InferenceBackendKind::bright_spot;
     std::filesystem::path model_path { };
@@ -37,6 +51,7 @@ struct InferenceConfig {
 struct Config {
     V4l2Config v4l2 { };
     DebugConfig debug { };
+    RuntimeConfig runtime { };
     InferenceConfig inference { };
 };
 

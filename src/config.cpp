@@ -56,6 +56,27 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (debug["draw_overlay"]) config.debug.draw_overlay = debug["draw_overlay"].as<bool>();
     }
 
+    if (const YAML::Node runtime = yaml["runtime"]) {
+        if (runtime["max_input_age_ms"])
+            config.runtime.max_input_age_ms = runtime["max_input_age_ms"].as<int>();
+        if (runtime["max_observation_age_ms"])
+            config.runtime.max_observation_age_ms = runtime["max_observation_age_ms"].as<int>();
+        if (runtime["max_infer_fps"])
+            config.runtime.max_infer_fps = runtime["max_infer_fps"].as<int>();
+        if (runtime["warmup_frames"])
+            config.runtime.warmup_frames = runtime["warmup_frames"].as<int>();
+        if (runtime["engine_path"])
+            config.runtime.engine_path = runtime["engine_path"].as<std::string>();
+        if (runtime["hit_confirm_frames"])
+            config.runtime.hit_confirm_frames = runtime["hit_confirm_frames"].as<int>();
+        if (runtime["hit_release_frames"])
+            config.runtime.hit_release_frames = runtime["hit_release_frames"].as<int>();
+        if (runtime["debug_enabled"]) config.runtime.debug_enabled = runtime["debug_enabled"].as<bool>();
+        if (runtime["debug_max_fps"]) config.runtime.debug_max_fps = runtime["debug_max_fps"].as<int>();
+        if (runtime["record_enabled"]) config.runtime.record_enabled = runtime["record_enabled"].as<bool>();
+        if (runtime["record_queue_size"]) config.runtime.record_queue_size = runtime["record_queue_size"].as<int>();
+    }
+
     if (const YAML::Node inference = yaml["inference"]) {
         if (inference["backend"]) {
             config.inference.backend =
@@ -70,6 +91,22 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
     if (config.v4l2.width <= 0) throw std::runtime_error("v4l2.width must be positive");
     if (config.v4l2.height <= 0) throw std::runtime_error("v4l2.height must be positive");
     if (config.v4l2.framerate <= 0.0F) throw std::runtime_error("v4l2.framerate must be positive");
+    if (config.runtime.max_input_age_ms <= 0)
+        throw std::runtime_error("runtime.max_input_age_ms must be positive");
+    if (config.runtime.max_observation_age_ms <= 0)
+        throw std::runtime_error("runtime.max_observation_age_ms must be positive");
+    if (config.runtime.max_infer_fps <= 0)
+        throw std::runtime_error("runtime.max_infer_fps must be positive");
+    if (config.runtime.warmup_frames < 0)
+        throw std::runtime_error("runtime.warmup_frames must be non-negative");
+    if (config.runtime.hit_confirm_frames <= 0)
+        throw std::runtime_error("runtime.hit_confirm_frames must be positive");
+    if (config.runtime.hit_release_frames <= 0)
+        throw std::runtime_error("runtime.hit_release_frames must be positive");
+    if (config.runtime.debug_max_fps <= 0)
+        throw std::runtime_error("runtime.debug_max_fps must be positive");
+    if (config.runtime.record_queue_size <= 0)
+        throw std::runtime_error("runtime.record_queue_size must be positive");
 
     return config;
 }
