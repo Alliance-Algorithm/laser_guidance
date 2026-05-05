@@ -58,7 +58,7 @@ namespace {
                 : session.GetOutputNameAllocated(index, allocator);
             Ort::TypeInfo type_info =
                 is_input ? session.GetInputTypeInfo(index) : session.GetOutputTypeInfo(index);
-            Ort::TensorTypeAndShapeInfo tensor_info = type_info.GetTensorTypeAndShapeInfo();
+            Ort::ConstTensorTypeAndShapeInfo tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
             ModelValueInfo value;
             value.name         = name ? name.get() : "";
