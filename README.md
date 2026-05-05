@@ -70,27 +70,23 @@ ctest --output-on-failure
 
 ## Quick Scripts
 
-`.script/` 提供一键操作，无需手敲 example 命令：
-
 ```bash
-# 选择配置文件（交互式，选一次后其他脚本自动使用）
-.script/set-config.sh
-.script/set-config.sh config/default.yaml   # 或直接指定
+make set-config      # 选择配置文件（交互式，选一次全局生效）
+make scan-camera     # 扫描可用采集卡
+make preview         # 本地预览（cv::imshow 窗口，不推流）
+make stream          # RTP 推流（自动打开 ffplay 窗口，关掉即退出）
+make stop            # 停止后台守护进程
+```
 
-# 扫描可用采集卡
-.script/scan-camera.sh
+`make stream` 无需手动开 ffplay，自动后台启动守护进程并前台显示推流画面。
 
-# 正常预览（cv::imshow 窗口）
-.script/preview.sh
+守护进程运行时，`make stream` 秒开推流（通过 `/tmp/laser_cmd` FIFO 发命令，无需重启）。
 
-# RTP 推流预览（自动关 imshow，临时开启 streaming）
-.script/stream.sh
-# 播放端：
-ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay /tmp/laser_guidance.sdp
-
-# 录制视频会话（默认 60s，输出到 videos/）
-.script/record.sh
-.script/record.sh config/capture_red_20m.yaml /tmp/out 120   # 自定义
+外部程序也可控制：
+```bash
+echo "stream on"  > /tmp/laser_cmd
+echo "stream off" > /tmp/laser_cmd
+echo "quit"       > /tmp/laser_cmd
 ```
 
 ## Examples

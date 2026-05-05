@@ -7,7 +7,7 @@ STORE="$SCRIPT_DIR/.config-path"
 
 list_configs() {
     echo "可用的配置文件:"
-    local i=1
+    i=1
     for f in "$REPO_ROOT"/config/*.yaml; do
         local name="$(basename "$f")"
         local mark=" "

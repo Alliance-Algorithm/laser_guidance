@@ -1,7 +1,12 @@
-#include <filesystem>
 #include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <filesystem>
 #include <print>
 #include <string>
+#include <string_view>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 #include <opencv2/highgui.hpp>
@@ -15,6 +20,8 @@
 
 namespace {
 
+constexpr const char* kFifoPath = "/tmp/laser_cmd";
+
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1) return argv[1];
     return rmcs_laser_guidance::examples::default_config_path();
@@ -22,11 +29,10 @@ auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
 
 auto print_mode(const rmcs_laser_guidance::V4l2Config& requested,
                 const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
-    std::println(
-        "requested device={} mode={}x{}@{} format={}",
-        requested.device_path.string(), requested.width, requested.height,
-        requested.framerate,
-        rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
+    std::println("requested device={} mode={}x{}@{} format={}",
+                 requested.device_path.string(), requested.width, requested.height,
+                 requested.framerate,
+                 rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
     std::println("actual    device={} mode={}x{}@{} format={}",
                  actual.device_path.string(), actual.width, actual.height,
                  actual.framerate, actual.fourcc);
@@ -34,9 +40,9 @@ auto print_mode(const rmcs_laser_guidance::V4l2Config& requested,
 
 auto class_color(int class_id) -> cv::Scalar {
     switch (class_id) {
-    case 0:  return { 255, 0, 255 }; // purple
-    case 1:  return { 0, 0, 255 };   // red
-    case 2:  return { 255, 0, 0 };   // blue
+    case 0:  return { 255, 0, 255 };
+    case 1:  return { 0, 0, 255 };
+    case 2:  return { 255, 0, 0 };
     default: return { 0, 255, 0 };
     }
 }
@@ -59,16 +65,11 @@ auto draw_candidates(cv::Mat& image,
         const cv::Rect r(static_cast<int>(c.bbox.x), static_cast<int>(c.bbox.y),
                          static_cast<int>(c.bbox.width), static_cast<int>(c.bbox.height));
         cv::rectangle(image, r, color, 2);
-
-        const auto label = std::format("{} {:.0f}%", class_name(c.class_id),
-                                       c.score * 100.0F);
-        cv::putText(image, label,
-                    cv::Point(r.x, std::max(r.y - 6, 16)),
+        const auto label = std::format("{} {:.0f}%", class_name(c.class_id), c.score * 100.0F);
+        cv::putText(image, label, cv::Point(r.x, std::max(r.y - 6, 16)),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
     }
-
     if (candidates.empty()) return;
-
     const auto& best = candidates.front();
     if (best.score < 0.25F) return;
     const int cx = static_cast<int>(best.center.x);
@@ -76,6 +77,39 @@ auto draw_candidates(cv::Mat& image,
     const int g = 8;
     cv::line(image, { cx - g, cy }, { cx + g, cy }, { 0, 255, 255 }, 1);
     cv::line(image, { cx, cy - g }, { cx, cy + g }, { 0, 255, 255 }, 1);
+}
+
+auto setup_fifo() -> int {
+    mkfifo(kFifoPath, 0666);
+    int fd = open(kFifoPath, O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        std::println(stderr, "Failed to open FIFO: {}", kFifoPath);
+        return -1;
+    }
+    std::println("FIFO ready: {}", kFifoPath);
+    return fd;
+}
+
+auto read_command(int fd, char* buf, int size) -> std::string_view {
+    ssize_t n = read(fd, buf, size - 1);
+    if (n <= 0) return {};
+    buf[n] = '\0';
+    return std::string_view(buf, static_cast<std::size_t>(n));
+}
+
+auto handle_command(std::string_view cmd,
+                    rmcs_laser_guidance::RtpStreamer& streamer,
+                    const rmcs_laser_guidance::Config& config,
+                    bool& running) -> void {
+    if (cmd.starts_with("stream on")) {
+        if (!streamer.is_active()) {
+            streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
+        }
+    } else if (cmd.starts_with("stream off")) {
+        streamer.stop();
+    } else if (cmd.starts_with("quit")) {
+        running = false;
+    }
 }
 
 } // namespace
@@ -98,9 +132,16 @@ int main(int argc, char** argv) {
             infer = std::make_unique<rmcs_laser_guidance::ModelInfer>(config.inference);
 
         rmcs_laser_guidance::RtpStreamer streamer(config.rtp);
-        streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
+        if (config.rtp.enabled)
+            streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
 
-        while (true) {
+        int fifo_fd = setup_fifo();
+        if (fifo_fd < 0) return 1;
+
+        char cmd_buf[256];
+        bool running = true;
+
+        while (running) {
             auto frame = capture.read_frame();
             if (!frame) {
                 std::println(stderr, "Failed to read frame: {}", frame.error());
@@ -115,17 +156,23 @@ int main(int argc, char** argv) {
                     draw_candidates(display, result.candidates);
             }
 
+            auto cmd = read_command(fifo_fd, cmd_buf, sizeof(cmd_buf));
+            if (!cmd.empty())
+                handle_command(cmd, streamer, config, running);
+
             streamer.push(display);
 
-            if (config.debug.show_window && !config.rtp.enabled) {
+            if (config.debug.show_window) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
-                if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
-                    break;
+                int key = cv::waitKey(1);
+                if (rmcs_laser_guidance::examples::should_exit_from_key(key))
+                    running = false;
             }
         }
 
         streamer.stop();
-
+        close(fifo_fd);
+        unlink(kFifoPath);
         capture.close();
         return 0;
     } catch (const std::exception& e) {

@@ -51,7 +51,8 @@
 - `docs/`
   - 补充文档。
 - `.script/`
-  - 便捷 Shell 脚本：配置选择、采集卡扫描、预览/推流/录制。
+  - 便捷 Shell 脚本：`set-config`（选配置）、`scan-camera`（扫描采集卡）、`preview`（imshow 预览）、`stream`（RTP 推流+ffplay）、`stop`（停止）。
+  - 架构：`make preview` 启动常驻进程（FIFO `/tmp/laser_cmd`），后续命令通过管道发送，运行时开关推流无需重启。
 
 ## 当前公开与内部接口
 public：

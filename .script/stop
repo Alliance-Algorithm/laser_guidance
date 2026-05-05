@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+FIFO="/tmp/laser_cmd"
+
+if [ -p "$FIFO" ]; then
+    if timeout 1 bash -c "echo 'quit' > '$FIFO'" 2>/dev/null; then
+        echo "已发送停止命令"
+    else
+        echo "守护进程未响应"
+        exit 1
+    fi
+else
+    echo "守护进程未运行"
+    exit 1
+fi

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+FIFO="/tmp/laser_cmd"
+SDP="/tmp/laser_guidance.sdp"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -14,9 +16,13 @@ if [ -z "$CONFIG" ]; then
     fi
 fi
 
-echo "=== RTP 推流预览 ==="
-echo "配置: $CONFIG"
-echo ""
+cleanup() { kill %1 2>/dev/null; rm -f "$TMP_CONFIG"; }
+trap cleanup EXIT
+
+if [ -p "$FIFO" ] && timeout 1 bash -c "echo 'stream on' > '$FIFO'" 2>/dev/null; then
+    echo "已开启推流，启动 ffplay ..."
+    exec ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"
+fi
 
 TMP_CONFIG="$(mktemp /tmp/laser_guidance_stream_XXXX.yaml)"
 python3 -c "
@@ -28,11 +34,7 @@ cfg.setdefault('debug', {})['show_window'] = False
 yaml.dump(cfg, sys.stdout, default_flow_style=False, allow_unicode=True)
 " > "$TMP_CONFIG"
 
-echo "临时配置: $TMP_CONFIG (streaming=enabled, show_window=false)"
-echo ""
-echo "播放命令: ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay /tmp/laser_guidance.sdp"
-echo ""
-
 cd "$REPO_ROOT"
-./build/example_v4l2_preview "$TMP_CONFIG"
-rm -f "$TMP_CONFIG"
+./build/example_v4l2_preview "$TMP_CONFIG" &
+sleep 1
+ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"
