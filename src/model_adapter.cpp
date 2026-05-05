@@ -234,17 +234,17 @@ namespace {
         detections.reserve(rows);
         for (std::size_t row = 0; row < rows; ++row) {
             const float* values    = tensor.values.data() + row * cols;
-            const float objectness = values[4];
-            float class_confidence = cols == 6 ? values[5] : 0.0F;
+            float score            = values[4];
             std::int32_t class_id  = 0;
-            if (cols > 6) {
+            if (cols == 6) {
+                class_id = static_cast<std::int32_t>(values[5]);
+            } else {
                 const auto class_begin = values + 5;
                 const auto class_end   = values + cols;
-                const auto best_class   = std::max_element(class_begin, class_end);
-                class_confidence        = *best_class;
+                const auto best_class  = std::max_element(class_begin, class_end);
+                score                  = score * (*best_class);
                 class_id = static_cast<std::int32_t>(std::distance(class_begin, best_class));
             }
-            const float score = objectness * class_confidence;
             if (score < kConfidenceThreshold) continue;
 
             const float center_x = values[0];
