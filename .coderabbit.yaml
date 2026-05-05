@@ -1,0 +1,28 @@
+language: zh-CN
+
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_instructions:
+    - path: "src/**"
+      instructions: "遵循项目现有代码风格（Google C++ Style，snake_case 变量/函数，PascalCase 类型，kPascalCase 编译期常量），保持 PIMPL idiom 和 .hpp/.cpp 分离"
+    - path: "include/**"
+      instructions: "保持扁平 public header 布局，只放稳定对外接口，不暴露内部实现类型"
+    - path: "tests/**"
+      instructions: "使用 require/require_near/require_contains 断言风格，测试文件名 *_test.cpp"
+    - path: "examples/**"
+      instructions: "只负责运行流程编排，不承载算法实现本身"
+
+  review:
+    focus:
+      - security
+      - performance
+      - logic
+    ignore:
+      - missing-docstring
+
+  summary:
+    enabled: true
+    auto_generate: true
