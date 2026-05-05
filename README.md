@@ -186,6 +186,7 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - 当前优先支持单类检测 ONNX 输出；契约不匹配时报告输入输出元数据和失败原因
 - 本仓库当前不负责本地训练；训练应在外部平台完成，仓库只负责数据集生成和模型接入
 - 后续如果要接 RMCS，再单独增加 bridge 和控制接口
+- `.script/` 提供便捷脚本：`set-config.sh`（选择配置）、`scan-camera.sh`（扫描采集卡）、`preview.sh`（本地预览）、`stream.sh`（RTP 推流）、`record.sh`（录制）
 
 ## Docs
 

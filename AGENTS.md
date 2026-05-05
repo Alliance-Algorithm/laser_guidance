@@ -50,6 +50,8 @@
   - 样本回放与固定测试资源。
 - `docs/`
   - 补充文档。
+- `.script/`
+  - 便捷 Shell 脚本：配置选择、采集卡扫描、预览/推流/录制。
 
 ## 当前公开与内部接口
 public：
@@ -57,7 +59,7 @@ public：
 - `include/config.hpp`
 - `include/types.hpp`
 - `include/pipeline.hpp`
-- `include/rmcs_laser_guidance.hpp`
+- `include/laser_guidance.hpp`
 
 internal：
 
