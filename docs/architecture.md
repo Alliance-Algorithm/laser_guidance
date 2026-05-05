@@ -53,7 +53,7 @@ or
 - `Detector` 负责最小亮点检测
 - `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime` 与 `ModelAdapter`
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
-- `ModelAdapter` 负责把具体模型契约映射到仓库内部结果；当前契约是 3 class YOLO（Red=0, Blue=1, Purple=2），Purple 命中由 `HitStateMachine` 单独判定
+- `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
 - `RedTargetRefiner` 负责对红色 ROI 做灯条几何精修，给后续模型 ROI 后处理预留接缝
 - `DebugRenderer` 负责最小调试绘制
 - `Pipeline` 组合“已选视觉后端”与 `DebugRenderer`
@@ -100,7 +100,7 @@ or
 - 未启用 TensorRT 时，TensorRT engine 路径不会被选中
 - `model_path` 为空或文件不存在时，明确报错
 - 模型加载成功后会执行预处理、推理和契约识别
-- 当前优先支持 YOLOv5 原始输出、单张量 NMS 输出和 split-NMS 输出
+- 当前支持 YOLO26 端到端 ONNX 输出（`[1,300,6]`）；契约不匹配时明确报错并保留输入输出元数据
 - 输出契约未适配时，明确报错并保留输入输出元数据
 
 ### Freshness Runtime Primitives
@@ -146,22 +146,14 @@ or
 
 ### Model Contract
 
-当前 `model` 后端按 3 类目标检测契约工作：
+YOLO26 端到端推理输出 `[1, 300, 6]`，每行为 `[x1, y1, x2, y2, confidence, class_id]`。
 
-- `0 = Red`
-- `1 = Blue`
-- `2 = Purple`
+3 class：
+- `0 = Purple`
+- `1 = Red`
+- `2 = Blue`
 
-运行时会根据 `match_color` 做颜色过滤：
-
-- `match_color=red`
-  - 接受 `Blue` 与 `Purple`
-  - 拒绝 `Red`
-- `match_color=blue`
-  - 接受 `Red` 与 `Purple`
-  - 拒绝 `Blue`
-
-其中 `Purple` 不是单独的控制支路，而是由 `HitStateMachine` 基于连续帧迟滞判定的 HIT 状态输入。
+取 confidence 最高且 > threshold 的候选作为最终检测结果。
 
 ### Examples
 
