@@ -169,10 +169,10 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
   录制参数也可放在 `record.*` 中；现有 CLI 位置参数仍可覆盖这些值
 - 默认样本回放位于 `test_data/sample_images`
 - 默认原始视频会话目录位于仓库根目录 `videos/`
-- `models/` 用于放置 `.onnx` 模型文件
+- `models/` 用于放置 `.onnx`、`.pt`、`.engine` 模型文件
 - public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
-- 当前默认 live 输入为 UGREEN 采集卡直读节点 `v4l2.device_path=/dev/video2`
-- 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `yuyv`
+- 当前默认 live 输入为 UGREEN 采集卡直读节点 `v4l2.device_path=/dev/video3`
+- 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
 - 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
 - `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台
   `.mp4` 现在默认写为 `H.264/avc1`
@@ -180,9 +180,9 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - 当前检测逻辑仍然是极简亮点检测实现，用于把工程链路跑通
 - 红色目标精修当前以内部 `RedTargetRefiner` 形式存在，预留给后续模型 ROI 后处理使用
 - `Pipeline` 通过 `inference.backend` 在 `bright_spot` 和 `model` 占位后端间切换
-- `inference.model_path` 现在用于定位 `.onnx` 文件，但默认构建仍不带 ONNX Runtime
-- `model` 后端当前已具备“可选 ONNX Runtime + YOLOv5 ONNX 预处理/推理 + 输出契约适配”能力
-- 当前优先支持单类 YOLOv5 常见 ONNX 输出；如果契约不匹配，会明确报告输入输出元数据和失败原因
+- `inference.model_path` 指向模型文件；启用 ONNX Runtime 需 `-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON -DONNXRUNTIME_ROOT=/usr`
+- `model` 后端当前已具备 ONNX Runtime + YOLO26 端到端推理能力，输出契约 `[1, 300, 6]` 已验证通过
+- 当前优先支持单类检测 ONNX 输出；契约不匹配时报告输入输出元数据和失败原因
 - 本仓库当前不负责本地训练；训练应在外部平台完成，仓库只负责数据集生成和模型接入
 - 后续如果要接 RMCS，再单独增加 bridge 和控制接口
 
