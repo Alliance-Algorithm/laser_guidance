@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 
             streamer.push(display);
 
-            if (config.debug.show_window) {
+            if (config.debug.show_window && !config.rtp.enabled) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
                 if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
                     break;

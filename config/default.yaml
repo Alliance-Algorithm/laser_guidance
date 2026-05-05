@@ -28,7 +28,7 @@ inference:
   model_path: models/exp.onnx
 
 streaming:
-  enabled: false
+  enabled: true
   host: "127.0.0.1"
   port: 5000
   sdp_path: "/tmp/laser_guidance.sdp"

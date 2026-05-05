@@ -51,7 +51,7 @@ auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
             pipeline.draw_debug_overlay(display, observation);
             streamer.push(display);
 
-            if (config.debug.show_window) {
+            if (config.debug.show_window && !config.rtp.enabled) {
                 cv::imshow("rmcs_laser_guidance_replay", display);
                 if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
                     break;
