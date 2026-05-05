@@ -68,6 +68,31 @@ ctest --output-on-failure
 
 在对应构建目录中执行全部自动测试。Standalone 构建对应 `build/`，ROS 工作区构建对应 `build/rmcs_laser_guidance/`。
 
+## Quick Scripts
+
+`.script/` 提供一键操作，无需手敲 example 命令：
+
+```bash
+# 选择配置文件（交互式，选一次后其他脚本自动使用）
+.script/set-config.sh
+.script/set-config.sh config/default.yaml   # 或直接指定
+
+# 扫描可用采集卡
+.script/scan-camera.sh
+
+# 正常预览（cv::imshow 窗口）
+.script/preview.sh
+
+# RTP 推流预览（自动关 imshow，临时开启 streaming）
+.script/stream.sh
+# 播放端：
+ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay /tmp/laser_guidance.sdp
+
+# 录制视频会话（默认 60s，输出到 videos/）
+.script/record.sh
+.script/record.sh config/capture_red_20m.yaml /tmp/out 120   # 自定义
+```
+
 ## Examples
 
 离线冒烟：
