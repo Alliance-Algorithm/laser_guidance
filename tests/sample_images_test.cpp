@@ -50,7 +50,8 @@ int main() {
     try {
         using namespace rmcs_laser_guidance::tests;
 
-        const auto config = rmcs_laser_guidance::load_config(default_config_path());
+        auto config = rmcs_laser_guidance::load_config(default_config_path());
+        config.inference.backend = rmcs_laser_guidance::InferenceBackendKind::bright_spot;
         rmcs_laser_guidance::Pipeline pipeline(config);
         const auto sample_root = default_sample_replay_path();
 

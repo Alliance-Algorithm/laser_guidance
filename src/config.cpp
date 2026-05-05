@@ -86,6 +86,13 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.inference.model_path = inference["model_path"].as<std::string>();
     }
 
+    if (const YAML::Node streaming = yaml["streaming"]) {
+        if (streaming["enabled"]) config.rtp.enabled = streaming["enabled"].as<bool>();
+        if (streaming["host"]) config.rtp.host = streaming["host"].as<std::string>();
+        if (streaming["port"]) config.rtp.port = streaming["port"].as<int>();
+        if (streaming["sdp_path"]) config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
+    }
+
     if (config.v4l2.device_path.empty())
         throw std::runtime_error("v4l2.device_path must not be empty");
     if (config.v4l2.width <= 0) throw std::runtime_error("v4l2.width must be positive");

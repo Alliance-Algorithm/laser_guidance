@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <print>
 
 #include "../examples/example_support.hpp"
@@ -15,7 +14,7 @@ int main() {
         require(default_config.v4l2.width == 1920, "default width mismatch");
         require(default_config.v4l2.height == 1080, "default height mismatch");
         require_near(default_config.v4l2.framerate, 60.0F, 1e-3F, "default framerate");
-        require(default_config.v4l2.pixel_format == rmcs_laser_guidance::V4l2PixelFormat::yuyv,
+        require(default_config.v4l2.pixel_format == rmcs_laser_guidance::V4l2PixelFormat::mjpeg,
             "default pixel format mismatch");
         require(!default_config.v4l2.invert_image, "default invert_image mismatch");
         require(default_config.debug.show_window, "default show_window mismatch");
@@ -36,9 +35,10 @@ int main() {
         require(default_config.runtime.record_queue_size == 16,
             "default record_queue_size mismatch");
         require(default_config.inference.backend
-                == rmcs_laser_guidance::InferenceBackendKind::bright_spot,
+                == rmcs_laser_guidance::InferenceBackendKind::model,
             "default inference backend mismatch");
-        require(default_config.inference.model_path.empty(), "default model path mismatch");
+        require(default_config.inference.model_path == std::filesystem::path("models/exp.onnx"),
+            "default model path mismatch");
         require(default_video_session_root()
                 == (default_config_path().parent_path().parent_path() / "videos"),
             "default video session root mismatch");
@@ -79,7 +79,7 @@ int main() {
         const auto capture_profile_path =
             default_config_path().parent_path() / "capture_red_20m.yaml";
         const auto capture_profile = rmcs_laser_guidance::load_config(capture_profile_path);
-        require(capture_profile.v4l2.device_path == std::filesystem::path("/dev/video3"),
+        require(capture_profile.v4l2.device_path == std::filesystem::path("/dev/video2"),
             "capture profile device path mismatch");
         require(capture_profile.v4l2.width == 1920, "capture profile width mismatch");
         require(capture_profile.v4l2.height == 1080, "capture profile height mismatch");
@@ -93,7 +93,7 @@ int main() {
             rmcs_laser_guidance::examples::load_record_session_options(capture_profile_path);
         require(capture_record_options.output_root == std::filesystem::path("./videos"),
             "capture record output root mismatch");
-        require_near(static_cast<float>(capture_record_options.duration_seconds), 120.0F, 1e-3F,
+        require_near(static_cast<float>(capture_record_options.duration_seconds), 240.0F, 1e-3F,
             "capture record duration mismatch");
         require(capture_record_options.lighting_tag == "indoor_lab",
             "capture record lighting tag mismatch");

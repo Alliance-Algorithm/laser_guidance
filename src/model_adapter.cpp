@@ -20,6 +20,7 @@ namespace {
 
     constexpr float kConfidenceThreshold = 0.25F;
     constexpr float kNmsIouThreshold     = 0.45F;
+    constexpr float kMaxAspectRatio      = 1.5F;
 
     struct DecodedDetection {
         float score = 0.0F;
@@ -150,6 +151,17 @@ namespace {
         result.success            = true;
         result.contract_supported = true;
         result.message            = std::move(message);
+
+        detections.erase(
+            std::remove_if(detections.begin(), detections.end(),
+                [](const DecodedDetection& d) {
+                    const float w = d.bbox.width;
+                    const float h = d.bbox.height;
+                    if (w <= 0.0F || h <= 0.0F) return true;
+                    const float ratio = std::max(w / h, h / w);
+                    return ratio > kMaxAspectRatio;
+                }),
+            detections.end());
 
         std::sort(detections.begin(), detections.end(),
             [](const auto& lhs, const auto& rhs) { return lhs.score > rhs.score; });

@@ -48,11 +48,19 @@ struct InferenceConfig {
     std::filesystem::path model_path { };
 };
 
+struct RtpConfig {
+    bool enabled = false;
+    std::string host = "127.0.0.1";
+    int port = 5000;
+    std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
+};
+
 struct Config {
     V4l2Config v4l2 { };
     DebugConfig debug { };
     RuntimeConfig runtime { };
     InferenceConfig inference { };
+    RtpConfig rtp { };
 };
 
 auto load_config(const std::filesystem::path& config_path) -> Config;

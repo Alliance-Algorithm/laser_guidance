@@ -26,3 +26,9 @@ runtime:
 inference:
   backend: model
   model_path: models/exp.onnx
+
+streaming:
+  enabled: false
+  host: "127.0.0.1"
+  port: 5000
+  sdp_path: "/tmp/laser_guidance.sdp"

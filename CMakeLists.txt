@@ -177,52 +177,16 @@ endfunction()
 # ---- examples -----------------------------------------------------------------
 enable_testing()
 
-set(RMCS_LASER_GUIDANCE_EXAMPLES
-    example_offline_smoke              examples/offline_smoke.cpp
-    example_v4l2_preview               examples/v4l2_preview.cpp
-    example_v4l2_capture               examples/v4l2_capture.cpp
-    example_v4l2_record_session        examples/v4l2_record_session.cpp
-    example_export_training_frames     examples/export_training_frames.cpp
-    example_replay_preview             examples/replay_preview.cpp
-    example_detector_benchmark         examples/detector_benchmark.cpp
-    example_model_infer                examples/model_infer.cpp
-    example_transcode_recorded_session examples/transcode_recorded_session.cpp
-    example_camera_calibration         examples/camera_calibration.cpp
-)
-
-list(LENGTH RMCS_LASER_GUIDANCE_EXAMPLES _num_pairs)
-math(EXPR _last "${_num_pairs} - 1")
-foreach(_i RANGE 0 ${_last} 2)
-  math(EXPR _j "${_i} + 1")
-  list(GET RMCS_LASER_GUIDANCE_EXAMPLES ${_i} _target)
-  list(GET RMCS_LASER_GUIDANCE_EXAMPLES ${_j} _source)
-  rmcs_laser_guidance_add_example(${_target} ${_source})
+file(GLOB RMCS_LASER_GUIDANCE_EXAMPLE_SOURCES examples/*.cpp)
+foreach(_source ${RMCS_LASER_GUIDANCE_EXAMPLE_SOURCES})
+  get_filename_component(_stem ${_source} NAME_WLE)
+  rmcs_laser_guidance_add_example("example_${_stem}" ${_source})
 endforeach()
 
 # ---- tests --------------------------------------------------------------------
-set(RMCS_LASER_GUIDANCE_TESTS
-    config_test              tests/config_test.cpp
-    pipeline_test            tests/pipeline_test.cpp
-    frame_format_test        tests/frame_format_test.cpp
-    detector_test            tests/detector_test.cpp
-    debug_renderer_test      tests/debug_renderer_test.cpp
-    sample_images_test       tests/sample_images_test.cpp
-    model_infer_test         tests/model_infer_test.cpp
-    model_adapter_test       tests/model_adapter_test.cpp
-    red_target_refiner_test  tests/red_target_refiner_test.cpp
-    training_data_test       tests/training_data_test.cpp
-    freshness_queue_test     tests/freshness_queue_test.cpp
-    runtime_metrics_test     tests/runtime_metrics_test.cpp
-    hit_state_test           tests/hit_state_test.cpp
-    mock_runtime_test        tests/mock_runtime_test.cpp
-)
-
-list(LENGTH RMCS_LASER_GUIDANCE_TESTS _num_pairs)
-math(EXPR _last "${_num_pairs} - 1")
-foreach(_i RANGE 0 ${_last} 2)
-  math(EXPR _j "${_i} + 1")
-  list(GET RMCS_LASER_GUIDANCE_TESTS ${_i} _target)
-  list(GET RMCS_LASER_GUIDANCE_TESTS ${_j} _source)
+file(GLOB RMCS_LASER_GUIDANCE_TEST_SOURCES tests/*_test.cpp)
+foreach(_source ${RMCS_LASER_GUIDANCE_TEST_SOURCES})
+  get_filename_component(_target ${_source} NAME_WLE)
   rmcs_laser_guidance_add_test(${_target} ${_source})
 endforeach()
 

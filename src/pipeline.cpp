@@ -39,7 +39,9 @@ namespace {
             const auto result = model_infer_.infer(frame);
             if (!result.success)
                 throw std::runtime_error(result.message);
-            return result.observation;
+            auto observation = result.observation;
+            observation.candidates = result.candidates;
+            return observation;
         }
 
     private:

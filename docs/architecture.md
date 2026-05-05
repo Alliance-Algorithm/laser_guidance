@@ -26,7 +26,9 @@ V4l2Capture
 -> selected backend
 -> Detector / ModelInfer
 -> TargetObservation
--> draw_debug_overlay() / stdout
+-> draw_debug_overlay()
+-> RtpStreamer.push()        ← 可选 RTP 推流
+-> cv::imshow()              ← 可选本地预览
 ```
 
 数据集生成链路当前是：
@@ -55,8 +57,10 @@ or
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
 - `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
 - `RedTargetRefiner` 负责对红色 ROI 做灯条几何精修，给后续模型 ROI 后处理预留接缝
-- `DebugRenderer` 负责最小调试绘制
-- `Pipeline` 组合“已选视觉后端”与 `DebugRenderer`
+- `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（当前为 standalone 模块，尚未接入主链路）
+- `DebugRenderer` 负责调试 overlay：含候选框、类别、置信度、准星；无 candidates 时回退为 contour + center
+- `Pipeline` 组合"已选视觉后端"与 `DebugRenderer`
+- `RtpStreamer` 负责将 overlay 后的画面通过 RTP 推流输出（ffmpeg 子进程），供 VLC 等外部播放器接收
 - `V4l2Capture` 负责从 `/dev/videoN` 读取 UVC 图像
 
 ## 模块职责
@@ -73,6 +77,19 @@ or
   - 指向 `.onnx` 模型文件；只有启用 ONNX Runtime 构建时才会实际加载
 
 `model` 后端还能在构建时选择额外的 TensorRT 支持，但它和 ONNX Runtime 一样都只是可选运行时；TensorRT engine 需要离线预先生成，运行时不会现场构建。
+
+串流输出配置：
+
+- `streaming.enabled`
+  - 启用/禁用 RTP 推流
+- `streaming.host`
+  - 接收端 IP 地址
+- `streaming.port`
+  - RTP 端口
+- `streaming.sdp_path`
+  - 自动生成的 SDP 描述文件路径
+
+RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可使用。
 
 ### Frame
 
@@ -128,6 +145,23 @@ or
   - 把 `Frame` 录成 `PNG + manifest.csv`
 - `load_replay_dataset`
   - 从样本或录帧目录回放 `Frame`
+
+### EkfTracker
+
+- `EkfTracker`
+  - 常加速度模型 EKF，6 维状态 `[x, y, vx, vy, ax, ay]`
+  - 观测为 `TargetObservation.center` 位置
+  - 支持 predict-only（丢帧时状态传播）和 update（检测帧校正）
+  - `max_missed_frames` 判定目标丢失后自动重置
+  - 当前为 standalone internal 模块，尚未接入 Pipeline 主链路
+
+### RTP Streaming
+
+- `RtpStreamer`
+  - 将 overlay 后的 BGR 帧通过 ffmpeg 子进程编码为 H.264/RTP 推流
+  - 零 ROS 依赖，纯 C++ standalone 构建即可使用
+  - 自动生成 SDP 文件供 VLC 等 RTP 播放器接收
+  - 与 `cv::imshow` 本地预览并行工作，互不阻塞
 
 ### Training Data
 

@@ -171,8 +171,10 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - 默认原始视频会话目录位于仓库根目录 `videos/`
 - `models/` 用于放置 `.onnx`、`.pt`、`.engine` 模型文件
 - public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
-- 当前默认 live 输入为 UGREEN 采集卡直读节点 `v4l2.device_path=/dev/video3`
+- 当前默认 live 输入为 UGREEN 采集卡直读节点 `v4l2.device_path=/dev/video2`
 - 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
+- RTP 视频推流通过 `streaming` 配置段启用，基于系统 ffmpeg（零 ROS 依赖），播放端用 VLC 打开 SDP
+- EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块，待接入主链路
 - 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
 - `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台
   `.mp4` 现在默认写为 `H.264/avc1`

@@ -10,6 +10,7 @@
 #include "example_support.hpp"
 #include "config.hpp"
 #include "internal/model_infer.hpp"
+#include "internal/rtp_streamer.hpp"
 #include "internal/v4l2_capture.hpp"
 
 namespace {
@@ -96,6 +97,9 @@ int main(int argc, char** argv) {
         if (config.inference.backend == rmcs_laser_guidance::InferenceBackendKind::model)
             infer = std::make_unique<rmcs_laser_guidance::ModelInfer>(config.inference);
 
+        rmcs_laser_guidance::RtpStreamer streamer(config.rtp);
+        streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
+
         while (true) {
             auto frame = capture.read_frame();
             if (!frame) {
@@ -111,12 +115,16 @@ int main(int argc, char** argv) {
                     draw_candidates(display, result.candidates);
             }
 
+            streamer.push(display);
+
             if (config.debug.show_window) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
                 if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
                     break;
             }
         }
+
+        streamer.stop();
 
         capture.close();
         return 0;

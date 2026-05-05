@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <print>
 
 #include "config.hpp"
@@ -16,6 +15,7 @@ int main() {
         const auto frame = rmcs_laser_guidance::load_replay_frame(dataset, dataset.frames.front());
         auto config = rmcs_laser_guidance::load_config(default_config_path());
         config.inference.backend = rmcs_laser_guidance::InferenceBackendKind::model;
+        config.inference.model_path.clear();
 
         rmcs_laser_guidance::ModelInfer default_infer(config.inference);
         const auto default_result = default_infer.infer(frame);
