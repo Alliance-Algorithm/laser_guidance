@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STORE="$SCRIPT_DIR/.config-path"
+
+CONFIG="${1:-}"
+if [ -z "$CONFIG" ]; then
+    if [ -f "$STORE" ]; then
+        CONFIG="$(cat "$STORE")"
+    else
+        CONFIG="$REPO_ROOT/config/default.yaml"
+    fi
+fi
+
+OUTPUT="${2:-$REPO_ROOT/videos}"
+DURATION="${3:-60}"
+
+echo "=== 视频会话录制 ==="
+echo "配置: $CONFIG"
+echo "输出: $OUTPUT"
+echo "时长: ${DURATION}s"
+echo ""
+
+cd "$REPO_ROOT"
+./build/example_v4l2_record_session "$CONFIG" "$OUTPUT" "$DURATION"
