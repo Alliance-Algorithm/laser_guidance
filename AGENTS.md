@@ -12,7 +12,7 @@
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
 - `Config` / `Frame` / `TargetObservation` / `Pipeline`
-- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `RedTargetRefiner` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture`
+- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture`
 - 自动测试与人工运行入口
 
 当前明确**不是**闭环控制系统，不包含：
@@ -68,7 +68,6 @@ internal：
 - `src/internal/model_runtime.hpp`
 - `src/internal/model_adapter.hpp`
 - `src/internal/model_infer.hpp`
-- `src/internal/red_target_refiner.hpp`
 - `src/internal/training_data.hpp`
 - `src/internal/v4l2_capture.hpp`
 
@@ -143,7 +142,7 @@ example_replay_preview
 ### 当前构建关系
 ```text
 rmcs_laser_guidance_core
--> config / detector / model_runtime / model_adapter / red_target_refiner / training_data / renderer / replay / v4l2 / pipeline
+-> config / detector / model_runtime / model_adapter / training_data / renderer / replay / v4l2 / pipeline
 
 example_*
 -> rmcs_laser_guidance_core

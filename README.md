@@ -180,7 +180,6 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
   `.mp4` 现在默认写为 `H.264/avc1`
 - 抽帧导出会生成 `images/train|val|test` 和按会话区分的 `export_manifest.csv`
 - 当前检测逻辑仍然是极简亮点检测实现，用于把工程链路跑通
-- 红色目标精修当前以内部 `RedTargetRefiner` 形式存在，预留给后续模型 ROI 后处理使用
 - `Pipeline` 通过 `inference.backend` 在 `bright_spot` 和 `model` 占位后端间切换
 - `inference.model_path` 指向模型文件；启用 ONNX Runtime 需 `-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON -DONNXRUNTIME_ROOT=/usr`
 - `model` 后端当前已具备 ONNX Runtime + YOLO26 端到端推理能力，输出契约 `[1, 300, 6]` 已验证通过

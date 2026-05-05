@@ -56,7 +56,6 @@ or
 - `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime` 与 `ModelAdapter`
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
 - `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
-- `RedTargetRefiner` 负责对红色 ROI 做灯条几何精修，给后续模型 ROI 后处理预留接缝
 - `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（当前为 standalone 模块，尚未接入主链路）
 - `DebugRenderer` 负责调试 overlay：含候选框、类别、置信度、准星；无 candidates 时回退为 contour + center
 - `Pipeline` 组合"已选视觉后端"与 `DebugRenderer`
