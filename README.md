@@ -1,6 +1,6 @@
-# rmcs_laser_guidance
+# laser_guidance
 
-`rmcs_laser_guidance` 是一个最小激光视觉引导骨架，当前阶段只覆盖：
+`laser_guidance` 是一个最小激光视觉引导骨架，当前阶段只覆盖：
 
 - `V4L2/UVC` 采集卡取图
 - 原始视频会话录制与可选离线抽帧导出
