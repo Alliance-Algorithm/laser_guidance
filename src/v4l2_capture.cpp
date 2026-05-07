@@ -14,7 +14,7 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-constexpr int kWarmupFrameCount = 8;
+constexpr int kWarmupFrameCount = 2;
 constexpr int kReadRetryCount   = 10;
 
 auto requested_fourcc(const V4l2PixelFormat pixel_format) -> int {
