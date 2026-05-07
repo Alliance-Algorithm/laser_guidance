@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
+#include <future>
 #include <print>
 #include <string>
 #include <string_view>
@@ -130,12 +131,17 @@ int main(int argc, char** argv) {
         print_mode(config.v4l2, *open_result);
 
         std::unique_ptr<rmcs_laser_guidance::ModelInfer> infer;
-        if (config.inference.backend != rmcs_laser_guidance::InferenceBackendKind::bright_spot)
-            infer = std::make_unique<rmcs_laser_guidance::ModelInfer>(config.inference);
+        std::future<void> model_ready;
+        if (config.inference.backend != rmcs_laser_guidance::InferenceBackendKind::bright_spot) {
+            model_ready = std::async(std::launch::async, [&] {
+                infer = std::make_unique<rmcs_laser_guidance::ModelInfer>(config.inference);
+            });
+        }
 
         rmcs_laser_guidance::RtpStreamer streamer(config.rtp);
         if (config.rtp.enabled)
-            streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
+            streamer.start(open_result->width, open_result->height,
+                           static_cast<float>(open_result->framerate));
 
         rmcs_laser_guidance::UdpSender udp(config.udp);
 
@@ -174,6 +180,11 @@ int main(int argc, char** argv) {
                         frame_cnt = 0;
                     }
                 }
+            } else if (model_ready.valid()) {
+                if (model_ready.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    model_ready.get();
+                    std::println(stderr, "Model loaded, starting inference overlay");
+                }
             }
 
             udp.send(observation);
@@ -188,6 +199,8 @@ int main(int argc, char** argv) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
                 int key = cv::waitKey(1);
                 if (rmcs_laser_guidance::examples::should_exit_from_key(key))
+                    running = false;
+                if (cv::getWindowProperty("rmcs_laser_guidance_v4l2", cv::WND_PROP_VISIBLE) < 1)
                     running = false;
             }
         }

@@ -18,5 +18,16 @@ echo "=== 正常预览 (imshow) ==="
 echo "配置: $CONFIG"
 echo ""
 
+TMP_CONFIG="$(mktemp /tmp/laser_guidance_preview_XXXX.yaml)"
+cleanup() { rm -f "$TMP_CONFIG"; }
+trap cleanup EXIT
+python3 -c "
+import yaml, sys
+with open('$CONFIG') as f:
+    cfg = yaml.safe_load(f)
+cfg.setdefault('streaming', {})['enabled'] = False
+cfg.setdefault('debug', {})['show_window'] = True
+yaml.dump(cfg, sys.stdout, default_flow_style=False, allow_unicode=True)
+" > "$TMP_CONFIG"
 cd "$REPO_ROOT"
-./build/example_v4l2_preview "$CONFIG"
+./build/example_v4l2_preview "$TMP_CONFIG"
