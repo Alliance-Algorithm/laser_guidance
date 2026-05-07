@@ -19,6 +19,9 @@
 #include "internal/model_infer.hpp"
 #include "internal/rtp_streamer.hpp"
 #include "internal/udp_sender.hpp"
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
 #include "internal/v4l2_capture.hpp"
 
 namespace {
@@ -145,6 +148,34 @@ int main(int argc, char** argv) {
 
         rmcs_laser_guidance::UdpSender udp(config.udp);
 
+        constexpr const char* kVideoPath = "/tmp/laser_frame";
+        unlink(kVideoPath);
+        int video_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (video_sock < 0) {
+            std::println(stderr, "[video] socket: {}", std::strerror(errno));
+        } else {
+            sockaddr_un video_addr{};
+            video_addr.sun_family = AF_UNIX;
+            std::strncpy(video_addr.sun_path, kVideoPath, sizeof(video_addr.sun_path) - 1);
+            if (bind(video_sock, reinterpret_cast<sockaddr*>(&video_addr), sizeof(video_addr)) < 0) {
+                std::println(stderr, "[video] bind: {}", std::strerror(errno));
+                close(video_sock);
+                video_sock = -1;
+            } else if (listen(video_sock, 1) < 0) {
+                std::println(stderr, "[video] listen: {}", std::strerror(errno));
+                close(video_sock);
+                video_sock = -1;
+            } else {
+                fcntl(video_sock, F_SETFL, O_NONBLOCK);
+                std::println("[video] listening on {}", kVideoPath);
+            }
+        }
+
+        int video_client = -1;
+        if (video_sock >= 0) {
+            std::println("[video] waiting for client...");
+        }
+
         int fifo_fd = setup_fifo();
         if (fifo_fd < 0) return 1;
 
@@ -195,6 +226,44 @@ int main(int argc, char** argv) {
 
             streamer.push(display);
 
+            if (video_client >= 0 && !frame->image.empty()) {
+                const std::uint32_t w = static_cast<std::uint32_t>(frame->image.cols);
+                const std::uint32_t h = static_cast<std::uint32_t>(frame->image.rows);
+
+                std::uint32_t sent = 0;
+                write(video_client, &w, 4);
+                write(video_client, &h, 4);
+
+                if (frame->image.isContinuous()) {
+                    sent = write(video_client, frame->image.data, w * h * 3);
+                } else {
+                    for (int row = 0; row < frame->image.rows; ++row) {
+                        const auto n = write(video_client, frame->image.ptr(row), w * 3);
+                        if (n > 0) sent += n;
+                        else { sent = n; break; }
+                    }
+                }
+
+                if (sent < 0) {
+                    std::println(stderr, "[video] client disconnected");
+                    close(video_client);
+                    video_client = -1;
+                } else {
+                    static unsigned frame_count = 0;
+                    if (++frame_count % 60 == 0)
+                        std::println(stderr, "[video] sent {} frames, last {}x{} {:.1f}MB",
+                                     frame_count, w, h,
+                                     static_cast<double>(w * h * 3) / (1024 * 1024));
+                }
+            }
+
+            if (video_client < 0 && video_sock >= 0) {
+                video_client = accept(video_sock, nullptr, nullptr);
+                if (video_client >= 0) {
+                    std::println("[video] client connected");
+                }
+            }
+
             if (config.debug.show_window) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
                 int key = cv::waitKey(1);
@@ -208,6 +277,8 @@ int main(int argc, char** argv) {
         streamer.stop();
         close(fifo_fd);
         unlink(kFifoPath);
+        if (video_client >= 0) close(video_client);
+        if (video_sock >= 0) close(video_sock);
         capture.close();
         return 0;
     } catch (const std::exception& e) {
