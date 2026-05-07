@@ -107,6 +107,11 @@ if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
     INTERFACE_INCLUDE_DIRECTORIES "${RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR}")
 
   message(STATUS "TensorRT engine backend enabled")
+
+  find_library(RMCS_LASER_GUIDANCE_CUDA_LIBRARY NAMES cudart
+    PATHS /opt/cuda/lib64 /opt/cuda/targets/x86_64-linux/lib)
+  find_library(RMCS_LASER_GUIDANCE_CUDA_RT_LIBRARY NAMES cuda
+    PATHS /opt/cuda/lib64 /opt/cuda/targets/x86_64-linux/lib/stubs)
 endif()
 
 # ---- default paths ------------------------------------------------------------
@@ -137,7 +142,8 @@ endif()
 
 if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
   target_link_libraries(${PROJECT_NAME}_core
-    PRIVATE TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin)
+    PRIVATE TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
+    PRIVATE ${RMCS_LASER_GUIDANCE_CUDA_LIBRARY} ${RMCS_LASER_GUIDANCE_CUDA_RT_LIBRARY})
   target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
 endif()
 

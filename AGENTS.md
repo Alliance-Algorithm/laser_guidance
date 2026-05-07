@@ -12,7 +12,7 @@
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
 - `Config` / `Frame` / `TargetObservation` / `Pipeline`
-- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture`
+- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker`
 - 自动测试与人工运行入口
 
 当前明确**不是**闭环控制系统，不包含：

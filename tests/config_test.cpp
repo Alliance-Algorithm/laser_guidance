@@ -9,7 +9,7 @@ int main() {
         using namespace rmcs_laser_guidance::tests;
 
         const auto default_config = rmcs_laser_guidance::load_config(default_config_path());
-        require(default_config.v4l2.device_path == std::filesystem::path("/dev/video2"),
+        require(default_config.v4l2.device_path == std::filesystem::path("/dev/video1"),
             "default device path mismatch");
         require(default_config.v4l2.width == 1920, "default width mismatch");
         require(default_config.v4l2.height == 1080, "default height mismatch");
@@ -24,7 +24,8 @@ int main() {
             "default max_observation_age_ms mismatch");
         require(default_config.runtime.max_infer_fps == 60, "default max_infer_fps mismatch");
         require(default_config.runtime.warmup_frames == 30, "default warmup_frames mismatch");
-        require(default_config.runtime.engine_path.empty(), "default engine_path mismatch");
+        require(default_config.runtime.engine_path == std::filesystem::path("models/exp.engine"),
+            "default engine_path mismatch");
         require(default_config.runtime.hit_confirm_frames == 3,
             "default hit_confirm_frames mismatch");
         require(default_config.runtime.hit_release_frames == 5,
@@ -35,9 +36,9 @@ int main() {
         require(default_config.runtime.record_queue_size == 16,
             "default record_queue_size mismatch");
         require(default_config.inference.backend
-                == rmcs_laser_guidance::InferenceBackendKind::model,
+                == rmcs_laser_guidance::InferenceBackendKind::tensorrt,
             "default inference backend mismatch");
-        require(default_config.inference.model_path == std::filesystem::path("models/exp.onnx"),
+        require(default_config.inference.model_path == std::filesystem::path("models/exp.engine"),
             "default model path mismatch");
         require(default_video_session_root()
                 == (default_config_path().parent_path().parent_path() / "videos"),

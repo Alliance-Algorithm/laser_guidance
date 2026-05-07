@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdio>
+#include <memory>
 #include <string>
 
 #include <opencv2/core/mat.hpp>
@@ -23,10 +23,8 @@ public:
     [[nodiscard]] auto is_active() const -> bool;
 
 private:
-    auto launch_ffmpeg(int width, int height, float framerate) -> bool;
-
-    RtpConfig config_;
-    std::FILE* pipe_ = nullptr;
+    struct Details;
+    std::unique_ptr<Details> details_;
 };
 
 }

@@ -2,14 +2,15 @@
 set -euo pipefail
 FIFO="/tmp/laser_cmd"
 
-if [ -p "$FIFO" ]; then
-    if timeout 1 bash -c "echo 'quit' > '$FIFO'" 2>/dev/null; then
-        echo "已发送停止命令"
-    else
-        echo "守护进程未响应"
-        exit 1
+if pgrep -f "example_v4l2_preview" >/dev/null 2>&1; then
+    if [ -p "$FIFO" ]; then
+        timeout 1 bash -c "echo 'quit' > '$FIFO'" 2>/dev/null || true
     fi
+    sleep 1
+    pkill -f "example_v4l2_preview" 2>/dev/null || true
+    rm -f "$FIFO"
+    echo "已停止"
 else
+    rm -f "$FIFO"
     echo "守护进程未运行"
-    exit 1
 fi

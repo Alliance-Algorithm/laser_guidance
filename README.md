@@ -192,22 +192,22 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - 默认原始视频会话目录位于仓库根目录 `videos/`
 - `models/` 用于放置 `.onnx`、`.pt`、`.engine` 模型文件
 - public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
-- 当前默认 live 输入为 UGREEN 采集卡直读节点 `v4l2.device_path=/dev/video2`
+- 当前默认采集卡通过 `make scan-camera` 扫描，设备号可能漂移；修改 `v4l2.device_path`
 - 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
-- RTP 视频推流通过 `streaming` 配置段启用，基于系统 ffmpeg（零 ROS 依赖），播放端用 VLC 打开 SDP
-- EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块，待接入主链路
+- RTP 视频推流：`make stream` 后台 daemon + ffplay 窗口，`streaming` 配置段控制
+- TensorRT GPU 推理（0.91ms）可选，通过 `inference.backend: tensorrt` 切换；ONNX 回退保留
+- EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块
 - 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
 - `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台
   `.mp4` 现在默认写为 `H.264/avc1`
 - 抽帧导出会生成 `images/train|val|test` 和按会话区分的 `export_manifest.csv`
 - 当前检测逻辑仍然是极简亮点检测实现，用于把工程链路跑通
-- `Pipeline` 通过 `inference.backend` 在 `bright_spot` 和 `model` 占位后端间切换
-- `inference.model_path` 指向模型文件；启用 ONNX Runtime 需 `-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON -DONNXRUNTIME_ROOT=/usr`
-- `model` 后端当前已具备 ONNX Runtime + YOLO26 端到端推理能力，输出契约 `[1, 300, 6]` 已验证通过
-- 当前优先支持单类检测 ONNX 输出；契约不匹配时报告输入输出元数据和失败原因
+- `Pipeline` 通过 `inference.backend` 在 `bright_spot`、`model`（ONNX）、`tensorrt`（GPU）间切换
+- `inference.model_path` 指向模型文件；TensorRT 额外需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON`
+- `model`/`tensorrt` 后端支持 YOLO26 端到端推理，输出契约 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库当前不负责本地训练；训练应在外部平台完成，仓库只负责数据集生成和模型接入
 - 后续如果要接 RMCS，再单独增加 bridge 和控制接口
-- `.script/` 提供便捷脚本：`set-config.sh`（选择配置）、`scan-camera.sh`（扫描采集卡）、`preview.sh`（本地预览）、`stream.sh`（RTP 推流）、`record.sh`（录制）
+- `.script/` 提供便捷脚本：`set-config`、`scan-camera`、`preview`、`stream`、`stop`
 
 ## Docs
 

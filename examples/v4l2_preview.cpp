@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -16,6 +17,7 @@
 #include "config.hpp"
 #include "internal/model_infer.hpp"
 #include "internal/rtp_streamer.hpp"
+#include "internal/udp_sender.hpp"
 #include "internal/v4l2_capture.hpp"
 
 namespace {
@@ -128,12 +130,14 @@ int main(int argc, char** argv) {
         print_mode(config.v4l2, *open_result);
 
         std::unique_ptr<rmcs_laser_guidance::ModelInfer> infer;
-        if (config.inference.backend == rmcs_laser_guidance::InferenceBackendKind::model)
+        if (config.inference.backend != rmcs_laser_guidance::InferenceBackendKind::bright_spot)
             infer = std::make_unique<rmcs_laser_guidance::ModelInfer>(config.inference);
 
         rmcs_laser_guidance::RtpStreamer streamer(config.rtp);
         if (config.rtp.enabled)
             streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
+
+        rmcs_laser_guidance::UdpSender udp(config.udp);
 
         int fifo_fd = setup_fifo();
         if (fifo_fd < 0) return 1;
@@ -150,11 +154,29 @@ int main(int argc, char** argv) {
 
             cv::Mat display = frame->image.clone();
 
+            rmcs_laser_guidance::TargetObservation observation;
             if (infer) {
+                const auto t0 = std::chrono::steady_clock::now();
                 const auto result = infer->infer(*frame);
+                const auto t1 = std::chrono::steady_clock::now();
+                observation = result.observation;
+                observation.candidates = result.candidates;
                 if (result.success)
                     draw_candidates(display, result.candidates);
+                if (running && result.success) {
+                    static int frame_cnt = 0;
+                    static double total_us = 0;
+                    total_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
+                    if (++frame_cnt % 60 == 0) {
+                        std::println(stderr, "infer: {:.0f} us avg over {} frames",
+                                     total_us / frame_cnt, frame_cnt);
+                        total_us = 0;
+                        frame_cnt = 0;
+                    }
+                }
             }
+
+            udp.send(observation);
 
             auto cmd = read_command(fifo_fd, cmd_buf, sizeof(cmd_buf));
             if (!cmd.empty())

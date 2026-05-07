@@ -29,8 +29,9 @@ namespace {
         const std::string lower = to_lower_copy(std::string(value));
         if (lower == "bright_spot") return InferenceBackendKind::bright_spot;
         if (lower == "model") return InferenceBackendKind::model;
+        if (lower == "tensorrt") return InferenceBackendKind::tensorrt;
 
-        throw std::runtime_error("inference.backend must be one of: bright_spot, model");
+        throw std::runtime_error("inference.backend must be one of: bright_spot, model, tensorrt");
     }
 
 } // namespace
@@ -91,6 +92,13 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (streaming["host"]) config.rtp.host = streaming["host"].as<std::string>();
         if (streaming["port"]) config.rtp.port = streaming["port"].as<int>();
         if (streaming["sdp_path"]) config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
+        if (streaming["encoder"]) config.rtp.encoder = streaming["encoder"].as<std::string>();
+    }
+
+    if (const YAML::Node udp_cfg = yaml["udp"]) {
+        if (udp_cfg["enabled"]) config.udp.enabled = udp_cfg["enabled"].as<bool>();
+        if (udp_cfg["host"]) config.udp.host = udp_cfg["host"].as<std::string>();
+        if (udp_cfg["port"]) config.udp.port = udp_cfg["port"].as<int>();
     }
 
     if (config.v4l2.device_path.empty())

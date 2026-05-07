@@ -13,6 +13,7 @@ enum class V4l2PixelFormat {
 enum class InferenceBackendKind {
     bright_spot = 0,
     model,
+    tensorrt,
 };
 
 struct V4l2Config {
@@ -51,8 +52,15 @@ struct InferenceConfig {
 struct RtpConfig {
     bool enabled = false;
     std::string host = "127.0.0.1";
-    int port = 5000;
+    int port = 5002;
     std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
+    std::string encoder = "h264_nvenc";
+};
+
+struct UdpConfig {
+    bool enabled = false;
+    std::string host = "127.0.0.1";
+    int port = 5001;
 };
 
 struct Config {
@@ -61,6 +69,7 @@ struct Config {
     RuntimeConfig runtime { };
     InferenceConfig inference { };
     RtpConfig rtp { };
+    UdpConfig udp { };
 };
 
 auto load_config(const std::filesystem::path& config_path) -> Config;

@@ -2,28 +2,16 @@
 set -euo pipefail
 FIFO="/tmp/laser_cmd"
 SDP="/tmp/laser_guidance.sdp"
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STORE="$SCRIPT_DIR/.config-path"
-
 CONFIG="${1:-}"
-if [ -z "$CONFIG" ]; then
-    if [ -f "$STORE" ]; then
-        CONFIG="$(cat "$STORE")"
-    else
-        CONFIG="$REPO_ROOT/config/default.yaml"
-    fi
-fi
-
+[ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/default.yaml")"
 cleanup() { kill %1 2>/dev/null; rm -f "$TMP_CONFIG"; }
 trap cleanup EXIT
-
 if [ -p "$FIFO" ] && timeout 1 bash -c "echo 'stream on' > '$FIFO'" 2>/dev/null; then
-    echo "已开启推流，启动 ffplay ..."
-    exec ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"
+    exec ffplay -loglevel quiet -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"
 fi
-
 TMP_CONFIG="$(mktemp /tmp/laser_guidance_stream_XXXX.yaml)"
 python3 -c "
 import yaml, sys
@@ -33,8 +21,7 @@ cfg.setdefault('streaming', {})['enabled'] = True
 cfg.setdefault('debug', {})['show_window'] = False
 yaml.dump(cfg, sys.stdout, default_flow_style=False, allow_unicode=True)
 " > "$TMP_CONFIG"
-
 cd "$REPO_ROOT"
 ./build/example_v4l2_preview "$TMP_CONFIG" &
-sleep 1
-ffplay -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"
+sleep 3
+ffplay -loglevel quiet -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay "$SDP"

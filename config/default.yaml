@@ -1,5 +1,5 @@
 v4l2:
-  device_path: /dev/video2
+  device_path: /dev/video1
   width: 1920
   height: 1080
   framerate: 60.0
@@ -15,7 +15,7 @@ runtime:
   max_observation_age_ms: 35
   max_infer_fps: 60
   warmup_frames: 30
-  engine_path: ""
+  engine_path: "models/exp.engine"
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: false
@@ -24,11 +24,17 @@ runtime:
   record_queue_size: 16
 
 inference:
-  backend: model
-  model_path: models/exp.onnx
+  backend: tensorrt
+  model_path: models/exp.engine
 
 streaming:
   enabled: true
   host: "127.0.0.1"
-  port: 5000
+  port: 5002
   sdp_path: "/tmp/laser_guidance.sdp"
+  encoder: "libx264"
+
+udp:
+  enabled: true
+  host: "127.0.0.1"
+  port: 5001
