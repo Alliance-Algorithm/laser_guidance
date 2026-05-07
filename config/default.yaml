@@ -24,13 +24,13 @@ runtime:
   record_queue_size: 16
 
 inference:
-  backend: tensorrt
-  model_path: models/exp.engine
+  backend: model
+  model_path: models/exp.onnx
 
 streaming:
   enabled: true
   host: "127.0.0.1"
-  port: 5002
+  port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "libx264"
 
