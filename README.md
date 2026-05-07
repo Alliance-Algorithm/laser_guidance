@@ -194,8 +194,10 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
 - 当前默认采集卡通过 `make scan-camera` 扫描，设备号可能漂移；修改 `v4l2.device_path`
 - 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
-- RTP 视频推流：`make stream` 后台 daemon + ffplay 窗口，`streaming` 配置段控制
-- TensorRT GPU 推理（0.91ms）可选，通过 `inference.backend: tensorrt` 切换；ONNX 回退保留
+- RTP 视频推流：`make stream` 后台 daemon + ffplay 窗口，关闭窗口即停止。daemon 常驻后第二次 `make stream` 秒开。`streaming` 配置段控制，默认端口 5004
+- `make preview` 仅本地 imshow 预览（不推流），关窗即停
+- ONNX 模型推理（后端 `model`）和 TensorRT GPU 推理（后端 `tensorrt`）可选，通过 `inference.backend` 切换。默认使用 ONNX 后端
+- 模型异步加载：相机和推流先启动，模型后台加载完成后自动画框
 - EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块
 - 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
 - `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台

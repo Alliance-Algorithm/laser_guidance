@@ -22,13 +22,15 @@
 V4l2Capture
 -> read_frame()
 -> Frame
--> Pipeline::process()
--> selected backend
--> Detector / ModelInfer
--> TargetObservation
--> draw_debug_overlay()
--> RtpStreamer.push()        ← 可选 RTP 推流
--> cv::imshow()              ← 可选本地预览
+-> ModelInfer (异步加载，后台线程)
+-> draw_candidates()           ← 框/标签/准星可视化
+-> RtpStreamer.push()          ← 可选 RTP 推流（ffmpeg → ffplay）
+-> UdpSender.send()            ← UDP 观测数据
+-> cv::imshow()                ← 可选本地预览（关窗即停）
+
+RTP 推流链路：
+  main thread → push(latest_frame) → writer thread → fwrite → pipe → ffmpeg (libx264)
+  ffplay 先占端口监听，daemon 启动后立即接收（无 late joiner 问题）
 ```
 
 数据集生成链路当前是：
