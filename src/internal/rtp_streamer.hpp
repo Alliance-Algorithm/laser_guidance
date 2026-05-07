@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 #include <opencv2/core/mat.hpp>
 
@@ -19,6 +18,7 @@ public:
 
     auto start(int width, int height, float framerate) -> bool;
     auto push(const cv::Mat& bgr_frame) -> void;
+    auto push(cv::Mat&& bgr_frame) -> void;
     auto stop() -> void;
     [[nodiscard]] auto is_active() const -> bool;
 

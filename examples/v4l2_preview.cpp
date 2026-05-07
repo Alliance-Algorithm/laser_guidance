@@ -1,13 +1,16 @@
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <future>
+#include <mutex>
 #include <print>
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -182,87 +185,109 @@ int main(int argc, char** argv) {
         char cmd_buf[256];
         bool running = true;
 
+        cv::Mat output; // previous frame with overlay, ready to push
+        auto loop_t0 = std::chrono::steady_clock::now();
+        unsigned loop_frames = 0;
+
+        // Async inference: main loop runs at camera speed, inference in background
+        std::mutex infer_mtx;
+        std::condition_variable infer_cv;
+        cv::Mat pending_frame;
+        bool has_pending = false;
+        rmcs_laser_guidance::TargetObservation latest_observation;
+        std::thread infer_thread;
+        if (config.inference.backend != rmcs_laser_guidance::InferenceBackendKind::bright_spot) {
+            infer_thread = std::thread([&] {
+                model_ready.wait();
+                unsigned infer_cnt = 0;
+                double infer_total_us = 0;
+                while (running) {
+                    cv::Mat frame_to_process;
+                    {
+                        std::unique_lock lock(infer_mtx);
+                        infer_cv.wait(lock, [&] { return has_pending || !running; });
+                        if (!running) break;
+                        frame_to_process = std::move(pending_frame);
+                        has_pending = false;
+                    }
+                    const auto t0 = std::chrono::steady_clock::now();
+                    rmcs_laser_guidance::Frame infer_frame{.image = frame_to_process, .timestamp = rmcs_laser_guidance::Clock::now()};
+                    const auto result = infer->infer(infer_frame);
+                    const auto t1 = std::chrono::steady_clock::now();
+                    {
+                        std::scoped_lock lock(infer_mtx);
+                        latest_observation = result.observation;
+                        latest_observation.candidates = result.candidates;
+                    }
+                    infer_total_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
+                    if (++infer_cnt % 30 == 0)
+                        std::println(stderr, "[infer] {:.0f} us avg over {} frames",
+                                     infer_total_us / infer_cnt, infer_cnt);
+                }
+            });
+        }
+
         while (running) {
+            auto t_cap0 = std::chrono::steady_clock::now();
             auto frame = capture.read_frame();
+            auto t_cap1 = std::chrono::steady_clock::now();
             if (!frame) {
                 std::println(stderr, "Failed to read frame: {}", frame.error());
                 continue;
             }
 
-            cv::Mat display = frame->image.clone();
-
-            rmcs_laser_guidance::TargetObservation observation;
-            if (infer) {
-                const auto t0 = std::chrono::steady_clock::now();
-                const auto result = infer->infer(*frame);
-                const auto t1 = std::chrono::steady_clock::now();
-                observation = result.observation;
-                observation.candidates = result.candidates;
-                if (result.success)
-                    draw_candidates(display, result.candidates);
-                if (running && result.success) {
-                    static int frame_cnt = 0;
-                    static double total_us = 0;
-                    total_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
-                    if (++frame_cnt % 60 == 0) {
-                        std::println(stderr, "infer: {:.0f} us avg over {} frames",
-                                     total_us / frame_cnt, frame_cnt);
-                        total_us = 0;
-                        frame_cnt = 0;
+            // Push previous frame — zero wait, no inference block
+            auto t_push0 = std::chrono::steady_clock::now();
+            if (!output.empty()) {
+                if (video_client >= 0) {
+                    const std::uint32_t pw = static_cast<std::uint32_t>(output.cols);
+                    const std::uint32_t ph = static_cast<std::uint32_t>(output.rows);
+                    write(video_client, &pw, 4);
+                    write(video_client, &ph, 4);
+                    if (output.isContinuous()) {
+                        write(video_client, output.data, pw * ph * 3);
+                    } else {
+                        for (int row = 0; row < output.rows; ++row)
+                            write(video_client, output.ptr(row), pw * 3);
                     }
                 }
-            } else if (model_ready.valid()) {
-                if (model_ready.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                    model_ready.get();
-                    std::println(stderr, "Model loaded, starting inference overlay");
-                }
+
+                streamer.push(std::move(output));
+
+                static unsigned frame_count = 0;
+                if (++frame_count % 60 == 0)
+                    std::println(stderr, "[video] sent {} frames",
+                                 frame_count);
             }
 
+            if (video_client < 0 && video_sock >= 0) {
+                video_client = accept(video_sock, nullptr, nullptr);
+                if (video_client >= 0)
+                    std::println("[video] client connected");
+            }
+
+            cv::Mat display = frame->image.clone();
+
+            // Single lock: draw overlay, submit frame, grab observation
+            rmcs_laser_guidance::TargetObservation observation;
+            {
+                std::scoped_lock lock(infer_mtx);
+                if (latest_observation.detected || !latest_observation.candidates.empty())
+                    draw_candidates(display, latest_observation.candidates);
+                if (infer) {
+                    pending_frame = std::move(frame->image);
+                    has_pending = true;
+                }
+                observation = latest_observation;
+            }
+            if (infer) infer_cv.notify_one();
             udp.send(observation);
 
             auto cmd = read_command(fifo_fd, cmd_buf, sizeof(cmd_buf));
             if (!cmd.empty())
                 handle_command(cmd, streamer, config, running);
 
-            streamer.push(display);
-
-            if (video_client >= 0 && !frame->image.empty()) {
-                const std::uint32_t w = static_cast<std::uint32_t>(frame->image.cols);
-                const std::uint32_t h = static_cast<std::uint32_t>(frame->image.rows);
-
-                std::uint32_t sent = 0;
-                write(video_client, &w, 4);
-                write(video_client, &h, 4);
-
-                if (frame->image.isContinuous()) {
-                    sent = write(video_client, frame->image.data, w * h * 3);
-                } else {
-                    for (int row = 0; row < frame->image.rows; ++row) {
-                        const auto n = write(video_client, frame->image.ptr(row), w * 3);
-                        if (n > 0) sent += n;
-                        else { sent = n; break; }
-                    }
-                }
-
-                if (sent < 0) {
-                    std::println(stderr, "[video] client disconnected");
-                    close(video_client);
-                    video_client = -1;
-                } else {
-                    static unsigned frame_count = 0;
-                    if (++frame_count % 60 == 0)
-                        std::println(stderr, "[video] sent {} frames, last {}x{} {:.1f}MB",
-                                     frame_count, w, h,
-                                     static_cast<double>(w * h * 3) / (1024 * 1024));
-                }
-            }
-
-            if (video_client < 0 && video_sock >= 0) {
-                video_client = accept(video_sock, nullptr, nullptr);
-                if (video_client >= 0) {
-                    std::println("[video] client connected");
-                }
-            }
+            output = display;
 
             if (config.debug.show_window) {
                 cv::imshow("rmcs_laser_guidance_v4l2", display);
@@ -272,7 +297,25 @@ int main(int argc, char** argv) {
                 if (cv::getWindowProperty("rmcs_laser_guidance_v4l2", cv::WND_PROP_VISIBLE) < 1)
                     running = false;
             }
+
+            if (++loop_frames % 30 == 0) {
+                const auto elapsed = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - loop_t0).count();
+                const double cap_ms = std::chrono::duration<double, std::milli>(t_cap1 - t_cap0).count();
+                const double push_ms = std::chrono::duration<double, std::milli>(t_push0 - t_cap1).count();
+                std::println(stderr, "[main] {} frames {:.1f}s ({:.0f}fps) cap={:.0f}ms push={:.0f}ms infer={}",
+                             loop_frames, elapsed, loop_frames / elapsed,
+                             cap_ms, push_ms,
+                             infer ? "ready" : "waiting");
+                loop_t0 = std::chrono::steady_clock::now();
+                loop_frames = 0;
+            }
         }
+
+        running = false;
+        infer_cv.notify_one();
+        if (infer_thread.joinable())
+            infer_thread.join();
 
         streamer.stop();
         close(fifo_fd);

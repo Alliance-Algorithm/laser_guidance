@@ -87,6 +87,7 @@ auto V4l2Capture::open() -> std::expected<V4l2NegotiatedFormat, std::string> {
         return std::unexpected("failed to open V4L2 device " + config_.device_path.string());
     }
 
+    (void)capture_.set(cv::CAP_PROP_BUFFERSIZE, 1.0);
     (void)capture_.set(cv::CAP_PROP_FOURCC, static_cast<double>(requested_fourcc(config_.pixel_format)));
     (void)capture_.set(cv::CAP_PROP_FRAME_WIDTH, static_cast<double>(config_.width));
     (void)capture_.set(cv::CAP_PROP_FRAME_HEIGHT, static_cast<double>(config_.height));
