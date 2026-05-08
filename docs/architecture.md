@@ -2,19 +2,27 @@
 
 ## 当前目标
 
-`rmcs_laser_guidance` 当前只解决视觉链路最小可运行问题：
+使用相机视觉引导激光振镜，使激光实时命中移动无人机搭载的特征靶。
+控制链路：Host PC → USB-to-SPI Bridge → SPI-to-DAC 驱动板 → 模拟电压 → 振镜 X/Y 角度。
 
-- 相机是否能稳定出图
-- 图像是否能被统一封装
-- 检测入口是否已经固定
-- 调试输出是否能独立于 RMCS 运行
+`rmcs_laser_guidance` 负责视觉链路：
 
-它当前不是控制模块，因此不包含：
+- 相机稳定出图
+- 图像统一封装
+- 检测 + EKF 跟踪
+- 视频输出（共享内存 + RTP 推流）
+- 控制指令收发（FIFO + UDP）
 
-- 姿态同步
-- 目标跟踪
-- 弹道或开火时机
-- `/gimbal/*` 输出
+## 数据输出分离
+
+控制指令 (高频/小数据, 延迟敏感) 与 视频流 (大数据, 带宽敏感) 走不同通道：
+
+| 通道 | 数据 | 协议 | 路径 |
+|---|---|---|---|
+| 控制 | 检测结果、EKF 状态 | UDP | `127.0.0.1:5001` |
+| 控制 | 运行时命令 | FIFO | `/tmp/laser_cmd` |
+| 视频 | BGR 原始帧 | 共享内存 | `/laser_frame` (shm_open) |
+| 视频 | H.264 编码流 | RTP | `127.0.0.1:5004` (可选) |
 
 ## 当前数据流
 
@@ -22,15 +30,22 @@
 V4l2Capture
 -> read_frame()
 -> Frame
--> ModelInfer (异步加载，后台线程)
--> draw_candidates()           ← 框/标签/准星可视化
--> RtpStreamer.push()          ← 可选 RTP 推流（ffmpeg → ffplay）
--> UdpSender.send()            ← UDP 观测数据
--> cv::imshow()                ← 可选本地预览（关窗即停）
+-> ModelInfer (异步推理线程)
+-> EkfTracker (CA-EKF 平滑/预测)
+-> draw_candidates() + draw_ekf_state()   ← 框/标签/准星 + EKF 绿点/速度箭头
+-> VideoShmProducer.push_frame()          ← 共享内存 BGR 帧 (零拷贝)
+-> RtpStreamer.push()                     ← 可选 RTP 推流 (ffmpeg)
+-> UdpSender.send()                       ← UDP 观测 + EKF 状态
+-> cv::imshow()                           ← 可选本地预览 (关窗即停)
+```
 
 RTP 推流链路：
   main thread → push(latest_frame) → writer thread → fwrite → pipe → ffmpeg (libx264)
   ffplay 先占端口监听，daemon 启动后立即接收（无 late joiner 问题）
+
+共享内存链路：
+  main thread → VideoShmProducer.push_frame() → memcpy → /laser_frame
+  consumer → shm_open + mmap → 读 ShmHeader → 读 buf_[write_idx]
 ```
 
 数据集生成链路当前是：
@@ -58,10 +73,12 @@ or
 - `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime` 与 `ModelAdapter`
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
 - `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
-- `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（当前为 standalone 模块，尚未接入主链路）
+- `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（已接入异步推理线程）
 - `DebugRenderer` 负责调试 overlay：含候选框、类别、置信度、准星；无 candidates 时回退为 contour + center
 - `Pipeline` 组合"已选视觉后端"与 `DebugRenderer`
 - `RtpStreamer` 负责将 overlay 后的画面通过 RTP 推流输出（ffmpeg 子进程），供 VLC 等外部播放器接收
+- `VideoShmProducer` 负责通过 POSIX 共享内存（`/laser_frame`）输出 BGR 原始帧，双缓冲 + 原子序号，供 UI 零拷贝读取
+- `UdpSender` 负责通过 UDP 发送 TargetObservation 和 EKF 状态（检测结果、跟踪位置、速度等）
 - `V4l2Capture` 负责从 `/dev/videoN` 读取 UVC 图像
 
 ## 模块职责
