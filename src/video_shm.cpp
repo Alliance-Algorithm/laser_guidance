@@ -59,14 +59,13 @@ bool VideoShmProducer::open(int width, int height) {
 void VideoShmProducer::push_frame(const std::uint8_t* bgr_data, int width, int height) {
     if (!header_) return;
 
-    const std::uint32_t idx = header_->write_idx.load(std::memory_order_relaxed);
+    const std::uint32_t idx = header_->write_idx.load(std::memory_order_acquire);
     const std::size_t frame_size =
         static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3;
 
-    std::memcpy(buf_[idx], bgr_data, frame_size);
+    std::memcpy(buf_[1 - idx], bgr_data, frame_size);
 
-    // Flip write_idx first, then increment frame_seq (release fence)
-    header_->write_idx.store(1 - idx, std::memory_order_relaxed);
+    header_->write_idx.store(1 - idx, std::memory_order_release);
     header_->frame_seq.fetch_add(1, std::memory_order_release);
 }
 
