@@ -11,6 +11,8 @@ CONFIG="${1:-}"
 cleanup() { kill %1 2>/dev/null || true; rm -f "$TMP_CONFIG" "$SDP"; }
 trap cleanup EXIT
 
+TMP_CONFIG=""
+
 eval "$(python3 -c "
 import yaml
 with open('$CONFIG') as f:
@@ -41,6 +43,9 @@ SDPEOF
 if [ -p "$FIFO" ] && timeout 1 bash -c "echo 'stream on' > '$FIFO'" 2>/dev/null; then
     if [ "$STREAMING_ENABLED" = "True" ]; then
         launch_ffplay
+    else
+        echo "daemon running, video at /laser_frame (Ctrl+C to stop)"
+        while true; do sleep 1; done
     fi
     exit 0
 fi
