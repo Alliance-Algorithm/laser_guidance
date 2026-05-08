@@ -101,6 +101,21 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (udp_cfg["port"]) config.udp.port = udp_cfg["port"].as<int>();
     }
 
+    if (const YAML::Node ekf = yaml["ekf"]) {
+        if (ekf["process_noise_q"])
+            config.ekf.process_noise_q = ekf["process_noise_q"].as<double>();
+        if (ekf["measurement_noise_r"])
+            config.ekf.measurement_noise_r = ekf["measurement_noise_r"].as<double>();
+        if (ekf["initial_pos_std"])
+            config.ekf.initial_pos_std = ekf["initial_pos_std"].as<double>();
+        if (ekf["initial_vel_std"])
+            config.ekf.initial_vel_std = ekf["initial_vel_std"].as<double>();
+        if (ekf["initial_acc_std"])
+            config.ekf.initial_acc_std = ekf["initial_acc_std"].as<double>();
+        if (ekf["max_missed_frames"])
+            config.ekf.max_missed_frames = ekf["max_missed_frames"].as<int>();
+    }
+
     if (config.v4l2.device_path.empty())
         throw std::runtime_error("v4l2.device_path must not be empty");
     if (config.v4l2.width <= 0) throw std::runtime_error("v4l2.width must be positive");

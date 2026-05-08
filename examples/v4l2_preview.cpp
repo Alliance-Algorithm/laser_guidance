@@ -19,12 +19,11 @@
 
 #include "example_support.hpp"
 #include "config.hpp"
+#include "internal/ekf_tracker.hpp"
 #include "internal/model_infer.hpp"
 #include "internal/rtp_streamer.hpp"
 #include "internal/udp_sender.hpp"
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <fcntl.h>
+#include "internal/video_shm.hpp"
 #include "internal/v4l2_capture.hpp"
 
 namespace {
@@ -86,6 +85,34 @@ auto draw_candidates(cv::Mat& image,
     const int g = 8;
     cv::line(image, { cx - g, cy }, { cx + g, cy }, { 0, 255, 255 }, 1);
     cv::line(image, { cx, cy - g }, { cx, cy + g }, { 0, 255, 255 }, 1);
+}
+
+auto draw_ekf_state(cv::Mat& image,
+                    const rmcs_laser_guidance::EkfState& state) -> void {
+    if (!state.initialized)
+        return;
+
+    const int cx = static_cast<int>(state.position.x);
+    const int cy = static_cast<int>(state.position.y);
+
+    if (state.lost) {
+        cv::putText(image, "EKF LOST", {10, 60},
+                    cv::FONT_HERSHEY_SIMPLEX, 0.7, {0, 0, 255}, 2);
+        return;
+    }
+
+    cv::circle(image, {cx, cy}, 5, {0, 255, 0}, -1);
+
+    constexpr float kArrowScale = 0.5F;
+    const int vx = static_cast<int>(state.velocity.x * kArrowScale);
+    const int vy = static_cast<int>(state.velocity.y * kArrowScale);
+    if (vx != 0 || vy != 0)
+        cv::arrowedLine(image, {cx, cy}, {cx + vx, cy + vy}, {0, 255, 0}, 2);
+
+    const float speed = std::hypot(state.velocity.x, state.velocity.y);
+    const auto label = std::format("EKF {:.0f} px/s", speed);
+    cv::putText(image, label, {cx + 10, cy - 10},
+                cv::FONT_HERSHEY_SIMPLEX, 0.5, {0, 255, 0}, 2);
 }
 
 auto setup_fifo() -> int {
@@ -151,32 +178,9 @@ int main(int argc, char** argv) {
 
         rmcs_laser_guidance::UdpSender udp(config.udp);
 
-        constexpr const char* kVideoPath = "/tmp/laser_frame";
-        unlink(kVideoPath);
-        int video_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (video_sock < 0) {
-            std::println(stderr, "[video] socket: {}", std::strerror(errno));
-        } else {
-            sockaddr_un video_addr{};
-            video_addr.sun_family = AF_UNIX;
-            std::strncpy(video_addr.sun_path, kVideoPath, sizeof(video_addr.sun_path) - 1);
-            if (bind(video_sock, reinterpret_cast<sockaddr*>(&video_addr), sizeof(video_addr)) < 0) {
-                std::println(stderr, "[video] bind: {}", std::strerror(errno));
-                close(video_sock);
-                video_sock = -1;
-            } else if (listen(video_sock, 1) < 0) {
-                std::println(stderr, "[video] listen: {}", std::strerror(errno));
-                close(video_sock);
-                video_sock = -1;
-            } else {
-                fcntl(video_sock, F_SETFL, O_NONBLOCK);
-                std::println("[video] listening on {}", kVideoPath);
-            }
-        }
-
-        int video_client = -1;
-        if (video_sock >= 0) {
-            std::println("[video] waiting for client...");
+        rmcs_laser_guidance::VideoShmProducer shm;
+        if (!shm.open(open_result->width, open_result->height)) {
+            std::println(stderr, "[shm] failed to create shared memory");
         }
 
         int fifo_fd = setup_fifo();
@@ -195,6 +199,8 @@ int main(int argc, char** argv) {
         cv::Mat pending_frame;
         bool has_pending = false;
         rmcs_laser_guidance::TargetObservation latest_observation;
+        rmcs_laser_guidance::EkfTracker tracker(config.ekf);
+        rmcs_laser_guidance::EkfState latest_ekf_state;
         std::thread infer_thread;
         if (config.inference.backend != rmcs_laser_guidance::InferenceBackendKind::bright_spot) {
             infer_thread = std::thread([&] {
@@ -214,10 +220,18 @@ int main(int argc, char** argv) {
                     rmcs_laser_guidance::Frame infer_frame{.image = frame_to_process, .timestamp = rmcs_laser_guidance::Clock::now()};
                     const auto result = infer->infer(infer_frame);
                     const auto t1 = std::chrono::steady_clock::now();
+
+                    if (result.observation.detected) {
+                        tracker.process(result.observation.center, infer_frame.timestamp);
+                    } else {
+                        tracker.predict(infer_frame.timestamp);
+                    }
+
                     {
                         std::scoped_lock lock(infer_mtx);
                         latest_observation = result.observation;
                         latest_observation.candidates = result.candidates;
+                        latest_ekf_state = tracker.state();
                     }
                     infer_total_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
                     if (++infer_cnt % 30 == 0)
@@ -239,17 +253,12 @@ int main(int argc, char** argv) {
             // Push previous frame — zero wait, no inference block
             auto t_push0 = std::chrono::steady_clock::now();
             if (!output.empty()) {
-                if (video_client >= 0) {
-                    const std::uint32_t pw = static_cast<std::uint32_t>(output.cols);
-                    const std::uint32_t ph = static_cast<std::uint32_t>(output.rows);
-                    write(video_client, &pw, 4);
-                    write(video_client, &ph, 4);
-                    if (output.isContinuous()) {
-                        write(video_client, output.data, pw * ph * 3);
-                    } else {
-                        for (int row = 0; row < output.rows; ++row)
-                            write(video_client, output.ptr(row), pw * 3);
-                    }
+                if (output.isContinuous()) {
+                    shm.push_frame(output.data, output.cols, output.rows);
+                } else {
+                    cv::Mat cont;
+                    output.copyTo(cont);
+                    shm.push_frame(cont.data, cont.cols, cont.rows);
                 }
 
                 streamer.push(std::move(output));
@@ -260,25 +269,22 @@ int main(int argc, char** argv) {
                                  frame_count);
             }
 
-            if (video_client < 0 && video_sock >= 0) {
-                video_client = accept(video_sock, nullptr, nullptr);
-                if (video_client >= 0)
-                    std::println("[video] client connected");
-            }
-
             cv::Mat display = frame->image.clone();
 
             // Single lock: draw overlay, submit frame, grab observation
             rmcs_laser_guidance::TargetObservation observation;
+            rmcs_laser_guidance::EkfState ekf_state;
             {
                 std::scoped_lock lock(infer_mtx);
                 if (latest_observation.detected || !latest_observation.candidates.empty())
                     draw_candidates(display, latest_observation.candidates);
+                draw_ekf_state(display, latest_ekf_state);
                 if (infer) {
                     pending_frame = std::move(frame->image);
                     has_pending = true;
                 }
                 observation = latest_observation;
+                ekf_state = latest_ekf_state;
             }
             if (infer) infer_cv.notify_one();
             udp.send(observation);
@@ -320,8 +326,6 @@ int main(int argc, char** argv) {
         streamer.stop();
         close(fifo_fd);
         unlink(kFifoPath);
-        if (video_client >= 0) close(video_client);
-        if (video_sock >= 0) close(video_sock);
         capture.close();
         return 0;
     } catch (const std::exception& e) {

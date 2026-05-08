@@ -84,4 +84,32 @@ auto DebugRenderer::draw(cv::Mat& image, const TargetObservation& observation) c
     }
 }
 
+auto DebugRenderer::draw_ekf_state(cv::Mat& image, const EkfState& state) const -> void {
+    if (image.empty() || !debug_.draw_overlay)
+        return;
+
+    if (!state.initialized)
+        return;
+
+    const int cx = static_cast<int>(state.position.x);
+    const int cy = static_cast<int>(state.position.y);
+
+    if (state.lost) {
+        cv::putText(image, "EKF LOST", {10, 60}, cv::FONT_HERSHEY_SIMPLEX, 0.7, {0, 0, 255}, 2);
+        return;
+    }
+
+    cv::circle(image, {cx, cy}, 5, {0, 255, 0}, -1);
+
+    constexpr float kArrowScale = 0.5F;
+    const int vx = static_cast<int>(state.velocity.x * kArrowScale);
+    const int vy = static_cast<int>(state.velocity.y * kArrowScale);
+    if (vx != 0 || vy != 0)
+        cv::arrowedLine(image, {cx, cy}, {cx + vx, cy + vy}, {0, 255, 0}, 2);
+
+    const float speed = std::hypot(state.velocity.x, state.velocity.y);
+    const auto label = std::format("EKF {:.0f} px/s", speed);
+    cv::putText(image, label, {cx + 10, cy - 10}, cv::FONT_HERSHEY_SIMPLEX, 0.5, {0, 255, 0}, 2);
+}
+
 } // namespace rmcs_laser_guidance

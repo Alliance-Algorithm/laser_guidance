@@ -7,18 +7,10 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 
+#include "config.hpp"
 #include "types.hpp"
 
 namespace rmcs_laser_guidance {
-
-struct EkfConfig {
-    double process_noise_q = 0.1;
-    double measurement_noise_r = 5.0;
-    double initial_pos_std = 100.0;
-    double initial_vel_std = 500.0;
-    double initial_acc_std = 1000.0;
-    int max_missed_frames = 10;
-};
 
 struct EkfState {
     cv::Point2f position{-1.0F, -1.0F};

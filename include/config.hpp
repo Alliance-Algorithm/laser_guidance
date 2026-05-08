@@ -63,6 +63,15 @@ struct UdpConfig {
     int port = 5001;
 };
 
+struct EkfConfig {
+    double process_noise_q     = 0.5;
+    double measurement_noise_r = 0.2;
+    double initial_pos_std     = 100.0;
+    double initial_vel_std     = 500.0;
+    double initial_acc_std     = 1000.0;
+    int max_missed_frames      = 10;
+};
+
 struct Config {
     V4l2Config v4l2 { };
     DebugConfig debug { };
@@ -70,6 +79,7 @@ struct Config {
     InferenceConfig inference { };
     RtpConfig rtp { };
     UdpConfig udp { };
+    EkfConfig ekf { };
 };
 
 auto load_config(const std::filesystem::path& config_path) -> Config;

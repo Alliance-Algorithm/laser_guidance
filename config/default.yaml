@@ -28,7 +28,7 @@ inference:
   model_path: models/exp.onnx
 
 streaming:
-  enabled: true
+  enabled: false
   host: "127.0.0.1"
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
@@ -38,3 +38,11 @@ udp:
   enabled: true
   host: "127.0.0.1"
   port: 5001
+
+ekf:
+  process_noise_q: 0.5
+  measurement_noise_r: 0.2
+  initial_pos_std: 100.0
+  initial_vel_std: 500.0
+  initial_acc_std: 1000.0
+  max_missed_frames: 10

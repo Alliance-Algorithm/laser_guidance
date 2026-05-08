@@ -1,6 +1,8 @@
 # 总目标
 
-为二维云台搭载激光笔，视觉引导云台，使激光实时命中移动无人机搭载的特征靶。
+使用相机视觉引导激光振镜，使激光实时命中移动无人机搭载的特征靶。
+
+硬件控制链路：Host PC → USB-to-SPI Bridge → SPI-to-DAC 驱动板 → 模拟电压 → 振镜 X/Y 角度。
 
 ## 当前阶段
 
@@ -11,10 +13,11 @@
 - YOLO26 ONNX 端到端推理 ✅（3 class：purple/red/blue）
 - 实时检测可视化（框+置信度+准星） ✅
 - 采集卡配置（UGREEN 1080p@60 MJPG） ✅
+- EKF tracker（常加速度模型，像素平滑+预测） ✅
 
 ## 后续阶段
 
 1. ROI 跟踪模式（全图→裁剪，降低推理延迟）
-2. EKF tracker（像素速度+加速度预测）
-3. 像素→振镜角度 solver（多项式打表）
-4. PID + 前馈 bridge（输出 /gimbal/laser_guidance/*）
+2. 像素→振镜角度 solver（像素坐标到振镜 X/Y 电压角度的映射标定）
+3. PID + 前馈控制器（根据 EKF 状态估计输出振镜角度指令）
+4. USB-to-SPI 通信桥接（Host PC → 驱动板指令下发，SPI 协议封装）
