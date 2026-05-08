@@ -133,7 +133,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(${PROJECT_NAME}_core PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME}_core PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt)
 
 if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
   target_link_libraries(${PROJECT_NAME}_core PRIVATE onnxruntime::onnxruntime)

@@ -6,17 +6,16 @@
 - 原始视频会话录制与可选离线抽帧导出
 - YAML 配置加载
 - `Pipeline` 统一视觉入口与可切换后端骨架
-- 最小亮点检测 `Detector`
-- 红色目标 ROI 精修骨架
 - 调试 overlay 与回放样本
 - 自动测试与人工运行示例
+- onnx模型和tensorRT模型
 
 当前阶段**不包含**：
 
-- RMCS 控制接入
+- 控制接入
 - `/gimbal/*` 接口
-- `HardSyncSnapshot`
-- 发弹时机或 `fire_control`
+- `通信接口`
+- 相机与激光振镜的坐标系转换
 
 ## Build
 
@@ -193,14 +192,11 @@ ros2 run rmcs_laser_guidance example_export_training_frames \
 - `models/` 用于放置 `.onnx`、`.pt`、`.engine` 模型文件
 - public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
 - 当前默认采集卡通过 `make scan-camera` 扫描，设备号可能漂移；修改 `v4l2.device_path`
-- 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`；V4L2 缓冲区设置为 1（`CAP_PROP_BUFFERSIZE=1`）以降低延迟
+- 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
 - RTP 视频推流：`make stream` 后台 daemon + ffplay 窗口，关闭窗口即停止。daemon 常驻后第二次 `make stream` 秒开。`streaming` 配置段控制，默认端口 5004
 - `make preview` 仅本地 imshow 预览（不推流），关窗即停
-- RTP 推流支持 NVENC 硬件编码（`streaming.encoder: h264_nvenc`）和 libx264 软件编码，根据编码器自动选择最优参数（NVENC: `-preset p1 -tune ll -rc cbr`, x264: `-preset ultrafast -tune zerolatency`）
 - ONNX 模型推理（后端 `model`）和 TensorRT GPU 推理（后端 `tensorrt`）可选，通过 `inference.backend` 切换。默认使用 ONNX 后端
 - 模型异步加载：相机和推流先启动，模型后台加载完成后自动画框
-- 推理线程与主循环解耦：inference 线程通过 `condition_variable` 等待新帧，不持锁 sleep；主循环 3 次锁操作合并为 1 次 `scoped_lock`，避免锁竞争阻塞采集和推流
-- RTP writer 线程同样使用 `condition_variable` 替代 spin-wait，仅在主循环 `push()` 后唤醒
 - EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块
 - 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
 - `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台
