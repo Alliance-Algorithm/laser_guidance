@@ -1,71 +1,109 @@
 # laser_guidance
 
-`laser_guidance` 是一个最小激光视觉引导骨架，当前阶段只覆盖：
+`laser_guidance` 是一个最小激光视觉引导骨架，当前阶段覆盖：
 
 - `V4L2/UVC` 采集卡取图
 - 原始视频会话录制与可选离线抽帧导出
 - YAML 配置加载
 - `Pipeline` 统一视觉入口与可切换后端骨架
 - 调试 overlay 与回放样本
-- 自动测试与人工运行示例
-- onnx模型和tensorRT模型
+- 自动测试与工具入口
+- ONNX/TensorRT 模型推理
+- FT4222H USB-to-SPI 振镜控制
 
 当前阶段**不包含**：
 
-- 控制接入
+- 控制链路闭环
 - `/gimbal/*` 接口
-- `通信接口`
 - 相机与激光振镜的坐标系转换
 
 ## Build
 
-仓库根目录直接构建：
-
 ```bash
+# 基础构建
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-配套测试：
+启用可选特性：
 
 ```bash
+# ONNX Runtime 模型推理
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON \
+  -DONNXRUNTIME_ROOT=/path/to/onnxruntime
+
+# TensorRT GPU 推理
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON
+
+# FT4222H 振镜控制（默认开启，需 libft4222.so 在项目根目录）
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DRMCS_LASER_GUIDANCE_WITH_FT4222=OFF   # 禁用
+```
+
+## Tests
+
+```bash
+cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-如果你在带 Jazzy 的 ROS 工作区里，也可以继续使用：
+## Tools
+
+构建后在 `build/` 下直接运行：
 
 ```bash
-build-rmcs --packages-select rmcs_laser_guidance
+./build/tool_preview                  # 本地预览
+./build/tool_capture                  # 录帧 (PNG + manifest)
+./build/tool_record                   # 原始视频会话录制
+./build/tool_replay                   # 回放预览
+./build/tool_model_infer              # 模型推理
+./build/tool_detector_benchmark       # 检测 benchmark
+./build/tool_calibrate                # 相机标定
+./build/tool_export                   # 离线抽帧导出
+./build/tool_transcode                # 已录视频转码
+./build/tool_smoke                    # 离线冒烟
 ```
 
-或：
+大部分工具接受可选的配置文件路径：
 
 ```bash
-cd rmcs_ws
-colcon build --packages-select rmcs_laser_guidance --symlink-install --merge-install
+./build/tool_preview config/capture_red_20m.yaml
 ```
 
-说明：
-
-- 当机器上没有 `/opt/ros/jazzy` 和 `ament_cmake` 时，ROS/`colcon` 路径不可用，但根目录直接 `cmake` 仍应可用。
-- 当机器上有完整 Jazzy 环境时，两种构建方式都支持。
-- 如果要启用 ONNX Runtime 骨架，额外传：
+录制工具支持显式参数覆盖：
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON \
-  -DONNXRUNTIME_ROOT=/abs/path/to/onnxruntime
+./build/tool_record \
+  config/capture_red_20m.yaml \
+  ./videos/my_session \
+  30 \
+  indoor_lab plain_wall 20m red
 ```
 
-## Auto Tests
+不显式传输出目录时，默认保存到 `videos/`。
 
-自动验证目标位于 `tests/*_test.cpp`，可通过：
+模型推理覆盖模型路径：
 
 ```bash
-ctest --output-on-failure
+./build/tool_model_infer \
+  config/default.yaml \
+  test_data/sample_images \
+  models/my_model.onnx
 ```
 
-在对应构建目录中执行全部自动测试。Standalone 构建对应 `build/`，ROS 工作区构建对应 `build/rmcs_laser_guidance/`。
+离线抽帧导出：
+
+```bash
+./build/tool_export /path/to/session_dir /path/to/dataset_root train 200
+```
+
+转码已录 session：
+
+```bash
+./build/tool_transcode /path/to/videos/<session_id>
+```
 
 ## Quick Scripts
 
@@ -77,159 +115,114 @@ make stream          # RTP 推流（自动打开 ffplay 窗口，关掉即退出
 make stop            # 停止后台守护进程
 ```
 
-`make stream` 无需手动开 ffplay，自动后台启动守护进程并前台显示推流画面。
+守护进程运行时，`make stream` 秒开推流（通过 `/tmp/laser_cmd` FIFO 发命令，无需重启）。外部程序也可通过 FIFO 控制：
 
-守护进程运行时，`make stream` 秒开推流（通过 `/tmp/laser_cmd` FIFO 发命令，无需重启）。
-
-外部程序也可控制：
 ```bash
 echo "stream on"  > /tmp/laser_cmd
 echo "stream off" > /tmp/laser_cmd
 echo "quit"       > /tmp/laser_cmd
 ```
 
-## Examples
+## 项目结构
 
-工具入口（原 `examples/`，现 `tools/`）：
-
-```bash
-# 可执行文件前缀为 tool_
-./build/tool_preview
-./build/tool_capture
-./build/tool_record
-./build/tool_replay
-./build/tool_model_infer
-./build/tool_detector_benchmark
-./build/tool_calibrate
-./build/tool_export
-./build/tool_transcode
-./build/tool_smoke
+```
+laser_guidance/
+├── include/               # 公开 API
+│   ├── config.hpp         # YAML 配置加载
+│   ├── types.hpp          # Frame, TargetObservation
+│   ├── pipeline.hpp       # 统一视觉入口
+│   └── laser_guidance.hpp
+├── src/
+│   ├── core/              # 核心模块
+│   ├── vision/            # 检测/推理模块
+│   ├── capture/           # 视频采集 (V4L2)
+│   ├── streaming/         # 网络推流 (RTP/UDP/SHM)
+│   ├── tracking/          # EKF 跟踪
+│   └── io/                # 硬件 I/O (FT4222H 等)
+├── tools/                 # 可执行工具
+├── tests/                 # 自动化测试
+│   ├── core/
+│   ├── vision/
+│   └── tracking/
+├── config/                # YAML 配置文件
+├── models/                # .onnx / .engine 模型文件
+└── test_data/             # 样本回放资源
 ```
 
-离线冒烟：
+## C++ API 示例
 
-```bash
-ros2 run rmcs_laser_guidance tool_smoke
+```cpp
+#include "config.hpp"
+#include "pipeline.hpp"
+#include "types.hpp"
+
+#include "core/frame_format.hpp"
+#include "capture/v4l2_capture.hpp"
+
+using namespace rmcs_laser_guidance;
+
+// 加载配置
+auto config = load_config("config/default.yaml");
+
+// 打开相机
+V4l2Capture capture(config.v4l2);
+auto negotiated = capture.open();
+if (!negotiated) { /* 处理错误 */ }
+
+// 创建 Pipeline
+Pipeline pipeline(config);
+
+// 主循环
+while (true) {
+    auto frame = capture.read_frame();
+    if (!frame) continue;
+
+    auto obs = pipeline.process(*frame);
+    if (obs && obs->detected) {
+        // 检测到目标
+        printf("target at (%.1f, %.1f)\n", obs->center.x, obs->center.y);
+    }
+}
 ```
 
-V4L2 预览：
+FT4222H 振镜控制：
 
-```bash
-ros2 run rmcs_laser_guidance tool_preview
-```
+```cpp
+#include "io/ft4222_spi.hpp"
 
-也可以显式传配置路径：
+auto spi = Ft4222Spi::open(Ft4222Config{
+    .sys_clock = Ft4222SysClock::k60MHz,
+    .clock_div = Ft4222SpiDiv::kDiv64,   // SCK ≈ 937 kHz
+    .cs_channel = 0                       // SS0O
+});
 
-```bash
-ros2 run rmcs_laser_guidance tool_preview /abs/path/to/default.yaml
-```
-
-V4L2 采图录帧：
-
-```bash
-ros2 run rmcs_laser_guidance tool_capture
-```
-
-V4L2 原始视频会话录制：
-
-```bash
-ros2 run rmcs_laser_guidance tool_record
-```
-
-不显式传输出目录时，默认保存到仓库根目录下的 `videos/`。
-录制入口会在运行时强制把 `v4l2.pixel_format` 覆盖为 `yuyv`；`preview` 仍按配置文件读取。
-`capture_red_20m.yaml` 现在还包含 `record.output_root`、`record.duration_seconds` 和场景标签，所以只传配置文件就能录制。
-
-也可以显式传录制根目录和时长：
-
-```bash
-ros2 run rmcs_laser_guidance tool_record \
-  /abs/path/to/config/capture_red_20m.yaml \
-  /abs/path/to/session_root \
-  30 \
-  indoor_lab \
-  plain_wall \
-  20m \
-  red
-```
-
-回放预览：
-
-```bash
-ros2 run rmcs_laser_guidance tool_replay
-```
-
-检测 benchmark：
-
-```bash
-ros2 run rmcs_laser_guidance tool_detector_benchmark
-```
-
-模型推理占位入口：
-
-```bash
-ros2 run rmcs_laser_guidance tool_model_infer
-```
-
-也可以显式覆盖模型路径：
-
-```bash
-ros2 run rmcs_laser_guidance tool_model_infer \
-  /abs/path/to/default.yaml \
-  /abs/path/to/replay_dir \
-  /abs/path/to/model.onnx
-```
-
-把已录制 session 的 `raw.mp4` 原地转为 `H.264/avc1`：
-
-```bash
-ros2 run rmcs_laser_guidance tool_transcode \
-  /abs/path/to/videos/<session_id>
-```
-
-离线抽帧生成待标注数据集（可选备用）：
-
-```bash
-ros2 run rmcs_laser_guidance tool_export \
-  /abs/path/to/session_dir \
-  /abs/path/to/dataset_root \
-  train \
-  200
+if (spi) {
+    uint8_t dac_cmd[2] = {0x30, 0xFF};   // 12-bit DAC value
+    spi->write(dac_cmd, 2);
+}
 ```
 
 ## Notes
 
-- 默认配置文件位于 `config/default.yaml`
-- 推荐视频采集配置位于 `config/capture_red_20m.yaml`
-  默认使用 UGREEN 采集卡直读节点 `/dev/video2`；如果你的机器编号不同，修改 `v4l2.device_path`
-  录制参数也可放在 `record.*` 中；现有 CLI 位置参数仍可覆盖这些值
-- 默认样本回放位于 `test_data/sample_images`
-- 默认原始视频会话目录位于仓库根目录 `videos/`
-- `models/` 用于放置 `.onnx`、`.pt`、`.engine` 模型文件
-- public 头文件平铺在 `include/`，实现细节头收束在 `src/internal/`
-- 当前默认采集卡通过 `make scan-camera` 扫描，设备号可能漂移；修改 `v4l2.device_path`
-- 当前默认 live 模式为 `1920x1080 @ 60 FPS`，优先 `mjpeg`
-- RTP 视频推流：`make stream` 后台 daemon + ffplay 窗口，关闭窗口即停止。daemon 常驻后第二次 `make stream` 秒开。`streaming` 配置段控制，默认端口 5004
-- `make preview` 仅本地 imshow 预览（不推流），关窗即停
-- ONNX 模型推理（后端 `model`）和 TensorRT GPU 推理（后端 `tensorrt`）可选，通过 `inference.backend` 切换。默认使用 ONNX 后端
-- 模型异步加载：相机和推流先启动，模型后台加载完成后自动画框
-- EKF 跟踪器（`EkfTracker`）已实现为 standalone 模块
-- 训练数据链路当前推荐“先录原始视频会话，再直接上传外部平台”；离线抽帧只作为本地待标注备用链路
-- `raw.mp4 + session.yaml + notes.txt` 用于保留完整采集会话，并对接外部标注/训练平台
-  `.mp4` 现在默认写为 `H.264/avc1`
-- 抽帧导出会生成 `images/train|val|test` 和按会话区分的 `export_manifest.csv`
-- 当前检测逻辑仍然是极简亮点检测实现，用于把工程链路跑通
-- `Pipeline` 通过 `inference.backend` 在 `bright_spot`、`model`（ONNX）、`tensorrt`（GPU）间切换
-- `inference.model_path` 指向模型文件；TensorRT 额外需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON`
-- `model`/`tensorrt` 后端支持 YOLO26 端到端推理，输出契约 `[1,300,6]`（3 class：purple/red/blue）
-- 本仓库当前不负责本地训练；训练应在外部平台完成，仓库只负责数据集生成和模型接入
-- 后续如果要接 RMCS，再单独增加 bridge 和控制接口
+- 默认配置 `config/default.yaml`，采集配置推荐 `config/capture_red_20m.yaml`
+- 采集卡设备路径通过 `v4l2.device_path` 配置；`make scan-camera` 可扫描可用设备
+- 默认采集模式 `1920x1080 @ 60 FPS`，优先 `mjpeg` 编码
+- 默认回放样本位于 `test_data/sample_images`
+- 原始视频会话目录默认为 `videos/`
+- `models/` 放置 `.onnx`、`.engine` 模型文件
+- `Pipeline` 通过 `inference.backend` 在 `bright_spot` / `model`(ONNX) / `tensorrt`(GPU) 间切换
+- TensorRT 需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON` 且预先生成 `.engine` 文件
+- 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
+- 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入
+- EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态
+- 训练数据链路推荐「先录原始视频会话，再直接上传外部平台」；离线抽帧为备用链路
+- 录制输出 `raw.mp4 + session.yaml + notes.txt`，默认 H.264/avc1 编码
+- RTP 推流：`make stream` 后台 daemon + ffplay 窗口，关闭即停。`streaming` 配置段控制，默认端口 5004
 - `.script/` 提供便捷脚本：`set-config`、`scan-camera`、`preview`、`stream`、`stop`
 
 ## Docs
 
 - `plan.md`
-- `docs/README.md`
 - `docs/architecture.md`
 - `docs/dataset_collection.md`
 - `docs/development.md`
