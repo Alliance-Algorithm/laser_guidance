@@ -24,4 +24,4 @@ echo "时长: ${DURATION}s"
 echo ""
 
 cd "$REPO_ROOT"
-./build/example_v4l2_record_session "$CONFIG" "$OUTPUT" "$DURATION"
+./build/tool_record "$CONFIG" "$OUTPUT" "$DURATION"

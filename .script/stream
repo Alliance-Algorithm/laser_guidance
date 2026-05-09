@@ -51,7 +51,7 @@ if [ -p "$FIFO" ] && timeout 1 bash -c "echo 'stream on' > '$FIFO'" 2>/dev/null;
 fi
 
 # Cold start: respect config value, don't force-enable streaming
-pkill -9 -f "example_v4l2_preview" 2>/dev/null || true
+pkill -9 -f "tool_preview" 2>/dev/null || true
 TMP_CONFIG="$(mktemp /tmp/laser_guidance_stream_XXXX.yaml)"
 
 python3 -c "
@@ -65,7 +65,7 @@ with open('$TMP_CONFIG', 'w') as f:
 
 cd "$REPO_ROOT"
 rm -f "$SDP"
-./build/example_v4l2_preview "$TMP_CONFIG" >/dev/null 2>/tmp/laser_daemon.log &
+./build/tool_preview "$TMP_CONFIG" >/dev/null 2>/tmp/laser_daemon.log &
 
 if [ "$STREAMING_ENABLED" = "True" ]; then
     for i in $(seq 1 50); do

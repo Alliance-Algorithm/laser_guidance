@@ -90,34 +90,50 @@ echo "quit"       > /tmp/laser_cmd
 
 ## Examples
 
+工具入口（原 `examples/`，现 `tools/`）：
+
+```bash
+# 可执行文件前缀为 tool_
+./build/tool_preview
+./build/tool_capture
+./build/tool_record
+./build/tool_replay
+./build/tool_model_infer
+./build/tool_detector_benchmark
+./build/tool_calibrate
+./build/tool_export
+./build/tool_transcode
+./build/tool_smoke
+```
+
 离线冒烟：
 
 ```bash
-ros2 run rmcs_laser_guidance example_offline_smoke
+ros2 run rmcs_laser_guidance tool_smoke
 ```
 
 V4L2 预览：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_preview
+ros2 run rmcs_laser_guidance tool_preview
 ```
 
 也可以显式传配置路径：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_preview /abs/path/to/default.yaml
+ros2 run rmcs_laser_guidance tool_preview /abs/path/to/default.yaml
 ```
 
 V4L2 采图录帧：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_capture
+ros2 run rmcs_laser_guidance tool_capture
 ```
 
 V4L2 原始视频会话录制：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_record_session
+ros2 run rmcs_laser_guidance tool_record
 ```
 
 不显式传输出目录时，默认保存到仓库根目录下的 `videos/`。
@@ -127,7 +143,7 @@ ros2 run rmcs_laser_guidance example_v4l2_record_session
 也可以显式传录制根目录和时长：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_record_session \
+ros2 run rmcs_laser_guidance tool_record \
   /abs/path/to/config/capture_red_20m.yaml \
   /abs/path/to/session_root \
   30 \
@@ -140,25 +156,25 @@ ros2 run rmcs_laser_guidance example_v4l2_record_session \
 回放预览：
 
 ```bash
-ros2 run rmcs_laser_guidance example_replay_preview
+ros2 run rmcs_laser_guidance tool_replay
 ```
 
 检测 benchmark：
 
 ```bash
-ros2 run rmcs_laser_guidance example_detector_benchmark
+ros2 run rmcs_laser_guidance tool_detector_benchmark
 ```
 
 模型推理占位入口：
 
 ```bash
-ros2 run rmcs_laser_guidance example_model_infer
+ros2 run rmcs_laser_guidance tool_model_infer
 ```
 
 也可以显式覆盖模型路径：
 
 ```bash
-ros2 run rmcs_laser_guidance example_model_infer \
+ros2 run rmcs_laser_guidance tool_model_infer \
   /abs/path/to/default.yaml \
   /abs/path/to/replay_dir \
   /abs/path/to/model.onnx
@@ -167,14 +183,14 @@ ros2 run rmcs_laser_guidance example_model_infer \
 把已录制 session 的 `raw.mp4` 原地转为 `H.264/avc1`：
 
 ```bash
-ros2 run rmcs_laser_guidance example_transcode_recorded_session \
+ros2 run rmcs_laser_guidance tool_transcode \
   /abs/path/to/videos/<session_id>
 ```
 
 离线抽帧生成待标注数据集（可选备用）：
 
 ```bash
-ros2 run rmcs_laser_guidance example_export_training_frames \
+ros2 run rmcs_laser_guidance tool_export \
   /abs/path/to/session_dir \
   /abs/path/to/dataset_root \
   train \

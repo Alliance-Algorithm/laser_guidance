@@ -12,8 +12,8 @@
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
 - `Config` / `Frame` / `TargetObservation` / `Pipeline`
-- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker`
-- 自动测试与人工运行入口
+- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker` / `Ft4222Spi`
+- 自动测试与工具运行入口
 
 当前明确**不是**闭环控制系统，不包含：
 
@@ -38,14 +38,22 @@
   - 放置 `.onnx` 模型文件。
 - `include/`
   - 扁平 public API，仅放稳定对外头文件。
-- `src/`
-  - 公开接口实现。
-- `src/internal/`
-  - 不安装的内部实现头。
-- `examples/`
-  - 人工运行入口。
+- `src/core/`
+  - 核心模块：`Config`、`Pipeline`、`FrameFormat`、`DebugRenderer`、`Replay`。
+- `src/vision/`
+  - 视觉/推理模块：`Detector`、`ModelInfer`、`ModelRuntime`、`ModelAdapter`、`TensorRTEngine`、`TrainingData`。
+- `src/capture/`
+  - 视频采集模块：`V4l2Capture`。
+- `src/streaming/`
+  - 网络推流模块：`RtpStreamer`、`UdpSender`、`VideoShm`。
+- `src/tracking/`
+  - 跟踪/状态模块：`EkfTracker`、`HitState`、`FreshnessQueue`、`RuntimeMetrics`。
+- `src/io/`
+  - 硬件 I/O 模块：`Ft4222Spi`、LibFT4222 头文件。
+- `tools/`
+  - 可执行工具入口（原 `examples/`）。
 - `tests/`
-  - 自动化验证，文件名统一为 `*_test.cpp`。
+  - 自动化验证，按模块分子目录（`core/`、`vision/`、`tracking/`），文件名统一为 `*_test.cpp`。
 - `test_data/`
   - 样本回放与固定测试资源。
 - `docs/`
@@ -64,15 +72,23 @@ public：
 
 internal：
 
-- `src/internal/frame_format.hpp`
-- `src/internal/detector.hpp`
-- `src/internal/debug_renderer.hpp`
-- `src/internal/replay.hpp`
-- `src/internal/model_runtime.hpp`
-- `src/internal/model_adapter.hpp`
-- `src/internal/model_infer.hpp`
-- `src/internal/training_data.hpp`
-- `src/internal/v4l2_capture.hpp`
+- `src/core/frame_format.hpp`
+- `src/core/debug_renderer.hpp`
+- `src/core/replay.hpp`
+- `src/vision/detector.hpp`
+- `src/vision/model_runtime.hpp`
+- `src/vision/model_adapter.hpp`
+- `src/vision/model_infer.hpp`
+- `src/vision/training_data.hpp`
+- `src/capture/v4l2_capture.hpp`
+- `src/streaming/rtp_streamer.hpp`
+- `src/streaming/udp_sender.hpp`
+- `src/streaming/video_shm.hpp`
+- `src/tracking/ekf_tracker.hpp`
+- `src/tracking/hit_state.hpp`
+- `src/tracking/freshness_queue.hpp`
+- `src/tracking/runtime_metrics.hpp`
+- `src/io/ft4222_spi.hpp`
 
 设计边界：
 

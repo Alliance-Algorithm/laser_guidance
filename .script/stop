@@ -2,12 +2,12 @@
 set -euo pipefail
 FIFO="/tmp/laser_cmd"
 
-if pgrep -f "example_v4l2_preview" >/dev/null 2>&1; then
+if pgrep -f "tool_preview" >/dev/null 2>&1; then
     if [ -p "$FIFO" ]; then
         timeout 1 bash -c "echo 'quit' > '$FIFO'" 2>/dev/null || true
     fi
     sleep 1
-    pkill -f "example_v4l2_preview" 2>/dev/null || true
+    pkill -f "tool_preview" 2>/dev/null || true
     rm -f "$FIFO"
     echo "已停止"
 else

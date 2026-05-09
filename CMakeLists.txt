@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME "Enable ONNX Runtime model backend support." OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to an ONNX Runtime installation root")
 option(RMCS_LASER_GUIDANCE_WITH_TENSORRT "Enable TensorRT engine backend support." OFF)
+option(RMCS_LASER_GUIDANCE_WITH_FT4222 "Enable FT4222H USB-to-SPI bridge support." ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O2 -Wall -Wextra -Wpedantic)
@@ -66,29 +67,16 @@ if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
     NAMES NvInfer.h NvOnnxParser.h
     PATHS /usr/include /usr/local/include
   )
-  find_library(
-    RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY
-    NAMES nvinfer
-    PATHS /usr/lib /usr/local/lib
-  )
-  find_library(
-    RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY
-    NAMES nvonnxparser
-    PATHS /usr/lib /usr/local/lib
-  )
-  find_library(
-    RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY
-    NAMES nvinfer_plugin
-    PATHS /usr/lib /usr/local/lib
-  )
+  find_library(RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY NAMES nvinfer PATHS /usr/lib /usr/local/lib)
+  find_library(RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY NAMES nvonnxparser PATHS /usr/lib /usr/local/lib)
+  find_library(RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY NAMES nvinfer_plugin PATHS /usr/lib /usr/local/lib)
 
   if(NOT RMCS_LASER_GUIDANCE_TENSORRT_INCLUDE_DIR
      OR NOT RMCS_LASER_GUIDANCE_TENSORRT_LIBRARY
      OR NOT RMCS_LASER_GUIDANCE_TENSORRT_ONNX_PARSER_LIBRARY
      OR NOT RMCS_LASER_GUIDANCE_TENSORRT_PLUGIN_LIBRARY)
     message(FATAL_ERROR
-      "RMCS_LASER_GUIDANCE_WITH_TENSORRT=ON requires TensorRT. "
-      "Install tensorrt or set CMAKE_PREFIX_PATH to the installation root.")
+      "RMCS_LASER_GUIDANCE_WITH_TENSORRT=ON requires TensorRT.")
   endif()
 
   add_library(TensorRT::nvinfer UNKNOWN IMPORTED)
@@ -114,93 +102,124 @@ if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
     PATHS /opt/cuda/lib64 /opt/cuda/targets/x86_64-linux/lib/stubs)
 endif()
 
+# ---- FT4222H USB-to-SPI (optional) --------------------------------------------
+if(RMCS_LASER_GUIDANCE_WITH_FT4222)
+  find_library(RMCS_LASER_GUIDANCE_FT4222_LIBRARY NAMES ft4222
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR} /usr/local/lib /usr/lib NO_DEFAULT_PATH)
+  if(NOT RMCS_LASER_GUIDANCE_FT4222_LIBRARY)
+    find_library(RMCS_LASER_GUIDANCE_FT4222_LIBRARY NAMES ft4222)
+  endif()
+
+  if(NOT RMCS_LASER_GUIDANCE_FT4222_LIBRARY)
+    message(FATAL_ERROR
+      "RMCS_LASER_GUIDANCE_WITH_FT4222=ON requires libft4222. "
+      "Place libft4222.so in the project root or /usr/local/lib.")
+  endif()
+
+  message(STATUS "FT4222H USB-to-SPI support enabled (${RMCS_LASER_GUIDANCE_FT4222_LIBRARY})")
+endif()
+
 # ---- default paths ------------------------------------------------------------
 set(default_config_path "${CMAKE_CURRENT_SOURCE_DIR}/config/default.yaml")
 set(default_sample_replay_path "${CMAKE_CURRENT_SOURCE_DIR}/test_data/sample_images")
 set(default_video_session_root "${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
-# ---- core library -------------------------------------------------------------
-file(GLOB RMCS_LASER_GUIDANCE_CORE_SOURCES src/*.cpp)
-add_library(${PROJECT_NAME}_core SHARED ${RMCS_LASER_GUIDANCE_CORE_SOURCES})
+# ---- module object libraries --------------------------------------------------
+set(RMCS_LASER_GUIDANCE_MODULES core vision capture streaming tracking io)
 
-target_include_directories(
-  ${PROJECT_NAME}_core
+foreach(_mod ${RMCS_LASER_GUIDANCE_MODULES})
+  file(GLOB _sources "src/${_mod}/*.cpp")
+  if(_sources)
+    add_library(${PROJECT_NAME}_obj_${_mod} OBJECT ${_sources})
+    target_include_directories(${PROJECT_NAME}_obj_${_mod}
+      PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+      PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+    if(_mod STREQUAL "io")
+      if(RMCS_LASER_GUIDANCE_WITH_FT4222)
+        target_link_libraries(${PROJECT_NAME}_obj_${_mod} PUBLIC ${RMCS_LASER_GUIDANCE_FT4222_LIBRARY})
+        target_compile_definitions(${PROJECT_NAME}_obj_${_mod} PUBLIC RMCS_LASER_GUIDANCE_WITH_FT4222=1)
+      endif()
+    endif()
+    if(_mod STREQUAL "vision")
+      if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
+        target_link_libraries(${PROJECT_NAME}_obj_${_mod} PRIVATE onnxruntime::onnxruntime)
+        target_compile_definitions(${PROJECT_NAME}_obj_${_mod} PUBLIC RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=1)
+      endif()
+      if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
+        target_link_libraries(${PROJECT_NAME}_obj_${_mod}
+          PRIVATE TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
+          PRIVATE ${RMCS_LASER_GUIDANCE_CUDA_LIBRARY} ${RMCS_LASER_GUIDANCE_CUDA_RT_LIBRARY})
+        target_compile_definitions(${PROJECT_NAME}_obj_${_mod} PUBLIC RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
+      endif()
+    endif()
+  endif()
+endforeach()
+
+# ---- core shared library ------------------------------------------------------
+add_library(${PROJECT_NAME}_core SHARED)
+target_link_libraries(${PROJECT_NAME}_core
+  PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt
+  PRIVATE ${PROJECT_NAME}_obj_core ${PROJECT_NAME}_obj_vision ${PROJECT_NAME}_obj_capture
+          ${PROJECT_NAME}_obj_streaming ${PROJECT_NAME}_obj_tracking ${PROJECT_NAME}_obj_io)
+
+target_include_directories(${PROJECT_NAME}_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     ${OpenCV_INCLUDE_DIRS}
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-target_link_libraries(${PROJECT_NAME}_core PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt)
-
-if(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
-  target_link_libraries(${PROJECT_NAME}_core PRIVATE onnxruntime::onnxruntime)
-  target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=1)
-endif()
-
-if(RMCS_LASER_GUIDANCE_WITH_TENSORRT)
-  target_link_libraries(${PROJECT_NAME}_core
-    PRIVATE TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
-    PRIVATE ${RMCS_LASER_GUIDANCE_CUDA_LIBRARY} ${RMCS_LASER_GUIDANCE_CUDA_RT_LIBRARY})
-  target_compile_definitions(${PROJECT_NAME}_core PUBLIC RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
-endif()
-
-# ---- shared helpers -----------------------------------------------------------
-define_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS
-  BRIEF_DOCS "Example targets" FULL_DOCS "Accumulated example executable names")
-
-set_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS "")
+# ---- tools & tests helpers -----------------------------------------------------
+define_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_TOOL_TARGETS
+  BRIEF_DOCS "Tool targets" FULL_DOCS "Accumulated tool executable names")
+set_property(GLOBAL PROPERTY RMCS_LASER_GUIDANCE_TOOL_TARGETS "")
 
 function(rmcs_laser_guidance_add_default_paths target_name)
-  target_compile_definitions(
-    ${target_name}
+  target_compile_definitions(${target_name}
     PRIVATE
       RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH="${default_config_path}"
       RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH="${default_sample_replay_path}"
-      RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT="${default_video_session_root}"
-  )
+      RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT="${default_video_session_root}")
 endfunction()
 
-function(rmcs_laser_guidance_add_example target_name source_path)
+function(rmcs_laser_guidance_add_tool target_name source_path)
   add_executable(${target_name} ${source_path})
   rmcs_laser_guidance_add_default_paths(${target_name})
-  target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/tools)
   target_link_libraries(${target_name} PRIVATE ${PROJECT_NAME}_core ${OpenCV_LIBS})
-  set_property(GLOBAL APPEND PROPERTY
-    RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS ${target_name})
+  set_property(GLOBAL APPEND PROPERTY RMCS_LASER_GUIDANCE_TOOL_TARGETS ${target_name})
 endfunction()
 
 function(rmcs_laser_guidance_add_test target_name source_path)
   add_executable(${target_name} ${source_path})
   rmcs_laser_guidance_add_default_paths(${target_name})
-  target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/tools ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_link_libraries(${target_name} PRIVATE ${PROJECT_NAME}_core ${OpenCV_LIBS})
   add_test(NAME ${target_name} COMMAND ${target_name})
 endfunction()
 
-# ---- examples -----------------------------------------------------------------
+# ---- tools --------------------------------------------------------------------
 enable_testing()
 
-file(GLOB RMCS_LASER_GUIDANCE_EXAMPLE_SOURCES examples/*.cpp)
-foreach(_source ${RMCS_LASER_GUIDANCE_EXAMPLE_SOURCES})
+file(GLOB RMCS_LASER_GUIDANCE_TOOL_SOURCES tools/*.cpp)
+foreach(_source ${RMCS_LASER_GUIDANCE_TOOL_SOURCES})
   get_filename_component(_stem ${_source} NAME_WLE)
-  rmcs_laser_guidance_add_example("example_${_stem}" ${_source})
+  rmcs_laser_guidance_add_tool("tool_${_stem}" ${_source})
 endforeach()
 
 # ---- tests --------------------------------------------------------------------
-file(GLOB RMCS_LASER_GUIDANCE_TEST_SOURCES tests/*_test.cpp)
+file(GLOB_RECURSE RMCS_LASER_GUIDANCE_TEST_SOURCES tests/*_test.cpp)
 foreach(_source ${RMCS_LASER_GUIDANCE_TEST_SOURCES})
   get_filename_component(_target ${_source} NAME_WLE)
   rmcs_laser_guidance_add_test(${_target} ${_source})
 endforeach()
 
 # ---- install ------------------------------------------------------------------
-get_property(_examples GLOBAL PROPERTY RMCS_LASER_GUIDANCE_EXAMPLE_TARGETS)
+get_property(_tools GLOBAL PROPERTY RMCS_LASER_GUIDANCE_TOOL_TARGETS)
 
 install(
-  TARGETS ${PROJECT_NAME}_core ${_examples}
+  TARGETS ${PROJECT_NAME}_core ${_tools}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION lib/${PROJECT_NAME}

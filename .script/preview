@@ -30,4 +30,4 @@ cfg.setdefault('debug', {})['show_window'] = True
 yaml.dump(cfg, sys.stdout, default_flow_style=False, allow_unicode=True)
 " > "$TMP_CONFIG"
 cd "$REPO_ROOT"
-./build/example_v4l2_preview "$TMP_CONFIG"
+./build/tool_preview "$TMP_CONFIG"
