@@ -444,6 +444,37 @@ V = D / 65535 * 20 - 10
 - SPI 模式是否为 `CPOL=0, CPHA=1`
 - 是否需要先显式使能内部参考
 
+### ONNX 模型已配置但始终不识别目标
+
+先跑诊断：
+
+```bash
+./build/tool_model_infer config/default.yaml test_data/sample_images models/exp.onnx
+```
+
+如果输出里看到：
+
+```text
+runtime_enabled=false
+message=model backend requires ONNX Runtime support
+```
+
+说明 **CMake 的编译宏名和 C++ 代码里的宏名不一致**。
+
+当前仓库存在一个已知的构建系统虫：
+
+- `CMakeLists.txt` 定义的编译宏是 `WITH_ONNXRUNTIME`
+- 但 C++ 代码检查的是 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`
+
+结果：即使 ONNX Runtime 库已成功找到并链接，C++ 代码仍然判定"未启用"，然后在运行时静默退化到 stub 实现。
+
+**当前修复**（已在 89426e7 附近的提交中修正）是把 CMakeLists.txt 的编译宏统一成 C++ 代码期望的 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`。
+
+**后续重构方向**（计划中）：
+
+- 短期：在 `model_runtime.cpp` 加 `#error` 守卫，使得名字不一致在编译阶段就炸掉，而不是运行时静默退化
+- 长期：把 `model_runtime.cpp` 拆成 `model_runtime_onnx.cpp` 和 `model_runtime_stub.cpp`，由 CMake 在源文件层面决定编译哪个。这样宏彻底消失，不会再有名字不一致的可能
+
 ## 振镜驱动输入接线
 
 你给出的振镜参数：
