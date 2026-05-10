@@ -91,13 +91,6 @@ auto Ft4222Spi::open(Ft4222Config config)
         return std::unexpected("FT4222H not found with compatible chip mode");
 
     FT4222_STATUS ft4222_status;
-    uint16_t max_transfer = 0;
-    ft4222_status = FT4222_GetMaxTransferSize(ft_handle, &max_transfer);
-    if (ft4222_status != FT4222_OK) {
-        FT_Close(ft_handle);
-        return std::unexpected("FT4222_GetMaxTransferSize failed");
-    }
-
     ft4222_status = FT4222_SPIMaster_Init(
         ft_handle,
         static_cast<FT4222_SPIMode>(SPI_IO_SINGLE),
@@ -108,14 +101,40 @@ auto Ft4222Spi::open(Ft4222Config config)
 
     if (ft4222_status != FT4222_OK) {
         FT_Close(ft_handle);
-        return std::unexpected("SPI Master init failed");
+        return std::unexpected("SPI Master init failed: " + std::to_string(ft4222_status));
+    }
+
+    ft4222_status = FT4222_SetClock(
+        ft_handle,
+        static_cast<FT4222_ClockRate>(config.sys_clock));
+    if (ft4222_status != FT4222_OK) {
+        FT4222_UnInitialize(ft_handle);
+        FT_Close(ft_handle);
+        return std::unexpected("FT4222_SetClock failed: " + std::to_string(ft4222_status));
+    }
+
+    ft4222_status = FT4222_SPIMaster_SetCS(
+        ft_handle,
+        static_cast<SPI_ChipSelect>(config.cs_active));
+    if (ft4222_status != FT4222_OK) {
+        FT4222_UnInitialize(ft_handle);
+        FT_Close(ft_handle);
+        return std::unexpected("FT4222_SPIMaster_SetCS failed: " + std::to_string(ft4222_status));
+    }
+
+    uint16_t max_transfer = 0;
+    ft4222_status = FT4222_GetMaxTransferSize(ft_handle, &max_transfer);
+    if (ft4222_status != FT4222_OK) {
+        FT4222_UnInitialize(ft_handle);
+        FT_Close(ft_handle);
+        return std::unexpected("FT4222_GetMaxTransferSize failed: " + std::to_string(ft4222_status));
     }
 
     ft4222_status = FT4222_SPI_SetDrivingStrength(ft_handle, DS_8MA, DS_8MA, DS_8MA);
     if (ft4222_status != FT4222_OK) {
         FT4222_UnInitialize(ft_handle);
         FT_Close(ft_handle);
-        return std::unexpected("SetDrivingStrength failed");
+        return std::unexpected("SetDrivingStrength failed: " + std::to_string(ft4222_status));
     }
 
     return Ft4222Spi(ft_handle, config);
