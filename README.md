@@ -61,6 +61,8 @@ ctest --test-dir build --output-on-failure
 ./build/tool_model_infer              # 模型推理
 ./build/tool_detector_benchmark       # 检测 benchmark
 ./build/tool_calibrate                # 相机标定
+./build/tool_dac8568_smoke            # FT4222 -> DAC8568 硬件冒烟
+./build/tool_galvo_smoke              # DAC8568 -> 振镜信号冒烟
 ./build/tool_export                   # 离线抽帧导出
 ./build/tool_transcode                # 已录视频转码
 ./build/tool_smoke                    # 离线冒烟
@@ -224,6 +226,7 @@ if (spi) {
 
 - `plan.md`
 - `docs/architecture.md`
+- `docs/hardware_ft4222_dac8568.md`
 - `docs/dataset_collection.md`
 - `docs/development.md`
 - `docs/future_rmcs_integration.md`
