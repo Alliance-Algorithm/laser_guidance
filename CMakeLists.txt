@@ -33,7 +33,7 @@ if(WITH_ONNXRUNTIME)
   set_target_properties(onnxruntime::onnxruntime PROPERTIES
     IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}")
-  add_compile_definitions(WITH_ONNXRUNTIME=1)
+  add_compile_definitions(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=1)
   message(STATUS "ONNX Runtime enabled")
 endif()
 
@@ -57,7 +57,7 @@ if(WITH_TENSORRT)
   add_library(TensorRT::nvinfer_plugin UNKNOWN IMPORTED)
   set_target_properties(TensorRT::nvinfer_plugin PROPERTIES
     IMPORTED_LOCATION "${TENSORRT_PLUGIN}" INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR}")
-  add_compile_definitions(WITH_TENSORRT=1)
+  add_compile_definitions(RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
   message(STATUS "TensorRT enabled")
 endif()
 

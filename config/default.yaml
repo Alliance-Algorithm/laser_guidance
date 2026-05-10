@@ -1,5 +1,5 @@
 v4l2:
-  device_path: /dev/video1
+  device_path: /dev/video2
   width: 1920
   height: 1080
   framerate: 60.0
