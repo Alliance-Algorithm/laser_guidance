@@ -20,7 +20,7 @@ runtime:
   hit_release_frames: 5
   debug_enabled: true
   debug_max_fps: 30
-  record_enabled: true
+  record_enabled: false
   record_queue_size: 16
 
 inference:
@@ -28,14 +28,14 @@ inference:
   model_path: models/exp.onnx
 
 streaming:
-  enabled: true
+  enabled: false
   host: "127.0.0.1"
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "h264_nvenc"
 
 udp:
-  enabled: true
+  enabled: false
   host: "127.0.0.1"
   port: 5001
 
@@ -49,6 +49,9 @@ ekf:
 
 guidance:
   enabled: true
+  calib_mode: true
+  calib_angle_x_deg: 0.0
+  calib_angle_y_deg: 0.0
   target_geometry:
     - class_id: 0
       width_mm: 72.0
@@ -63,8 +66,8 @@ guidance:
   t_x_mm: -92.5
   t_y_mm: 30.0
   t_z_mm: 100.0
-  r_x_deg: 0.86
-  r_y_deg: 0.13
+  r_x_deg: 0.88
+  r_y_deg: 0.00
   r_z_deg: 6.56
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
@@ -76,7 +79,7 @@ guidance:
     x_minus_channel: 2
     y_plus_channel: 1
     y_minus_channel: 3
-  scan_mode: rectangle
-  scan_width_deg: 0.12
-  scan_height_deg: 0.16
-  scan_grid_n: 8
+  scan_mode: single
+  scan_width_deg: 0.5
+  scan_height_deg: 0.4
+  scan_grid_n: 10

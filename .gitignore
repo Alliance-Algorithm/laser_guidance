@@ -21,3 +21,8 @@ __pycache__/
 *.swo
 models/*.pt
 .script/.config-path
+calib_records*.csv
+hit_calib_records*.csv
+calib_all.csv
+calib_merged.csv
+extrinsics_group1.txt

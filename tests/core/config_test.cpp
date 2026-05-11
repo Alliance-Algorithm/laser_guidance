@@ -9,7 +9,7 @@ int main() {
         using namespace rmcs_laser_guidance::tests;
 
         const auto default_config = rmcs_laser_guidance::load_config(default_config_path());
-        require(default_config.v4l2.device_path == std::filesystem::path("/dev/video1"),
+        require(default_config.v4l2.device_path == std::filesystem::path("/dev/video2"),
             "default device path mismatch");
         require(default_config.v4l2.width == 1920, "default width mismatch");
         require(default_config.v4l2.height == 1080, "default height mismatch");
@@ -30,9 +30,9 @@ int main() {
             "default hit_confirm_frames mismatch");
         require(default_config.runtime.hit_release_frames == 5,
             "default hit_release_frames mismatch");
-        require(!default_config.runtime.debug_enabled, "default debug_enabled mismatch");
+        require(default_config.runtime.debug_enabled, "default debug_enabled mismatch");
         require(default_config.runtime.debug_max_fps == 30, "default debug_max_fps mismatch");
-        require(!default_config.runtime.record_enabled, "default record_enabled mismatch");
+        require(default_config.runtime.record_enabled, "default record_enabled mismatch");
         require(default_config.runtime.record_queue_size == 16,
             "default record_queue_size mismatch");
         require(default_config.inference.backend

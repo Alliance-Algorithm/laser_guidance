@@ -116,6 +116,89 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.ekf.max_missed_frames = ekf["max_missed_frames"].as<int>();
     }
 
+    if (const YAML::Node guidance = yaml["guidance"]) {
+        if (guidance["enabled"])
+            config.guidance.enabled = guidance["enabled"].as<bool>();
+        if (guidance["camera_calib_path"])
+            config.guidance.camera_calib_path =
+                guidance["camera_calib_path"].as<std::string>();
+        if (guidance["t_x_mm"])
+            config.guidance.t_x_mm = guidance["t_x_mm"].as<float>();
+        if (guidance["t_y_mm"])
+            config.guidance.t_y_mm = guidance["t_y_mm"].as<float>();
+        if (guidance["t_z_mm"])
+            config.guidance.t_z_mm = guidance["t_z_mm"].as<float>();
+        if (guidance["r_x_deg"])
+            config.guidance.r_x_deg = guidance["r_x_deg"].as<float>();
+        if (guidance["r_y_deg"])
+            config.guidance.r_y_deg = guidance["r_y_deg"].as<float>();
+        if (guidance["r_z_deg"])
+            config.guidance.r_z_deg = guidance["r_z_deg"].as<float>();
+        if (guidance["mirror_separation_mm"])
+            config.guidance.mirror_separation_mm =
+                guidance["mirror_separation_mm"].as<float>();
+        if (guidance["max_optical_angle_deg"])
+            config.guidance.max_optical_angle_deg =
+                guidance["max_optical_angle_deg"].as<float>();
+        if (guidance["input_voltage_range_v"])
+            config.guidance.input_voltage_range_v =
+                guidance["input_voltage_range_v"].as<float>();
+        if (guidance["dac_voltage_range_v"])
+            config.guidance.dac_voltage_range_v =
+                guidance["dac_voltage_range_v"].as<float>();
+
+        if (const YAML::Node geom_list = guidance["target_geometry"]) {
+            config.guidance.target_geometry.clear();
+            for (const auto& item : geom_list) {
+                TargetGeometry geom;
+                if (item["class_id"]) geom.class_id = item["class_id"].as<int>();
+                if (item["width_mm"]) geom.width_mm = item["width_mm"].as<float>();
+                if (item["height_mm"]) geom.height_mm = item["height_mm"].as<float>();
+                config.guidance.target_geometry.push_back(geom);
+            }
+        }
+
+        if (const YAML::Node wiring = guidance["wiring"]) {
+            if (wiring["mode"]) {
+                const auto mode_str = to_lower_copy(wiring["mode"].as<std::string>());
+                if (mode_str == "differential")
+                    config.guidance.wiring.mode = GalvoWiringMode::differential;
+                else if (mode_str == "single_ended")
+                    config.guidance.wiring.mode = GalvoWiringMode::single_ended;
+            }
+            if (wiring["x_plus_channel"])
+                config.guidance.wiring.x_plus_channel =
+                    wiring["x_plus_channel"].as<int>();
+            if (wiring["x_minus_channel"])
+                config.guidance.wiring.x_minus_channel =
+                    wiring["x_minus_channel"].as<int>();
+            if (wiring["y_plus_channel"])
+                config.guidance.wiring.y_plus_channel =
+                    wiring["y_plus_channel"].as<int>();
+            if (wiring["y_minus_channel"])
+                config.guidance.wiring.y_minus_channel =
+                    wiring["y_minus_channel"].as<int>();
+        }
+
+        if (guidance["scan_mode"]) {
+            const auto mode = to_lower_copy(guidance["scan_mode"].as<std::string>());
+            if (mode == "rectangle")
+                config.guidance.scan_mode = ScanMode::rectangle;
+        }
+        if (guidance["scan_width_deg"])
+            config.guidance.scan_width_deg = guidance["scan_width_deg"].as<float>();
+        if (guidance["scan_height_deg"])
+            config.guidance.scan_height_deg = guidance["scan_height_deg"].as<float>();
+        if (guidance["scan_grid_n"])
+            config.guidance.scan_grid_n = guidance["scan_grid_n"].as<int>();
+        if (guidance["calib_mode"])
+            config.guidance.calib_mode = guidance["calib_mode"].as<bool>();
+        if (guidance["calib_angle_x_deg"])
+            config.guidance.calib_angle_x_deg = guidance["calib_angle_x_deg"].as<float>();
+        if (guidance["calib_angle_y_deg"])
+            config.guidance.calib_angle_y_deg = guidance["calib_angle_y_deg"].as<float>();
+    }
+
     if (config.v4l2.device_path.empty())
         throw std::runtime_error("v4l2.device_path must not be empty");
     if (config.v4l2.width <= 0) throw std::runtime_error("v4l2.width must be positive");

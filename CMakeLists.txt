@@ -90,42 +90,40 @@ set(DEFAULT_PATH_DEFS
   RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test_data/sample_images"
   RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
+# ---- shared library (compile once, link everywhere) ----------------------------
+add_library(rmcs_laser_guidance_core ${ALL_SOURCES})
+target_include_directories(rmcs_laser_guidance_core PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(rmcs_laser_guidance_core PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(rmcs_laser_guidance_core PUBLIC ${COMMON_LIBS})
+if(WITH_ONNXRUNTIME)
+  target_link_libraries(rmcs_laser_guidance_core PUBLIC onnxruntime::onnxruntime)
+endif()
+if(WITH_TENSORRT)
+  target_link_libraries(rmcs_laser_guidance_core PUBLIC
+    TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
+    ${CUDA_LIBRARY} ${CUDA_RT_LIBRARY})
+endif()
+
 # ---- tools ---------------------------------------------------------------------
 enable_testing()
 
 file(GLOB TOOL_SOURCES tools/*.cpp)
 foreach(_src ${TOOL_SOURCES})
   get_filename_component(_name ${_src} NAME_WLE)
-  add_executable(tool_${_name} ${_src} ${ALL_SOURCES})
-  target_include_directories(tool_${_name} PRIVATE ${COMMON_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  add_executable(tool_${_name} ${_src})
+  target_include_directories(tool_${_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
   target_compile_definitions(tool_${_name} PRIVATE ${DEFAULT_PATH_DEFS})
-  target_link_libraries(tool_${_name} PRIVATE ${COMMON_LIBS})
-  if(WITH_ONNXRUNTIME)
-    target_link_libraries(tool_${_name} PRIVATE onnxruntime::onnxruntime)
-  endif()
-  if(WITH_TENSORRT)
-    target_link_libraries(tool_${_name} PRIVATE
-      TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
-      ${CUDA_LIBRARY} ${CUDA_RT_LIBRARY})
-  endif()
+  target_link_libraries(tool_${_name} PRIVATE rmcs_laser_guidance_core)
 endforeach()
 
 # ---- tests ---------------------------------------------------------------------
 file(GLOB_RECURSE TEST_SOURCES tests/*_test.cpp)
 foreach(_src ${TEST_SOURCES})
   get_filename_component(_name ${_src} NAME_WLE)
-  add_executable(${_name} ${_src} ${ALL_SOURCES})
-  target_include_directories(${_name} PRIVATE ${COMMON_INCLUDES}
+  add_executable(${_name} ${_src})
+  target_include_directories(${_name} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tools ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_compile_definitions(${_name} PRIVATE ${DEFAULT_PATH_DEFS})
-  target_link_libraries(${_name} PRIVATE ${COMMON_LIBS})
-  if(WITH_ONNXRUNTIME)
-    target_link_libraries(${_name} PRIVATE onnxruntime::onnxruntime)
-  endif()
-  if(WITH_TENSORRT)
-    target_link_libraries(${_name} PRIVATE
-      TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
-      ${CUDA_LIBRARY} ${CUDA_RT_LIBRARY})
-  endif()
+  target_link_libraries(${_name} PRIVATE rmcs_laser_guidance_core)
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()

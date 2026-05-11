@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
+#include <vector>
 
 namespace rmcs_laser_guidance {
 
@@ -72,6 +74,54 @@ struct EkfConfig {
     int max_missed_frames      = 10;
 };
 
+enum class GalvoWiringMode : int {
+    differential = 0,
+    single_ended,
+};
+
+enum class ScanMode : int {
+    single = 0,
+    rectangle,
+};
+
+struct TargetGeometry {
+    int class_id = 0;
+    float width_mm = 150.0F;
+    float height_mm = 150.0F;
+};
+
+struct GalvoWiringConfig {
+    GalvoWiringMode mode = GalvoWiringMode::differential;
+    int x_plus_channel = 0;
+    int x_minus_channel = 2;
+    int y_plus_channel = 1;
+    int y_minus_channel = 3;
+};
+
+struct GuidanceConfig {
+    bool enabled = false;
+    std::vector<TargetGeometry> target_geometry {};
+    std::filesystem::path camera_calib_path {};
+    float t_x_mm = 0.0F;
+    float t_y_mm = 0.0F;
+    float t_z_mm = 0.0F;
+    float r_x_deg = 0.0F;
+    float r_y_deg = 0.0F;
+    float r_z_deg = 0.0F;
+    float mirror_separation_mm = 15.0F;
+    float max_optical_angle_deg = 30.0F;
+    float input_voltage_range_v = 5.0F;
+    float dac_voltage_range_v = 10.0F;
+    GalvoWiringConfig wiring {};
+    ScanMode scan_mode = ScanMode::single;
+    float scan_width_deg = 1.0F;
+    float scan_height_deg = 0.8F;
+    int scan_grid_n = 10;
+    bool calib_mode = false;
+    float calib_angle_x_deg = 0.0F;
+    float calib_angle_y_deg = 0.0F;
+};
+
 struct Config {
     V4l2Config v4l2 { };
     DebugConfig debug { };
@@ -80,6 +130,7 @@ struct Config {
     RtpConfig rtp { };
     UdpConfig udp { };
     EkfConfig ekf { };
+    GuidanceConfig guidance { };
 };
 
 auto load_config(const std::filesystem::path& config_path) -> Config;
