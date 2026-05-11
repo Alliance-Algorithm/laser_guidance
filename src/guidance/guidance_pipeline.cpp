@@ -65,12 +65,21 @@ GuidancePipeline::GuidancePipeline(const Config& config, Ft4222Spi& spi)
         return;
     }
 
+    const bool wants_scan = config_.scan_mode == ScanMode::rectangle && !config_.calib_mode;
+
     if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
         try {
             voltage_mapper_ = std::make_unique<VoltageMapper>(config_);
         } catch (const std::exception& e) {
             std::println(stderr, "guidance: voltage mapper init failed: {}", e.what());
             return;
+        }
+        if (wants_scan) {
+            const auto calib_err = load_calibration(config_.camera_calib_path);
+            if (!calib_err.empty()) {
+                std::println(stderr, "guidance: scan geometry init failed: {}", calib_err);
+                return;
+            }
         }
     } else {
         const auto calib_err = load_calibration(config_.camera_calib_path);
@@ -80,8 +89,7 @@ GuidancePipeline::GuidancePipeline(const Config& config, Ft4222Spi& spi)
         }
     }
     initialized_ = true;
-    if (config_.command_model == GuidanceCommandModelKind::geometry
-        && config_.scan_mode == ScanMode::rectangle && !config_.calib_mode) {
+    if (wants_scan) {
         start_scan_thread();
     }
     if (config_.calib_mode) {
@@ -266,6 +274,17 @@ auto GuidancePipeline::write_voltage_single(float x_voltage, float y_voltage,
     last_output_vy_.store(y_voltage, std::memory_order_relaxed);
     has_output_voltages_.store(true, std::memory_order_relaxed);
     has_output_angles_.store(false, std::memory_order_relaxed);
+    if (config_.scan_mode == ScanMode::rectangle) {
+        {
+            std::scoped_lock lock(scan_mutex_);
+            scan_center_vx_ = x_voltage;
+            scan_center_vy_ = y_voltage;
+            scan_active_ = true;
+        }
+        scan_cv_.notify_one();
+        // scan thread owns the driver output; do not contend on driver_mutex_
+        return {};
+    }
     std::scoped_lock driver_lock(driver_mutex_);
     if (auto r = driver_->set_voltages(x_voltage, y_voltage); !r) {
         return "galvo voltage write failed: " + r.error();
@@ -340,6 +359,47 @@ auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg)
     return "";
 }
 
+auto GuidancePipeline::scan_rectangle_once_voltage(float cx_v, float cy_v)
+    -> std::string {
+    const float hw = driver_->optical_to_voltage(config_.scan_width_deg * 0.5F);
+    const float hh = driver_->optical_to_voltage(config_.scan_height_deg * 0.5F);
+    const int n = std::max(2, config_.scan_grid_n);
+    const float sx = (hw * 2.0F) / static_cast<float>(n - 1);
+    const float sy = (hh * 2.0F) / static_cast<float>(n - 1);
+
+    for (int row = 0; row < n; ++row) {
+        {
+            std::scoped_lock scan_lock(scan_mutex_);
+            if (scan_stop_ || !scan_active_) return "";
+        }
+        const float y = cy_v - hh + static_cast<float>(row) * sy;
+        if (row % 2 == 0) {
+            for (int col = 0; col < n; ++col) {
+                {
+                    std::scoped_lock scan_lock(scan_mutex_);
+                    if (scan_stop_ || !scan_active_) return "";
+                }
+                const float x = cx_v - hw + static_cast<float>(col) * sx;
+                std::scoped_lock driver_lock(driver_mutex_);
+                if (auto r = driver_->set_voltages(x, y); !r)
+                    return "scan voltage write failed: " + r.error();
+            }
+        } else {
+            for (int col = n - 1; col >= 0; --col) {
+                {
+                    std::scoped_lock scan_lock(scan_mutex_);
+                    if (scan_stop_ || !scan_active_) return "";
+                }
+                const float x = cx_v - hw + static_cast<float>(col) * sx;
+                std::scoped_lock driver_lock(driver_mutex_);
+                if (auto r = driver_->set_voltages(x, y); !r)
+                    return "scan voltage write failed: " + r.error();
+            }
+        }
+    }
+    return "";
+}
+
 auto GuidancePipeline::start_scan_thread() -> void {
     scan_stop_ = false;
     scan_thread_ = std::thread([this] { scan_loop(); });
@@ -358,17 +418,26 @@ auto GuidancePipeline::stop_scan_thread() -> void {
 }
 
 auto GuidancePipeline::scan_loop() -> void {
+    const bool voltage_scan = config_.command_model == GuidanceCommandModelKind::direct_voltage;
     while (true) {
-        float cx_deg = 0.0F;
-        float cy_deg = 0.0F;
+        float cx_deg = 0.0F, cy_deg = 0.0F;
+        float cx_v = 0.0F, cy_v = 0.0F;
         {
             std::unique_lock lock(scan_mutex_);
             scan_cv_.wait(lock, [this] { return scan_stop_ || scan_active_; });
             if (scan_stop_) return;
             cx_deg = scan_center_x_deg_;
             cy_deg = scan_center_y_deg_;
+            cx_v = scan_center_vx_;
+            cy_v = scan_center_vy_;
         }
-        if (auto err = scan_rectangle_once(cx_deg, cy_deg); !err.empty()) {
+        std::string err;
+        if (voltage_scan) {
+            err = scan_rectangle_once_voltage(cx_v, cy_v);
+        } else {
+            err = scan_rectangle_once(cx_deg, cy_deg);
+        }
+        if (!err.empty()) {
             std::println(stderr, "guidance: {}", err);
         }
     }

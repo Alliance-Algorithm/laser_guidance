@@ -65,6 +65,7 @@ private:
     auto update_scan_center(float theta_x, float theta_y, float depth_mm,
                             const cv::Point2f& center) -> std::string;
     auto scan_rectangle_once(float cx_deg, float cy_deg) -> std::string;
+    auto scan_rectangle_once_voltage(float cx_v, float cy_v) -> std::string;
     auto start_scan_thread() -> void;
     auto stop_scan_thread() -> void;
     auto scan_loop() -> void;
@@ -85,6 +86,8 @@ private:
     bool scan_active_ = false;
     float scan_center_x_deg_ = 0.0F;
     float scan_center_y_deg_ = 0.0F;
+    float scan_center_vx_ = 0.0F;
+    float scan_center_vy_ = 0.0F;
     std::atomic<float> last_output_theta_x_deg_ { 0.0F };
     std::atomic<float> last_output_theta_y_deg_ { 0.0F };
     std::atomic<float> last_output_vx_ { 0.0F };

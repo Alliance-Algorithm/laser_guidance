@@ -61,6 +61,20 @@ GalvoDriver (角度→电压→DAC码值→SPI写入)
 FT4222H → DAC8568 → 振镜驱动 → 反射镜
 ```
 
+### Direct Voltage 数据流 (command_model: direct_voltage)
+
+```text
+ModelInfer + EkfTracker
+-> (center + bbox/area)
+-> VoltageMapper (LUT 或 poly3 三阶多项式)
+-> 直接预测电压 (Vx, Vy)
+-> GalvoDriver::set_voltages()
+-> DAC/SPI 写入
+```
+
+矩形扫描模式下，扫描线程独占驱动输出，主线程仅更新扫描中心，避免 `driver_mutex_` 锁竞争。
+扫描中心使用模型预测电压，扫描范围内部由角度参数换算为电压。
+
 **EKF 策略**：瞄准中心用 EKF 预测位置，测距用当前帧 bbox 尺度。
 丢帧时 EKF 短时预测维持，深度沿用最近有效值。EKF lost 时振镜回中。
 
