@@ -18,7 +18,7 @@
 - 单目测距（靶物理尺寸 + bbox 尺度，72×50mm） ✅
 - 相机→振镜外参（平移已知：t_x=-92.5, t_y=30, t_z=100mm） ✅
 - 旋转外参在线标定（WASD 对准 → 空格记录 → solver 求解） ✅
-- `purple confirmed` 命中样本自动采集（`hit_calib_records.csv`）✅
+- `purple confirmed` 命中样本自动采集（`geometry_hit_calib_records.csv`）✅
 - 矩形面扫描（持续 raster，扩大覆盖面积） ✅
 - 振镜解析运动学（含镜间距 + Euler 旋转） ✅
 - 线性角度→电压映射（±30° ↔ ±5V） ✅
@@ -40,14 +40,14 @@
 ```bash
 # 1. 采集数据
 ./build/tool_guidance config/calib_guidance.yaml
-# WASD 微调激光对准靶 → 空格记录 → 换角度重复 → 生成 calib_records.csv
+# WASD 微调激光对准靶 → 空格记录 → 换角度重复 → 生成 geometry_calib_records.csv
 
 # 2. 求解旋转外参
-./build/tool_calib_solve calib_records.csv config/calib_guidance.yaml
+./build/tool_calib_solve geometry_calib_records.csv config/calib_guidance.yaml
 # 输出优化后的 r_x_deg, r_y_deg, r_z_deg
 
 # 或直接使用命中样本
-./build/tool_calib_solve hit_calib_records.csv config/default.yaml
+./build/tool_calib_solve geometry_hit_calib_records.csv config/default.yaml
 
 # 3. 写入 default.yaml，正常跟踪
 ```

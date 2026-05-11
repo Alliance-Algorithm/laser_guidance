@@ -87,13 +87,23 @@ auto GalvoDriver::set_angles(float optical_x_deg, float optical_y_deg)
     const float vx = optical_to_voltage(optical_x_deg);
     const float vy = optical_to_voltage(optical_y_deg);
 
+    return set_voltages(vx, vy);
+}
+
+auto GalvoDriver::set_voltages(float x_voltage, float y_voltage)
+    -> std::expected<void, std::string> {
+
+    if (!reference_enabled_) {
+        return std::unexpected("DAC internal reference not enabled");
+    }
+
     const auto& w = config_.wiring;
     const bool diff = w.mode == GalvoWiringMode::differential;
 
-    const float x_pos_v = diff ? vx : vx;
-    const float x_neg_v = diff ? -vx : 0.0F;
-    const float y_pos_v = diff ? vy : vy;
-    const float y_neg_v = diff ? -vy : 0.0F;
+    const float x_pos_v = diff ? x_voltage : x_voltage;
+    const float x_neg_v = diff ? -x_voltage : 0.0F;
+    const float y_pos_v = diff ? y_voltage : y_voltage;
+    const float y_neg_v = diff ? -y_voltage : 0.0F;
 
     if (auto r = write_voltage(static_cast<std::uint8_t>(w.x_plus_channel),
                                x_pos_v, "x_plus"); !r)

@@ -40,6 +40,16 @@ int main() {
             "default inference backend mismatch");
         require(default_config.inference.model_path == std::filesystem::path("models/exp.onnx"),
             "default model path mismatch");
+        require(default_config.guidance.command_model
+                == rmcs_laser_guidance::GuidanceCommandModelKind::geometry,
+            "default guidance command model mismatch");
+        require(default_config.guidance.voltage_model_path
+                == std::filesystem::path("models/vision_voltage_lut.example.yaml"),
+            "default guidance voltage model path mismatch");
+        require(default_config.guidance.voltage_use_ekf_center,
+            "default guidance voltage_use_ekf_center mismatch");
+        require_near(default_config.guidance.voltage_limit_v, 5.0F, 1e-3F,
+            "default guidance voltage_limit_v mismatch");
         require(default_video_session_root()
                 == (default_config_path().parent_path().parent_path() / "videos"),
             "default video session root mismatch");
@@ -131,7 +141,12 @@ int main() {
             "  record_queue_size: 8\n"
             "inference:\n"
             "  backend: model\n"
-            "  model_path: models/mock_detector.onnx\n");
+            "  model_path: models/mock_detector.onnx\n"
+            "guidance:\n"
+            "  command_model: direct_voltage\n"
+            "  voltage_model_path: models/mock_voltage.yaml\n"
+            "  voltage_use_ekf_center: false\n"
+            "  voltage_limit_v: 3.5\n");
         const auto override_config = rmcs_laser_guidance::load_config(override_path);
         require(override_config.v4l2.device_path == std::filesystem::path("/dev/video7"),
             "override device path mismatch");
@@ -167,6 +182,16 @@ int main() {
         require(override_config.inference.model_path
                 == std::filesystem::path("models/mock_detector.onnx"),
             "override model path mismatch");
+        require(override_config.guidance.command_model
+                == rmcs_laser_guidance::GuidanceCommandModelKind::direct_voltage,
+            "override guidance command model mismatch");
+        require(override_config.guidance.voltage_model_path
+                == std::filesystem::path("models/mock_voltage.yaml"),
+            "override guidance voltage model path mismatch");
+        require(!override_config.guidance.voltage_use_ekf_center,
+            "override guidance voltage_use_ekf_center mismatch");
+        require_near(override_config.guidance.voltage_limit_v, 3.5F, 1e-3F,
+            "override guidance voltage_limit_v mismatch");
 
         const auto bad_framerate_path = make_temp_path("rmcs_laser_guidance_bad_framerate");
         write_text_file(bad_framerate_path,

@@ -34,6 +34,16 @@ namespace {
         throw std::runtime_error("inference.backend must be one of: bright_spot, model, tensorrt");
     }
 
+    auto parse_guidance_command_model(const std::string_view value)
+        -> GuidanceCommandModelKind {
+        const std::string lower = to_lower_copy(std::string(value));
+        if (lower == "geometry") return GuidanceCommandModelKind::geometry;
+        if (lower == "direct_voltage") return GuidanceCommandModelKind::direct_voltage;
+
+        throw std::runtime_error(
+            "guidance.command_model must be one of: geometry, direct_voltage");
+    }
+
 } // namespace
 
 auto load_config(const std::filesystem::path& config_path) -> Config {
@@ -119,9 +129,15 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
     if (const YAML::Node guidance = yaml["guidance"]) {
         if (guidance["enabled"])
             config.guidance.enabled = guidance["enabled"].as<bool>();
+        if (guidance["command_model"])
+            config.guidance.command_model =
+                parse_guidance_command_model(guidance["command_model"].as<std::string>());
         if (guidance["camera_calib_path"])
             config.guidance.camera_calib_path =
                 guidance["camera_calib_path"].as<std::string>();
+        if (guidance["voltage_model_path"])
+            config.guidance.voltage_model_path =
+                guidance["voltage_model_path"].as<std::string>();
         if (guidance["t_x_mm"])
             config.guidance.t_x_mm = guidance["t_x_mm"].as<float>();
         if (guidance["t_y_mm"])
@@ -146,6 +162,11 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (guidance["dac_voltage_range_v"])
             config.guidance.dac_voltage_range_v =
                 guidance["dac_voltage_range_v"].as<float>();
+        if (guidance["voltage_use_ekf_center"])
+            config.guidance.voltage_use_ekf_center =
+                guidance["voltage_use_ekf_center"].as<bool>();
+        if (guidance["voltage_limit_v"])
+            config.guidance.voltage_limit_v = guidance["voltage_limit_v"].as<float>();
 
         if (const YAML::Node geom_list = guidance["target_geometry"]) {
             config.guidance.target_geometry.clear();

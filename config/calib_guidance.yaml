@@ -49,6 +49,7 @@ ekf:
 
 guidance:
   enabled: true
+  command_model: geometry
   calib_mode: true
   calib_angle_x_deg: 0.0
   calib_angle_y_deg: 0.0
@@ -66,13 +67,16 @@ guidance:
   t_x_mm: -92.5
   t_y_mm: 30.0
   t_z_mm: 100.0
-  r_x_deg: 0.88
-  r_y_deg: 0.00
-  r_z_deg: 6.56
+  r_x_deg: -0.96
+  r_y_deg: 0.48
+  r_z_deg: -1.19
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
   dac_voltage_range_v: 10.0
+  voltage_model_path: "models/vision_voltage_lut.example.yaml"
+  voltage_use_ekf_center: true
+  voltage_limit_v: 5.0
   wiring:
     mode: differential
     x_plus_channel: 0

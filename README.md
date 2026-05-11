@@ -64,7 +64,7 @@ ctest --test-dir build --output-on-failure
 ./build/tool_dac8568_smoke            # FT4222 -> DAC8568 硬件冒烟
 ./build/tool_galvo_smoke              # DAC8568 -> 振镜信号冒烟
 ./build/tool_guidance                 # 激光引导（模型+EKF+振镜）
-./build/tool_calib_solve              # 外参旋转求解（从 calib_records.csv）
+./build/tool_calib_solve              # 外参旋转求解（从 geometry_calib_records.csv）
 ./build/tool_export                   # 离线抽帧导出
 ./build/tool_transcode                # 已录视频转码
 ./build/tool_smoke                    # 离线冒烟

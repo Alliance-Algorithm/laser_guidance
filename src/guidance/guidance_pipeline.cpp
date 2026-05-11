@@ -14,6 +14,7 @@
 #include "guidance/depth_estimator.hpp"
 #include "guidance/galvo_driver.hpp"
 #include "guidance/galvo_kinematics.hpp"
+#include "guidance/voltage_mapper.hpp"
 #include "io/ft4222_spi.hpp"
 
 namespace rmcs_laser_guidance {
@@ -53,21 +54,43 @@ namespace {
 
 GuidancePipeline::GuidancePipeline(const Config& config, Ft4222Spi& spi)
     : spi_(spi)
-    , config_(config.guidance) {
+    , config_(config.guidance)
+    , image_width_(static_cast<float>(config.v4l2.width))
+    , image_height_(static_cast<float>(config.v4l2.height)) {
     if (!config_.enabled) return;
 
-    const auto init_err = load_calibration(config_.camera_calib_path);
+    const auto init_err = initialize_driver();
     if (!init_err.empty()) {
         std::println(stderr, "guidance: {}", init_err);
         return;
     }
+
+    if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
+        try {
+            voltage_mapper_ = std::make_unique<VoltageMapper>(config_);
+        } catch (const std::exception& e) {
+            std::println(stderr, "guidance: voltage mapper init failed: {}", e.what());
+            return;
+        }
+    } else {
+        const auto calib_err = load_calibration(config_.camera_calib_path);
+        if (!calib_err.empty()) {
+            std::println(stderr, "guidance: {}", calib_err);
+            return;
+        }
+    }
     initialized_ = true;
-    if (config_.scan_mode == ScanMode::rectangle && !config_.calib_mode) {
+    if (config_.command_model == GuidanceCommandModelKind::geometry
+        && config_.scan_mode == ScanMode::rectangle && !config_.calib_mode) {
         start_scan_thread();
     }
     if (config_.calib_mode) {
-        std::println("guidance: CALIB MODE — galvo locked at θ=({:.2f}°,{:.2f}°)",
-                     config_.calib_angle_x_deg, config_.calib_angle_y_deg);
+        if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
+            std::println("guidance: CALIB MODE — direct voltage command active");
+        } else {
+            std::println("guidance: CALIB MODE — galvo locked at θ=({:.2f}°,{:.2f}°)",
+                         config_.calib_angle_x_deg, config_.calib_angle_y_deg);
+        }
     }
 }
 
@@ -85,14 +108,6 @@ auto GuidancePipeline::load_calibration(const std::filesystem::path& path)
         depth_estimator_ = std::make_unique<DepthEstimator>(
             config_, camera.clone());
         kinematics_ = std::make_unique<GalvoKinematics>(config_);
-        driver_ = std::make_unique<GalvoDriver>(spi_, config_);
-
-        if (auto r = driver_->enable_reference(); !r)
-            return "DAC reference enable failed: " + r.error();
-
-        if (auto r = driver_->set_center(); !r)
-            return "galvo center failed: " + r.error();
-
         std::println("guidance: initialized, K=[{}x{}] mirror_d={:.1f}mm t=[{:.1f},{:.1f},{:.1f}]mm",
                      camera.cols, camera.rows,
                      config_.mirror_separation_mm,
@@ -103,11 +118,29 @@ auto GuidancePipeline::load_calibration(const std::filesystem::path& path)
     }
 }
 
+auto GuidancePipeline::initialize_driver() -> std::string {
+    try {
+        driver_ = std::make_unique<GalvoDriver>(spi_, config_);
+        if (auto r = driver_->enable_reference(); !r)
+            return "DAC reference enable failed: " + r.error();
+        if (auto r = driver_->set_center(); !r)
+            return "galvo center failed: " + r.error();
+        return {};
+    } catch (const std::exception& e) {
+        return std::string("driver init failed: ") + e.what();
+    }
+}
+
 auto GuidancePipeline::process(const TargetObservation& observation) -> std::string {
     if (!initialized_) return "guidance not initialized";
     if (config_.calib_mode) return "";
     if (!observation.detected) return "";
     if (observation.candidates.empty()) return "no candidates";
+
+    if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
+        return process_direct_voltage_guided(observation.candidates.front().center,
+                                             &observation.candidates.front());
+    }
 
     const auto& top = observation.candidates.front();
     const auto depth = depth_estimator_->estimate(top);
@@ -127,10 +160,14 @@ auto GuidancePipeline::process(const TargetObservation& observation) -> std::str
 }
 
 auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
-                                           const ModelCandidate* candidate,
-                                           float& io_depth_mm) -> std::string {
+                                            const ModelCandidate* candidate,
+                                            float& io_depth_mm) -> std::string {
     if (!initialized_) return "guidance not initialized";
     if (config_.calib_mode) return "";
+
+    if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
+        return process_direct_voltage_guided(ekf_center, candidate);
+    }
 
     if (candidate != nullptr
         && candidate->bbox.width > 0.0F
@@ -158,6 +195,30 @@ auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
                         io_depth_mm, ekf_center);
 }
 
+auto GuidancePipeline::process_direct_voltage_guided(const cv::Point2f& ekf_center,
+                                                     const ModelCandidate* candidate) -> std::string {
+    if (!voltage_mapper_) return "direct voltage mapper not initialized";
+    if (candidate == nullptr) return "no candidate for direct voltage";
+    if (candidate->bbox.width <= 0.0F || candidate->bbox.height <= 0.0F)
+        return "invalid bbox for direct voltage";
+
+    VoltageFeatures features;
+    features.center_x = config_.voltage_use_ekf_center ? ekf_center.x : candidate->center.x;
+    features.center_y = config_.voltage_use_ekf_center ? ekf_center.y : candidate->center.y;
+    features.bbox_w = candidate->bbox.width;
+    features.bbox_h = candidate->bbox.height;
+    features.bbox_area = candidate->bbox.width * candidate->bbox.height;
+    features.score = candidate->score;
+    features.class_id = candidate->class_id;
+    features.image_width = std::max(1.0F, image_width_);
+    features.image_height = std::max(1.0F, image_height_);
+
+    const auto command = voltage_mapper_->predict(features);
+    if (!command || !command->valid) return "direct voltage predict failed";
+    return write_voltage_single(command->vx, command->vy,
+                                {features.center_x, features.center_y});
+}
+
 auto GuidancePipeline::set_center() -> std::string {
     if (!initialized_) return "guidance not initialized";
     std::println("guidance: centering galvo");
@@ -183,12 +244,33 @@ auto GuidancePipeline::write_single(float theta_x, float theta_y,
     }
     last_output_theta_x_deg_.store(theta_x, std::memory_order_relaxed);
     last_output_theta_y_deg_.store(theta_y, std::memory_order_relaxed);
+    last_output_vx_.store(driver_->optical_to_voltage(theta_x), std::memory_order_relaxed);
+    last_output_vy_.store(driver_->optical_to_voltage(theta_y), std::memory_order_relaxed);
     has_output_angles_.store(true, std::memory_order_relaxed);
+    has_output_voltages_.store(true, std::memory_order_relaxed);
     std::scoped_lock driver_lock(driver_mutex_);
     if (auto r = driver_->set_angles(theta_x, theta_y); !r) {
         return "galvo write failed: " + r.error();
     }
     return "";
+}
+
+auto GuidancePipeline::write_voltage_single(float x_voltage, float y_voltage,
+                                            const cv::Point2f& center) -> std::string {
+    static int log_counter = 0;
+    if (++log_counter % 30 == 0) {
+        std::println("guidance: direct_voltage aim=({:.1f},{:.1f}) V=[{:.3f},{:.3f}]",
+                     center.x, center.y, x_voltage, y_voltage);
+    }
+    last_output_vx_.store(x_voltage, std::memory_order_relaxed);
+    last_output_vy_.store(y_voltage, std::memory_order_relaxed);
+    has_output_voltages_.store(true, std::memory_order_relaxed);
+    has_output_angles_.store(false, std::memory_order_relaxed);
+    std::scoped_lock driver_lock(driver_mutex_);
+    if (auto r = driver_->set_voltages(x_voltage, y_voltage); !r) {
+        return "galvo voltage write failed: " + r.error();
+    }
+    return {};
 }
 
 auto GuidancePipeline::update_scan_center(float theta_x, float theta_y,
@@ -303,9 +385,22 @@ auto GuidancePipeline::process_calib_angle(float angle_x_deg, float angle_y_deg)
     if (!initialized_) return "guidance not initialized";
     last_output_theta_x_deg_.store(angle_x_deg, std::memory_order_relaxed);
     last_output_theta_y_deg_.store(angle_y_deg, std::memory_order_relaxed);
+    last_output_vx_.store(driver_->optical_to_voltage(angle_x_deg), std::memory_order_relaxed);
+    last_output_vy_.store(driver_->optical_to_voltage(angle_y_deg), std::memory_order_relaxed);
     has_output_angles_.store(true, std::memory_order_relaxed);
+    has_output_voltages_.store(true, std::memory_order_relaxed);
     std::scoped_lock driver_lock(driver_mutex_);
     return driver_->set_angles(angle_x_deg, angle_y_deg).error_or("");
+}
+
+auto GuidancePipeline::process_calib_voltage(float x_voltage, float y_voltage) -> std::string {
+    if (!initialized_) return "guidance not initialized";
+    last_output_vx_.store(x_voltage, std::memory_order_relaxed);
+    last_output_vy_.store(y_voltage, std::memory_order_relaxed);
+    has_output_voltages_.store(true, std::memory_order_relaxed);
+    has_output_angles_.store(false, std::memory_order_relaxed);
+    std::scoped_lock driver_lock(driver_mutex_);
+    return driver_->set_voltages(x_voltage, y_voltage).error_or("");
 }
 
 auto GuidancePipeline::project_to_camera(const cv::Point2f& pixel, float depth_mm) const
@@ -325,6 +420,14 @@ auto GuidancePipeline::latest_output_angles() const -> std::optional<cv::Point2f
     return cv::Point2f {
         last_output_theta_x_deg_.load(std::memory_order_relaxed),
         last_output_theta_y_deg_.load(std::memory_order_relaxed),
+    };
+}
+
+auto GuidancePipeline::latest_output_voltages() const -> std::optional<cv::Point2f> {
+    if (!has_output_voltages_.load(std::memory_order_relaxed)) return std::nullopt;
+    return cv::Point2f {
+        last_output_vx_.load(std::memory_order_relaxed),
+        last_output_vy_.load(std::memory_order_relaxed),
     };
 }
 

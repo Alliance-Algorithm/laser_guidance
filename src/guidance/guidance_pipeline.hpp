@@ -11,6 +11,7 @@
 #include <opencv2/core/types.hpp>
 
 #include "config.hpp"
+#include "guidance/voltage_mapper.hpp"
 #include "types.hpp"
 
 namespace rmcs_laser_guidance {
@@ -39,6 +40,7 @@ public:
 
     auto process_calib() -> std::string;
     auto process_calib_angle(float angle_x_deg, float angle_y_deg) -> std::string;
+    auto process_calib_voltage(float x_voltage, float y_voltage) -> std::string;
 
     auto project_to_camera(const cv::Point2f& pixel, float depth_mm) const
         -> cv::Point3f;
@@ -47,13 +49,19 @@ public:
         -> std::optional<float>;
 
     [[nodiscard]] auto latest_output_angles() const -> std::optional<cv::Point2f>;
+    [[nodiscard]] auto latest_output_voltages() const -> std::optional<cv::Point2f>;
 
     [[nodiscard]] auto is_initialized() const noexcept -> bool { return initialized_; }
 
 private:
+    auto initialize_driver() -> std::string;
     auto load_calibration(const std::filesystem::path& path) -> std::string;
     auto write_single(float theta_x, float theta_y, float depth_mm,
                       const cv::Point2f& center) -> std::string;
+    auto write_voltage_single(float x_voltage, float y_voltage,
+                              const cv::Point2f& center) -> std::string;
+    auto process_direct_voltage_guided(const cv::Point2f& ekf_center,
+                                       const ModelCandidate* candidate) -> std::string;
     auto update_scan_center(float theta_x, float theta_y, float depth_mm,
                             const cv::Point2f& center) -> std::string;
     auto scan_rectangle_once(float cx_deg, float cy_deg) -> std::string;
@@ -67,6 +75,7 @@ private:
     std::unique_ptr<CameraProjection> projection_;
     std::unique_ptr<GalvoKinematics> kinematics_;
     std::unique_ptr<GalvoDriver> driver_;
+    std::unique_ptr<VoltageMapper> voltage_mapper_;
     bool initialized_ = false;
     std::mutex driver_mutex_;
     std::mutex scan_mutex_;
@@ -78,7 +87,12 @@ private:
     float scan_center_y_deg_ = 0.0F;
     std::atomic<float> last_output_theta_x_deg_ { 0.0F };
     std::atomic<float> last_output_theta_y_deg_ { 0.0F };
+    std::atomic<float> last_output_vx_ { 0.0F };
+    std::atomic<float> last_output_vy_ { 0.0F };
     std::atomic<bool> has_output_angles_ { false };
+    std::atomic<bool> has_output_voltages_ { false };
+    float image_width_ = 0.0F;
+    float image_height_ = 0.0F;
 };
 
 } // namespace rmcs_laser_guidance

@@ -20,7 +20,7 @@ runtime:
   hit_release_frames: 5
   debug_enabled: true
   debug_max_fps: 30
-  record_enabled: true
+  record_enabled: false
   record_queue_size: 16
 
 inference:
@@ -28,14 +28,14 @@ inference:
   model_path: models/exp.onnx
 
 streaming:
-  enabled: true
+  enabled: false
   host: "127.0.0.1"
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "h264_nvenc"
 
 udp:
-  enabled: true
+  enabled: false
   host: "127.0.0.1"
   port: 5001
 
@@ -49,17 +49,11 @@ ekf:
 
 guidance:
   enabled: true
-  command_model: geometry
-  target_geometry:
-    - class_id: 0
-      width_mm: 72.0
-      height_mm: 50.0
-    - class_id: 1
-      width_mm: 72.0
-      height_mm: 50.0
-    - class_id: 2
-      width_mm: 72.0
-      height_mm: 50.0
+  command_model: direct_voltage
+  calib_mode: true
+  voltage_model_path: "models/vision_voltage_lut.example.yaml"
+  voltage_use_ekf_center: true
+  voltage_limit_v: 5.0
   camera_calib_path: "config/camera_calib.yaml"
   t_x_mm: -92.5
   t_y_mm: 30.0
@@ -71,16 +65,10 @@ guidance:
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
   dac_voltage_range_v: 10.0
-  voltage_model_path: "models/vision_voltage_lut.example.yaml"
-  voltage_use_ekf_center: true
-  voltage_limit_v: 5.0
   wiring:
     mode: differential
     x_plus_channel: 0
     x_minus_channel: 2
     y_plus_channel: 1
     y_minus_channel: 3
-  scan_mode: rectangle
-  scan_width_deg: 0.12
-  scan_height_deg: 0.16
-  scan_grid_n: 8
+  scan_mode: single

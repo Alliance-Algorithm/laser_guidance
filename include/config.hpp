@@ -84,6 +84,11 @@ enum class ScanMode : int {
     rectangle,
 };
 
+enum class GuidanceCommandModelKind : int {
+    geometry = 0,
+    direct_voltage,
+};
+
 struct TargetGeometry {
     int class_id = 0;
     float width_mm = 150.0F;
@@ -100,8 +105,10 @@ struct GalvoWiringConfig {
 
 struct GuidanceConfig {
     bool enabled = false;
+    GuidanceCommandModelKind command_model = GuidanceCommandModelKind::geometry;
     std::vector<TargetGeometry> target_geometry {};
     std::filesystem::path camera_calib_path {};
+    std::filesystem::path voltage_model_path {};
     float t_x_mm = 0.0F;
     float t_y_mm = 0.0F;
     float t_z_mm = 0.0F;
@@ -112,6 +119,8 @@ struct GuidanceConfig {
     float max_optical_angle_deg = 30.0F;
     float input_voltage_range_v = 5.0F;
     float dac_voltage_range_v = 10.0F;
+    bool voltage_use_ekf_center = true;
+    float voltage_limit_v = 5.0F;
     GalvoWiringConfig wiring {};
     ScanMode scan_mode = ScanMode::single;
     float scan_width_deg = 1.0F;

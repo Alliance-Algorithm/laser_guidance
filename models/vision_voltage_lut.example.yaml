@@ -1,0 +1,13 @@
+model:
+  type: lut
+  u_axis: [0.0, 1.0]
+  v_axis: [0.0, 1.0]
+  log_area_axis: [0.0]
+  vx_values:
+    -
+      - [-1.0, 1.0]
+      - [-1.0, 1.0]
+  vy_values:
+    -
+      - [-1.0, -1.0]
+      - [1.0, 1.0]
