@@ -62,7 +62,7 @@ guidance:
     - class_id: 2
       width_mm: 72.0
       height_mm: 50.0
-  voltage_model_path: "models/vision_voltage_poly_v3.yaml"
+  voltage_model_path: "models/vision_voltage_poly_v4.yaml"
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   camera_calib_path: "config/camera_calib.yaml"
@@ -83,6 +83,6 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   scan_mode: rectangle
-  scan_width_deg: 0.12
-  scan_height_deg: 0.16
+  scan_width_deg: 0.08
+  scan_height_deg: 0.10
   scan_grid_n: 8
