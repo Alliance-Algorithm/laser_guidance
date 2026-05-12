@@ -40,13 +40,13 @@ udp:
   port: 5001
 
 ekf:
-  process_noise_q: 0.05
-  measurement_noise_r: 0.5
+  process_noise_q: 0.20
+  measurement_noise_r: 0.15
   initial_pos_std: 100.0
   initial_vel_std: 100.0
-  initial_acc_std: 50.0
+  initial_acc_std: 35.0
   max_missed_frames: 5
-  lookahead_ms: 12.0
+  lookahead_ms: 8.0
 
 guidance:
   enabled: true
@@ -62,7 +62,7 @@ guidance:
     - class_id: 2
       width_mm: 72.0
       height_mm: 50.0
-  voltage_model_path: "models/vision_voltage_poly_v4.yaml"
+  voltage_model_path: "models/vision_voltage_poly_v5.yaml"
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   camera_calib_path: "config/camera_calib.yaml"
