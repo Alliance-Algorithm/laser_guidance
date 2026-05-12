@@ -62,7 +62,7 @@ guidance:
     - class_id: 2
       width_mm: 72.0
       height_mm: 50.0
-  voltage_model_path: "models/vision_voltage_poly_v6.yaml"
+  voltage_model_path: "models/vision_voltage_lut_v1.yaml"
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   camera_calib_path: "config/camera_calib.yaml"
