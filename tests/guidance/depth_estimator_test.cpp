@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cmath>
-#include <iostream>
+#include <print>
 
 #include <opencv2/core.hpp>
 
@@ -43,7 +43,7 @@ void test_depth_basic() {
     float expected = 2000.0F * 150.0F / 15.0F;
     assert(std::abs(*depth - expected) < 1.0F);
 
-    std::cout << "  depth_basic: " << *depth << "mm (expected ~" << expected << "mm)" << std::endl;
+    std::println("  depth_basic: {}mm (expected ~{}mm)", *depth, expected);
 }
 
 void test_depth_uses_max_dim() {
@@ -60,7 +60,7 @@ void test_depth_uses_max_dim() {
     assert(depth.has_value());
     assert(std::abs(*depth - expected) < 1.0F);
 
-    std::cout << "  depth_uses_max_dim: OK" << std::endl;
+    std::println("  depth_uses_max_dim: OK");
 }
 
 void test_depth_unknown_class() {
@@ -77,7 +77,7 @@ void test_depth_unknown_class() {
     float expected = 2000.0F * 150.0F / 10.0F;
     assert(std::abs(*depth - expected) < 1.0F);
 
-    std::cout << "  depth_unknown_class: OK (falls back to default)" << std::endl;
+    std::println("  depth_unknown_class: OK (falls back to default)");
 }
 
 void test_depth_zero_size() {
@@ -92,7 +92,7 @@ void test_depth_zero_size() {
     auto depth = estimator.estimate(candidate);
     assert(!depth.has_value());
 
-    std::cout << "  depth_zero_size: OK" << std::endl;
+    std::println("  depth_zero_size: OK");
 }
 
 void test_depth_invalid_fx() {
@@ -110,7 +110,7 @@ void test_depth_invalid_fx() {
     auto depth = estimator.estimate(candidate);
     assert(!depth.has_value());
 
-    std::cout << "  depth_invalid_fx: OK" << std::endl;
+    std::println("  depth_invalid_fx: OK");
 }
 
 void test_depth_large_distance() {
@@ -128,19 +128,19 @@ void test_depth_large_distance() {
     assert(std::abs(*depth - expected) < 1.0F);
     assert(*depth > 100000.0F);
 
-    std::cout << "  depth_large_distance: " << *depth << "mm" << std::endl;
+    std::println("  depth_large_distance: {}mm", *depth);
 }
 
 } // namespace
 
 int main() {
-    std::cout << "depth_estimator_test:" << std::endl;
+    std::println("depth_estimator_test:");
     test_depth_basic();
     test_depth_uses_max_dim();
     test_depth_unknown_class();
     test_depth_zero_size();
     test_depth_invalid_fx();
     test_depth_large_distance();
-    std::cout << "PASSED" << std::endl;
+    std::println("PASSED");
     return 0;
 }

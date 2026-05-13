@@ -90,8 +90,7 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
             frame_count++;
 
             if (frame_count % 300 == 0) {
-                std::fprintf(stderr, "RTP streamer: %lu frames sent\n",
-                             static_cast<unsigned long>(frame_count));
+                std::println(stderr, "RTP streamer: {} frames sent", frame_count);
             }
         }
     });

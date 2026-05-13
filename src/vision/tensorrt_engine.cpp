@@ -13,7 +13,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include <print>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -29,7 +29,7 @@ class TensorRTLogger final : public nvinfer1::ILogger {
 public:
     void log(Severity severity, const char* message) noexcept override {
         if (severity > Severity::kWARNING || message == nullptr) return;
-        std::cerr << "[TensorRT] " << message << '\n';
+        std::println(stderr, "[TensorRT] {}", message);
     }
 };
 

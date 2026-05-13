@@ -1,6 +1,6 @@
 #include <cmath>
 #include <cstdlib>
-#include <iostream>
+#include <print>
 
 #include "guidance/galvo_kinematics.hpp"
 #include "config.hpp"
@@ -12,7 +12,7 @@ using namespace rmcs_laser_guidance;
 constexpr float kRadToDeg = 180.0F / 3.14159265358979323846F;
 constexpr float kEps = 0.1F;
 
-#define CHECK(cond) do { if (!(cond)) { std::cout << "  FAIL: " #cond << std::endl; std::abort(); } } while(0)
+#define CHECK(cond) do { if (!(cond)) { std::println("  FAIL: " #cond); std::abort(); } } while(0)
 
 auto make_test_config(float tx = 0.0F, float ty = 0.0F, float tz = 0.0F, float d = 15.0F) -> GuidanceConfig {
     GuidanceConfig cfg;
@@ -32,7 +32,7 @@ void test_center_point() {
     CHECK(angles.valid);
     CHECK(std::abs(angles.theta_x_optical_deg) < kEps);
     CHECK(std::abs(angles.theta_y_optical_deg) < kEps);
-    std::cout << "  center_point: OK" << std::endl;
+    std::println("  center_point: OK");
 }
 
 void test_positive_x() {
@@ -43,7 +43,7 @@ void test_positive_x() {
     CHECK(angles.valid);
     CHECK(angles.theta_x_optical_deg > 0.0F);
     CHECK(std::abs(angles.theta_y_optical_deg) < kEps);
-    std::cout << "  positive_x: th_x=" << angles.theta_x_optical_deg << "deg" << std::endl;
+    std::println("  positive_x: th_x={}deg", angles.theta_x_optical_deg);
 }
 
 void test_positive_y() {
@@ -54,7 +54,7 @@ void test_positive_y() {
     CHECK(angles.valid);
     CHECK(std::abs(angles.theta_x_optical_deg) < kEps);
     CHECK(angles.theta_y_optical_deg > 0.0F);
-    std::cout << "  positive_y: th_y=" << angles.theta_y_optical_deg << "deg" << std::endl;
+    std::println("  positive_y: th_y={}deg", angles.theta_y_optical_deg);
 }
 
 void test_extrinsic_offset() {
@@ -64,21 +64,21 @@ void test_extrinsic_offset() {
     CHECK(angles.valid);
     CHECK(std::abs(angles.theta_x_optical_deg) < kEps);
     CHECK(std::abs(angles.theta_y_optical_deg) < kEps);
-    std::cout << "  extrinsic_offset: OK (t_x=-92.5mm)" << std::endl;
+    std::println("  extrinsic_offset: OK (t_x=-92.5mm)");
 }
 
 void test_behind_camera() {
     GalvoKinematics kin(make_test_config());
     auto angles = kin.compute({0.0F, 0.0F, -100.0F});
     CHECK(!angles.valid);
-    std::cout << "  behind_camera: OK" << std::endl;
+    std::println("  behind_camera: OK");
 }
 
 void test_behind_galvo() {
     GalvoKinematics kin(make_test_config(0.0F, 0.0F, 50.0F));
     auto angles = kin.compute({0.0F, 0.0F, 30.0F});
     CHECK(!angles.valid);
-    std::cout << "  behind_galvo: OK" << std::endl;
+    std::println("  behind_galvo: OK");
 }
 
 void test_mirror_separation_effect() {
@@ -88,14 +88,14 @@ void test_mirror_separation_effect() {
     auto a_with = kin_with.compute({0.0F, 200.0F, 1000.0F});
     CHECK(a_no.valid && a_with.valid);
     CHECK(a_with.theta_y_optical_deg < a_no.theta_y_optical_deg);
-    std::cout << "  mirror_separation_effect: d=0→" << a_no.theta_y_optical_deg
-              << "deg d=100→" << a_with.theta_y_optical_deg << "deg" << std::endl;
+    std::println("  mirror_separation_effect: d=0→{}deg d=100→{}deg",
+                a_no.theta_y_optical_deg, a_with.theta_y_optical_deg);
 }
 
 } // namespace
 
 int main() {
-    std::cout << "galvo_kinematics_test:" << std::endl;
+    std::println("galvo_kinematics_test:");
     test_center_point();
     test_positive_x();
     test_positive_y();
@@ -103,6 +103,6 @@ int main() {
     test_behind_camera();
     test_behind_galvo();
     test_mirror_separation_effect();
-    std::cout << "PASSED" << std::endl;
+    std::println("PASSED");
     return 0;
 }
