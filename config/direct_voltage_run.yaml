@@ -24,8 +24,9 @@ runtime:
   record_queue_size: 16
 
 inference:
-  backend: model
-  model_path: models/exp.onnx
+  backend: tensorrt
+  model_path: models/exp.engine
+  enemy_color: auto
 
 streaming:
   enabled: true

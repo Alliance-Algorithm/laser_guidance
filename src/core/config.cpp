@@ -95,6 +95,12 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         }
         if (inference["model_path"])
             config.inference.model_path = inference["model_path"].as<std::string>();
+        if (inference["enemy_color"]) {
+            const auto ec = to_lower_copy(inference["enemy_color"].as<std::string>());
+            if (ec == "red")       config.inference.enemy_class_id = 2;
+            else if (ec == "blue") config.inference.enemy_class_id = 1;
+            else if (ec == "auto") config.inference.enemy_class_id = -1;
+        }
     }
 
     if (const YAML::Node streaming = yaml["streaming"]) {

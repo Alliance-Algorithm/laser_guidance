@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STORE="$SCRIPT_DIR/.config-path"
+
+CONFIG="${1:-}"
+if [ -z "$CONFIG" ]; then
+    if [ -f "$STORE" ]; then
+        CONFIG="$(cat "$STORE")"
+    else
+        CONFIG="$REPO_ROOT/config/direct_voltage_run.yaml"
+    fi
+fi
+
+echo "=== 比赛模式 ==="
+echo "配置: $CONFIG"
+echo ""
+
+cd "$REPO_ROOT"
+./build/tool_competition "$CONFIG"

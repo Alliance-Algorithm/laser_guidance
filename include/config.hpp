@@ -49,6 +49,7 @@ struct RuntimeConfig {
 struct InferenceConfig {
     InferenceBackendKind backend = InferenceBackendKind::bright_spot;
     std::filesystem::path model_path { };
+    int enemy_class_id = -1;
 };
 
 struct RtpConfig {

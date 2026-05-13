@@ -40,6 +40,7 @@ endif()
 # ---- TensorRT (optional) -------------------------------------------------------
 if(WITH_TENSORRT)
   find_path(TENSORRT_INCLUDE_DIR NvInfer.h PATHS /usr/include /usr/local/include)
+  find_path(CUDA_INCLUDE_DIR cuda_runtime_api.h PATHS /opt/cuda/include /usr/local/cuda/include)
   find_library(TENSORRT_LIBRARY nvinfer)
   find_library(TENSORRT_ONNX_PARSER nvonnxparser)
   find_library(TENSORRT_PLUGIN nvinfer_plugin)
@@ -48,15 +49,21 @@ if(WITH_TENSORRT)
   if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY OR NOT TENSORRT_ONNX_PARSER OR NOT TENSORRT_PLUGIN)
     message(FATAL_ERROR "WITH_TENSORRT=ON requires TensorRT.")
   endif()
+  if(NOT CUDA_INCLUDE_DIR)
+    message(FATAL_ERROR "WITH_TENSORRT=ON requires CUDA headers (cuda_runtime_api.h)")
+  endif()
   add_library(TensorRT::nvinfer UNKNOWN IMPORTED)
   set_target_properties(TensorRT::nvinfer PROPERTIES
-    IMPORTED_LOCATION "${TENSORRT_LIBRARY}" INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR}")
+    IMPORTED_LOCATION "${TENSORRT_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR};${CUDA_INCLUDE_DIR}")
   add_library(TensorRT::nvonnxparser UNKNOWN IMPORTED)
   set_target_properties(TensorRT::nvonnxparser PROPERTIES
-    IMPORTED_LOCATION "${TENSORRT_ONNX_PARSER}" INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR}")
+    IMPORTED_LOCATION "${TENSORRT_ONNX_PARSER}"
+    INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR};${CUDA_INCLUDE_DIR}")
   add_library(TensorRT::nvinfer_plugin UNKNOWN IMPORTED)
   set_target_properties(TensorRT::nvinfer_plugin PROPERTIES
-    IMPORTED_LOCATION "${TENSORRT_PLUGIN}" INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR}")
+    IMPORTED_LOCATION "${TENSORRT_PLUGIN}"
+    INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR};${CUDA_INCLUDE_DIR}")
   add_compile_definitions(RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
   message(STATUS "TensorRT enabled")
 endif()

@@ -2,7 +2,7 @@
 
 #include "vision/tensorrt_engine.hpp"
 
-#include "cuda_runtime_api.h"
+#include <cuda_runtime_api.h>
 
 #include <NvInfer.h>
 
