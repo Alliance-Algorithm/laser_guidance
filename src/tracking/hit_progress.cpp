@@ -33,10 +33,11 @@ void HitProgress::update(bool is_hit, float dt_s) {
 
     t_ += dt_s;
     constexpr float kTick = 0.1F;
-    while (t_ >= kTick) {
-        t_ -= kTick;
-        ++n_;
-        p_ += static_cast<float>(n_);
+    int ticks = static_cast<int>(t_ / kTick + 1.0e-6F);
+    if (ticks > 0) {
+        p_ += static_cast<float>(n_ * ticks + ticks * (ticks + 1) / 2);
+        n_ += ticks;
+        t_ -= static_cast<float>(ticks) * kTick;
     }
 
     if (p_ >= p0_) {
