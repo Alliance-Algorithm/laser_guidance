@@ -41,6 +41,7 @@ streaming:
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "h264_nvenc"
+  bitrate: "12M"
 
 udp:
   enabled: true
@@ -91,6 +92,6 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   scan_mode: rectangle
-  scan_width_deg: 0.06
-  scan_height_deg: 0.08
-  scan_grid_n: 10
+  scan_width_deg: 0.15
+  scan_height_deg: 0.20
+  scan_grid_n: 12

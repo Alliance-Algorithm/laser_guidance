@@ -109,6 +109,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (streaming["port"]) config.rtp.port = streaming["port"].as<int>();
         if (streaming["sdp_path"]) config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
         if (streaming["encoder"]) config.rtp.encoder = streaming["encoder"].as<std::string>();
+        if (streaming["bitrate"]) config.rtp.bitrate = streaming["bitrate"].as<std::string>();
     }
 
     if (const YAML::Node udp_cfg = yaml["udp"]) {
