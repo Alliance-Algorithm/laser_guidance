@@ -52,7 +52,7 @@ guidance:
   enabled: true
   command_model: direct_voltage
   calib_mode: true
-  voltage_model_path: "models/vision_voltage_poly_v7.yaml"
+  voltage_model_path: "models/vision_voltage_poly_v8.yaml"
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   camera_calib_path: "config/camera_calib.yaml"
