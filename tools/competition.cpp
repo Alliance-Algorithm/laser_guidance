@@ -394,6 +394,7 @@ int main(int argc, char** argv) {
         rg::EkfTracker tracker(config.ekf);
         rg::HitProgress hit_progress;
         int enemy_class_id = config.inference.enemy_class_id;
+        bool ekf_enabled = config.ekf.enabled;
 
         std::mutex infer_mtx;
         std::condition_variable infer_cv;
@@ -506,7 +507,17 @@ int main(int argc, char** argv) {
             hit_progress.update(is_purple, frame_dt_s);
 
             if (guidance && guidance->is_initialized()) {
-                if (ekf_state.initialized && !ekf_state.lost) {
+                if (!ekf_enabled) {
+                    if (observation.detected && !observation.candidates.empty()) {
+                        auto* cand = &observation.candidates.front();
+                        guidance_msg = guidance->process_ekf_guided(
+                            observation.center, cand, last_valid_depth_mm);
+                        depth_valid = true;
+                    } else if (depth_valid) {
+                        guidance_msg = guidance->set_center();
+                        depth_valid = false;
+                    }
+                } else if (ekf_state.initialized && !ekf_state.lost) {
                     const rg::ModelCandidate* cand = nullptr;
                     if (observation.detected && !observation.candidates.empty()) {
                         cand = &observation.candidates.front();
@@ -532,8 +543,12 @@ int main(int argc, char** argv) {
             }
 
             const bool guidance_ok = guidance && guidance->is_initialized();
-            const bool ekf_ok = ekf_state.initialized && !ekf_state.lost;
-            draw_guidance_status(display, guidance_ok, ekf_ok, depth_valid, guidance_msg);
+            const bool ekf_ok = ekf_enabled
+                ? (ekf_state.initialized && !ekf_state.lost)
+                : depth_valid;
+            draw_guidance_status(display, guidance_ok, ekf_ok, depth_valid,
+                                 ekf_enabled ? guidance_msg
+                                 : std::string("EKF OFF (raw)"));
             draw_hit_progress(display, hit_progress);
             draw_status_bar(display, streaming_active, recording_active, enemy_class_id,
                             active_infer.load() == infer_trt.get());
@@ -591,6 +606,12 @@ int main(int argc, char** argv) {
                         active_infer = infer_onnx.get();
                         std::println("FIFO: backend → ONNX");
                     }
+                } else if (cmd.starts_with("ekf on")) {
+                    ekf_enabled = true;
+                    std::println("FIFO: EKF ON");
+                } else if (cmd.starts_with("ekf off")) {
+                    ekf_enabled = false;
+                    std::println("FIFO: EKF OFF (raw detection)");
                 } else if (cmd.starts_with("quit")) {
                     running = false;
                 }

@@ -49,6 +49,7 @@ udp:
   port: 5001
 
 ekf:
+  enabled: true
   process_noise_q: 0.15
   measurement_noise_r: 0.05
   initial_pos_std: 100.0
@@ -92,6 +93,6 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   scan_mode: rectangle
-  scan_width_deg: 0.10
-  scan_height_deg: 0.13
+  scan_width_deg: 0.08
+  scan_height_deg: 0.10
   scan_grid_n: 12

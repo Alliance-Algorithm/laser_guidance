@@ -119,6 +119,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
     }
 
     if (const YAML::Node ekf = yaml["ekf"]) {
+        if (ekf["enabled"]) config.ekf.enabled = ekf["enabled"].as<bool>();
         if (ekf["process_noise_q"])
             config.ekf.process_noise_q = ekf["process_noise_q"].as<double>();
         if (ekf["measurement_noise_r"])

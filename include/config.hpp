@@ -68,6 +68,7 @@ struct UdpConfig {
 };
 
 struct EkfConfig {
+    bool enabled = true;
     double process_noise_q     = 0.05;
     double measurement_noise_r = 0.5;
     double initial_pos_std     = 100.0;
