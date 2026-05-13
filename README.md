@@ -63,8 +63,8 @@ ctest --test-dir build --output-on-failure
 ./build/tool_calibrate                # 相机标定
 ./build/tool_dac8568_smoke            # FT4222 -> DAC8568 硬件冒烟
 ./build/tool_galvo_smoke              # DAC8568 -> 振镜信号冒烟
-./build/tool_guidance                 # 激光引导（模型+EKF+振镜）
-./build/tool_calib_solve              # 外参旋转求解（从 geometry_calib_records.csv）
+./build/tool_guidance                 # 激光引导（模型+EKF+振镜，支持 direct_voltage/geometry）
+./build/tool_calib_solve              # 外参旋转求解（默认读 test_data/calib/geometry_calib_records.csv）
 ./build/tool_export                   # 离线抽帧导出
 ./build/tool_transcode                # 已录视频转码
 ./build/tool_smoke                    # 离线冒烟
@@ -213,12 +213,14 @@ if (spi) {
 - 默认采集模式 `1920x1080 @ 60 FPS`，优先 `mjpeg` 编码
 - 默认回放样本位于 `test_data/sample_images`
 - 原始视频会话目录默认为 `videos/`
-- `models/` 放置 `.onnx`、`.engine` 模型文件
+- `models/` 放置 `.onnx`、`.engine`、电压映射模型文件（`vision_voltage_poly_v*.yaml`、`vision_voltage_lut*.yaml`）
+- `test_data/calib/` 放置标定 CSV（voltage_records, geometry_calib_records 等）
 - `Pipeline` 通过 `inference.backend` 在 `bright_spot` / `model`(ONNX) / `tensorrt`(GPU) 间切换
 - TensorRT 需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON` 且预先生成 `.engine` 文件
 - 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入
-- EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态
+- EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态，支持 lookahead 超前预测
+- Direct voltage 视觉→电压映射：`config/direct_voltage_run.yaml`（主配置）、`config/direct_voltage_calib.yaml`（标定采集）、`config/direct_voltage_run_lut_v1.yaml`（LUT 实验）
 - 训练数据链路推荐「先录原始视频会话，再直接上传外部平台」；离线抽帧为备用链路
 - 录制输出 `raw.mp4 + session.yaml + notes.txt`，默认 H.264/avc1 编码
 - RTP 推流：`make stream` 后台 daemon + ffplay 窗口，关闭即停。`streaming` 配置段控制，默认端口 5004

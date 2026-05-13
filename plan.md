@@ -6,23 +6,49 @@
 
 ## 当前阶段
 
-引导最小闭环已打通，外参标定工具就绪，进入精度调优阶段：
+引导最小闭环已打通，direct_voltage 为当前主线，SPI 推到 30MHz：
 
 - `V4L2/UVC` 取图 ✅
 - 相机标定（内参+畸变） ✅
-- YOLO26 ONNX 端到端推理 ✅（3 class：purple/red/blue）
+- YOLO26 ONNX/TensorRT 端到端推理 ✅（3 class：purple/red/blue）
 - 实时检测可视化（框+置信度+准星） ✅
 - 采集卡配置（UGREEN 1080p@60 MJPG） ✅
-- EKF tracker（常加速度模型，像素平滑+预测） ✅
-- FT4222 → DAC8568 振镜 SPI 控制 ✅
+- EKF tracker（常加速度模型）+ lookahead 40ms 超前预测 ✅
+- FT4222 → DAC8568 振镜 SPI 控制（30MHz SCK）✅
 - 单目测距（靶物理尺寸 + bbox 尺度，72×50mm） ✅
 - 相机→振镜外参（平移已知：t_x=-92.5, t_y=30, t_z=100mm） ✅
+- Direct voltage 视觉→电压映射（poly3 v6，1894 样本，6 轮迭代训练）✅
+- LUT 电压映射实验模型（vision_voltage_lut_v1.yaml）✅
+- 矩形面扫描（持续 raster，0.06°×0.08°，10×10 grid）✅
 - 旋转外参在线标定（WASD 对准 → 空格记录 → solver 求解） ✅
-- `purple confirmed` 命中样本自动采集（`geometry_hit_calib_records.csv`）✅
-- 矩形面扫描（持续 raster，扩大覆盖面积） ✅
-- 振镜解析运动学（含镜间距 + Euler 旋转） ✅
-- 线性角度→电压映射（±30° ↔ ±5V） ✅
-- EKF-A 集成：瞄准用 EKF 预测中心，测距用 bbox ✅
+- `purple confirmed` 命中样本自动采集 ✅
+
+## 标定数据路径
+
+所有 CSV 位于 `test_data/calib/`：
+- `voltage_records.csv` — 累计电压标定数据（多轮追加，6 批）
+- `voltage_records_v1.csv` — 第一批基线（873 样本）
+- `voltage_records_merged_v*.csv` — 各版本合并去重数据集
+- `geometry_calib_records.csv` — 几何外参标定记录
+- `geometry_hit_calib_records.csv` — Purple 命中自动采集
+
+## Direct Voltage 训练流
+
+```bash
+# 标定采集
+./build/tool_guidance config/direct_voltage_calib.yaml
+# WASD 对准 → 空格记录 → test_data/calib/voltage_records.csv
+
+# 训练 poly3
+python scripts/train_voltage_poly.py \
+  --input test_data/calib/voltage_records_merged_v6.csv \
+  --output models/vision_voltage_poly_v7.yaml
+
+# 训练 LUT
+python scripts/train_voltage_lut.py \
+  --input test_data/calib/voltage_records_merged_v6.csv \
+  --output models/vision_voltage_lut_v2.yaml
+```
 
 ## 物理外参（已确定，不动）
 
