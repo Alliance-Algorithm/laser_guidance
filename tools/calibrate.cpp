@@ -5,7 +5,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
-#include <print>
+#include <iostream>
 #include <print>
 #include <string>
 #include <string_view>
@@ -400,8 +400,8 @@ public:
         std::println("");
         std::println("--- Calibration result ---");
         std::println("RMS reprojection error : {:.4f} px", result_.rms_error);
-        std::println("Camera matrix:\n  {}", result_.camera_matrix);
-        std::println("Distortion coefficients:\n  {}", result_.dist_coeffs);
+        std::cout << "Camera matrix:\n  " << result_.camera_matrix << "\n";
+        std::cout << "Distortion coefficients:\n  " << result_.dist_coeffs << "\n";
         std::println("Image size: {}x{}", result_.image_size.width, result_.image_size.height);
         std::println("Samples used: {}", result_.num_samples);
         std::println("---------------------------");

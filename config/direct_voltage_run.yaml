@@ -20,13 +20,20 @@ runtime:
   hit_release_frames: 5
   debug_enabled: true
   debug_max_fps: 30
-  record_enabled: true
+  record_enabled: false
   record_queue_size: 16
 
 inference:
   backend: tensorrt
   model_path: models/exp.engine
   enemy_color: auto
+
+record:
+  output_root: ./videos
+  lighting_tag: competition
+  background_tag: field
+  distance_tag: variable
+  target_color: purple
 
 streaming:
   enabled: true
