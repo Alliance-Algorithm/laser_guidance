@@ -111,7 +111,7 @@ auto optimize_extrinsics(const std::vector<CalibRecord>& recs,
 } // namespace
 
 int main(int argc, char** argv) {
-    const char* csv_path = (argc > 1) ? argv[1] : "geometry_calib_records.csv";
+    const char* csv_path = (argc > 1) ? argv[1] : "test_data/calib/geometry_calib_records.csv";
     const char* config_path = (argc > 2) ? argv[2] : "config/calib_guidance.yaml";
 
     auto recs = load_records(csv_path);

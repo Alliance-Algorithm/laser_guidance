@@ -66,12 +66,13 @@ struct UdpConfig {
 };
 
 struct EkfConfig {
-    double process_noise_q     = 0.5;
-    double measurement_noise_r = 0.2;
+    double process_noise_q     = 0.05;
+    double measurement_noise_r = 0.5;
     double initial_pos_std     = 100.0;
-    double initial_vel_std     = 500.0;
-    double initial_acc_std     = 1000.0;
-    int max_missed_frames      = 10;
+    double initial_vel_std     = 100.0;
+    double initial_acc_std     = 50.0;
+    int max_missed_frames      = 5;
+    double lookahead_ms        = 12.0;
 };
 
 enum class GalvoWiringMode : int {

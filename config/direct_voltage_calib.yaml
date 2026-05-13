@@ -40,12 +40,13 @@ udp:
   port: 5001
 
 ekf:
-  process_noise_q: 0.5
-  measurement_noise_r: 0.05
+  process_noise_q: 0.20
+  measurement_noise_r: 0.15
   initial_pos_std: 100.0
-  initial_vel_std: 500.0
-  initial_acc_std: 1000.0
+  initial_vel_std: 100.0
+  initial_acc_std: 35.0
   max_missed_frames: 5
+  lookahead_ms: 8.0
 
 guidance:
   enabled: true

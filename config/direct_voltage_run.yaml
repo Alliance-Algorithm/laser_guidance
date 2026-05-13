@@ -83,6 +83,6 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   scan_mode: rectangle
-  scan_width_deg: 0.08
-  scan_height_deg: 0.10
-  scan_grid_n: 8
+  scan_width_deg: 0.06
+  scan_height_deg: 0.08
+  scan_grid_n: 10

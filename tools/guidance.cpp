@@ -28,9 +28,9 @@ namespace {
 
 namespace rg = rmcs_laser_guidance;
 
-constexpr std::string_view kGeometryCalibPath = "geometry_calib_records.csv";
-constexpr std::string_view kGeometryHitPath = "geometry_hit_calib_records.csv";
-constexpr std::string_view kVoltageCalibPath = "voltage_records.csv";
+constexpr std::string_view kGeometryCalibPath = "test_data/calib/geometry_calib_records.csv";
+constexpr std::string_view kGeometryHitPath = "test_data/calib/geometry_hit_calib_records.csv";
+constexpr std::string_view kVoltageCalibPath = "test_data/calib/voltage_records.csv";
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1) return argv[1];
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
         if (config.guidance.enabled) {
             auto spi_result = rg::Ft4222Spi::open(rg::Ft4222Config{
                 .sys_clock = rg::Ft4222SysClock::k60MHz,
-                .clock_div = rg::Ft4222SpiDiv::kDiv4,
+                .clock_div = rg::Ft4222SpiDiv::kDiv2,
                 .cpol = rg::Ft4222Cpol::kIdleLow,
                 .cpha = rg::Ft4222Cpha::kTrailing,
                 .cs_active = rg::Ft4222CsActive::kLow,
@@ -332,8 +332,13 @@ int main(int argc, char** argv) {
                         depth_valid = true;
                     }
                     if (depth_valid) {
+                        const float latency_s =
+                            static_cast<float>(config.ekf.lookahead_ms) * 0.001F;
+                        const cv::Point2f aim_pos(
+                            ekf_state.position.x + ekf_state.velocity.x * latency_s,
+                            ekf_state.position.y + ekf_state.velocity.y * latency_s);
                         guidance_msg = guidance->process_ekf_guided(
-                            ekf_state.position, cand, last_valid_depth_mm);
+                            aim_pos, cand, last_valid_depth_mm);
                     }
                 } else if (ekf_state.lost) {
                     if (!ekf_was_lost) {

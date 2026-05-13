@@ -124,6 +124,8 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.ekf.initial_acc_std = ekf["initial_acc_std"].as<double>();
         if (ekf["max_missed_frames"])
             config.ekf.max_missed_frames = ekf["max_missed_frames"].as<int>();
+        if (ekf["lookahead_ms"])
+            config.ekf.lookahead_ms = ekf["lookahead_ms"].as<double>();
     }
 
     if (const YAML::Node guidance = yaml["guidance"]) {
