@@ -26,3 +26,4 @@ hit_calib_records*.csv
 calib_all.csv
 calib_merged.csv
 extrinsics_group1.txt
+build_nogt/
