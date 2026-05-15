@@ -40,10 +40,12 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
     const auto& encoder = details_->config.encoder;
     std::string encoder_opts;
     if (encoder.find("nvenc") != std::string::npos) {
-        encoder_opts = "-preset p1 -tune ll -rc cbr -g 2 -bf 0";
+        encoder_opts = std::format("-preset p1 -tune ll -rc cbr -b:v {} -g 2 -bf 0",
+                                   details_->config.bitrate);
     } else {
-        encoder_opts = "-preset ultrafast -tune zerolatency "
-                       "-x264-params \"keyint=2:min-keyint=2:scenecut=0:repeat-headers=1\"";
+        encoder_opts = std::format("-preset ultrafast -tune zerolatency -b:v {} "
+                                   "-x264-params \"keyint=2:min-keyint=2:scenecut=0:repeat-headers=1\"",
+                                   details_->config.bitrate);
     }
 
     const std::string command = std::format(
@@ -90,8 +92,7 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
             frame_count++;
 
             if (frame_count % 300 == 0) {
-                std::fprintf(stderr, "RTP streamer: %lu frames sent\n",
-                             static_cast<unsigned long>(frame_count));
+                std::println(stderr, "RTP streamer: {} frames sent", frame_count);
             }
         }
     });

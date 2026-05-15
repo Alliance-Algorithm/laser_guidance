@@ -2,41 +2,38 @@ name: Run Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  test:
+  test-standalone:
     runs-on: ubuntu-latest
-    container:
-      image: qzhhhi/rmcs-develop
-      options: --user 0
-
-    env:
-      WS_DIR: ${{ github.workspace }}/ws
-      SRC_DIR: ${{ github.workspace }}/ws/src
 
     steps:
-      - name: Checkout repository into ROS2 workspace
-        uses: actions/checkout@v4
-        with:
-          path: ws/src/rmcs_laser_guidance
+      - uses: actions/checkout@v4
 
-      - name: Build package
-        shell: bash
+      - name: Install dependencies
         run: |
-          source /opt/ros/jazzy/setup.bash
-          cd "$WS_DIR"
-          colcon build \
-            --packages-select rmcs_laser_guidance \
-            --symlink-install \
-            --merge-install \
-            --event-handlers console_direct+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake g++-14 \
+            ffmpeg \
+            libopencv-dev \
+            libyaml-cpp-dev
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+
+      - name: Configure (standalone CMake)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+            -DWITH_ONNXRUNTIME=OFF \
+            -DWITH_TENSORRT=OFF \
+            -DWITH_FT4222=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
 
       - name: Run tests
-        shell: bash
-        run: |
-          source /opt/ros/jazzy/setup.bash
-          source "$WS_DIR/install/setup.bash"
-          ctest --test-dir "$WS_DIR/build/rmcs_laser_guidance" --output-on-failure
+        run: ctest --test-dir build --output-on-failure

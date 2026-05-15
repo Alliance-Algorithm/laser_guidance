@@ -1,6 +1,6 @@
 # laser_guidance
 
-`laser_guidance` 是一个最小激光视觉引导骨架，当前阶段覆盖：
+`laser_guidance` 是一个激光视觉引导系统，当前阶段覆盖：
 
 - `V4L2/UVC` 采集卡取图
 - 原始视频会话录制与可选离线抽帧导出
@@ -8,14 +8,20 @@
 - `Pipeline` 统一视觉入口与可切换后端骨架
 - 调试 overlay 与回放样本
 - 自动测试与工具入口
-- ONNX/TensorRT 模型推理
+- ONNX / TensorRT GPU 推理，双后端运行时热切换
 - FT4222H USB-to-SPI 振镜控制
+- Direct voltage 视觉→电压多项式映射（Poly3，支持增量标定训练）
+- 比赛模式统一守护进程 (`tool_competition`)
+- 空中机器人被瞄准进度计算 (`HitProgress`，RoboMaster 2026 §5.6.3)
+- EKF 跟踪（可运行时关闭，切换原始检测直驱）
+- 敌方颜色过滤（red/blue/auto）
 
 当前阶段**不包含**：
 
-- 控制链路闭环
+- 控制链路闭环（比赛模式已闭环）
 - `/gimbal/*` 接口
-- 相机与激光振镜的坐标系转换
+- `tracker` / `solver` / `planner`
+- `fire_control`
 
 ## Build
 
@@ -28,18 +34,17 @@ cmake --build build --parallel
 启用可选特性：
 
 ```bash
-# ONNX Runtime 模型推理
+# ONNX Runtime + TensorRT + FT4222 (推荐比赛配置)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON \
-  -DONNXRUNTIME_ROOT=/path/to/onnxruntime
+  -DWITH_ONNXRUNTIME=ON \
+  -DWITH_TENSORRT=ON \
+  -DWITH_FT4222=ON
 
-# TensorRT GPU 推理
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON
+# 仅 ONNX Runtime
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ONNXRUNTIME=ON
 
-# FT4222H 振镜控制（默认开启，需 libft4222.so 在项目根目录）
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DRMCS_LASER_GUIDANCE_WITH_FT4222=OFF   # 禁用
+# 禁用 FT4222H
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_FT4222=OFF
 ```
 
 ## Tests
@@ -54,20 +59,21 @@ ctest --test-dir build --output-on-failure
 构建后在 `build/` 下直接运行：
 
 ```bash
-./build/tool_preview                  # 本地预览
-./build/tool_capture                  # 录帧 (PNG + manifest)
-./build/tool_record                   # 原始视频会话录制
-./build/tool_replay                   # 回放预览
-./build/tool_model_infer              # 模型推理
-./build/tool_detector_benchmark       # 检测 benchmark
-./build/tool_calibrate                # 相机标定
-./build/tool_dac8568_smoke            # FT4222 -> DAC8568 硬件冒烟
-./build/tool_galvo_smoke              # DAC8568 -> 振镜信号冒烟
-./build/tool_guidance                 # 激光引导（模型+EKF+振镜，支持 direct_voltage/geometry）
-./build/tool_calib_solve              # 外参旋转求解（默认读 test_data/calib/geometry_calib_records.csv）
-./build/tool_export                   # 离线抽帧导出
-./build/tool_transcode                # 已录视频转码
-./build/tool_smoke                    # 离线冒烟
+./build/tool_competition             # 比赛模式（守护进程，TensorRT+EKF+振镜+推流+录制）
+./build/tool_preview                 # 本地预览（RTP推流+SHM+FIFO）
+./build/tool_guidance                # 激光引导（模型+EKF+振镜，支持标定模式）
+./build/tool_capture                 # 录帧 (PNG + manifest)
+./build/tool_record                  # 原始视频会话录制
+./build/tool_replay                  # 回放预览
+./build/tool_model_infer             # 模型推理
+./build/tool_detector_benchmark      # 检测 benchmark
+./build/tool_calibrate               # 相机标定
+./build/tool_dac8568_smoke           # FT4222 -> DAC8568 硬件冒烟
+./build/tool_galvo_smoke             # DAC8568 -> 振镜信号冒烟
+./build/tool_calib_solve             # 外参旋转求解
+./build/tool_export                  # 离线抽帧导出
+./build/tool_transcode               # 已录视频转码
+./build/tool_smoke                   # 离线冒烟
 ```
 
 大部分工具接受可选的配置文件路径：
@@ -114,17 +120,22 @@ ctest --test-dir build --output-on-failure
 ```bash
 make set-config      # 选择配置文件（交互式，选一次全局生效）
 make scan-camera     # 扫描可用采集卡
+make competition     # 比赛模式（守护进程 + RTP推流 + ffplay）
+make stream          # RTP 推流（自动打开 ffplay 窗口）
 make preview         # 本地预览（cv::imshow 窗口，不推流）
-make stream          # RTP 推流（自动打开 ffplay 窗口，关掉即退出）
 make stop            # 停止后台守护进程
+make record          # 视频录制
 ```
 
-守护进程运行时，`make stream` 秒开推流（通过 `/tmp/laser_cmd` FIFO 发命令，无需重启）。外部程序也可通过 FIFO 控制：
+守护进程运行时，通过 `/tmp/laser_cmd` FIFO 控制：
 
 ```bash
-echo "stream on"  > /tmp/laser_cmd
-echo "stream off" > /tmp/laser_cmd
-echo "quit"       > /tmp/laser_cmd
+echo "stream on"       > /tmp/laser_cmd   # 推流开关
+echo "record on"       > /tmp/laser_cmd   # 录制开关
+echo "enemy red"       > /tmp/laser_cmd   # 敌方颜色过滤
+echo "backend tensorrt" > /tmp/laser_cmd  # 推理后端切换
+echo "ekf off"         > /tmp/laser_cmd   # EKF 直驱模式
+echo "quit"            > /tmp/laser_cmd   # 优雅退出
 ```
 
 ## 项目结构
@@ -220,7 +231,12 @@ if (spi) {
 - 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入
 - EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态，支持 lookahead 超前预测
-- Direct voltage 视觉→电压映射：`config/direct_voltage_run.yaml`（主配置）、`config/direct_voltage_calib.yaml`（标定采集）、`config/direct_voltage_run_lut_v1.yaml`（LUT 实验）
+- Direct voltage 视觉→电压映射：`config/direct_voltage_run.yaml`（比赛配置）、`config/direct_voltage_calib.yaml`（标定采集）。训练脚本 `scripts/train_voltage_poly.py`，模型版本 `models/vision_voltage_poly_v*.yaml`
+- 比赛模式 (`tool_competition`) 融合预览+引导+录制，守护进程启动，支持 RTP 推流（可配码率 `streaming.bitrate`）、视频内录（`record.output_root`）、FIFO 运行时控制
+- 双推理后端：ONNX + TensorRT，启动时同时加载，运行时通过 FIFO 或配置 `inference.backend` 切换
+- 敌方颜色过滤：`inference.enemy_color` (red/blue/auto)，仅处理敌方颜色+紫色候选框
+- EKF 可运行时关闭 (`ekf.enabled: false` 或 `ekf off`)，切换原始检测直驱振镜
+- 被瞄准进度 (`HitProgress`)：规则手册 §5.6.3，3 阶段 P0 阈值，45s 锁定，overlay 进度条
 - 训练数据链路推荐「先录原始视频会话，再直接上传外部平台」；离线抽帧为备用链路
 - 录制输出 `raw.mp4 + session.yaml + notes.txt`，默认 H.264/avc1 编码
 - RTP 推流：`make stream` 后台 daemon + ffplay 窗口，关闭即停。`streaming` 配置段控制，默认端口 5004

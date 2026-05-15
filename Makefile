@@ -1,4 +1,4 @@
-.PHONY: scan-camera set-config preview stream record stop
+.PHONY: scan-camera set-config preview stream record stop competition
 
 scan-camera:
 	@.script/scan-camera
@@ -17,3 +17,6 @@ record:
 
 stop:
 	@.script/stop
+
+competition:
+	@.script/competition

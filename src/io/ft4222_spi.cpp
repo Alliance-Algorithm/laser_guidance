@@ -7,7 +7,11 @@
 #include <string>
 #include <utility>
 
+#ifdef WITH_FT4222
 #include "io/libft4222.h"
+#endif
+
+#ifdef WITH_FT4222
 
 namespace rmcs_laser_guidance {
 
@@ -185,3 +189,34 @@ auto Ft4222Spi::transfer(const uint8_t* tx_buf, uint16_t tx_len,
 }
 
 }  // namespace rmcs_laser_guidance
+
+#else
+
+namespace rmcs_laser_guidance {
+
+auto Ft4222Spi::negotiated_clock_hz() const noexcept -> uint32_t { return 0; }
+
+Ft4222Spi::Ft4222Spi(void*, Ft4222Config) noexcept : handle_(nullptr) {}
+
+Ft4222Spi::Ft4222Spi(Ft4222Spi&&) noexcept = default;
+auto Ft4222Spi::operator=(Ft4222Spi&&) noexcept -> Ft4222Spi& = default;
+Ft4222Spi::~Ft4222Spi() noexcept = default;
+
+auto Ft4222Spi::open(Ft4222Config) -> std::expected<Ft4222Spi, std::string> {
+    return std::unexpected(std::string("FT4222 support not compiled"));
+}
+
+auto Ft4222Spi::write(const uint8_t*, uint16_t) -> std::expected<void, std::string> {
+    return std::unexpected(std::string("FT4222 not available"));
+}
+
+auto Ft4222Spi::transfer(const uint8_t*, uint16_t, uint8_t*, uint16_t)
+    -> std::expected<void, std::string> {
+    return std::unexpected(std::string("FT4222 not available"));
+}
+
+auto Ft4222Spi::close() noexcept -> void {}
+
+}  // namespace rmcs_laser_guidance
+
+#endif

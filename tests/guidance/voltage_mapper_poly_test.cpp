@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cmath>
-#include <iostream>
+#include <print>
 
 #include "config.hpp"
 #include "guidance/voltage_mapper.hpp"
@@ -40,6 +40,6 @@ int main() {
     assert(result->valid);
     assert(std::abs(result->vx - 1.0F) < 1e-4F);
     assert(std::abs(result->vy + 1.0F) < 1e-4F);
-    std::cout << "voltage_mapper_poly_test: PASSED" << std::endl;
+    std::println("voltage_mapper_poly_test: PASSED");
     return 0;
 }

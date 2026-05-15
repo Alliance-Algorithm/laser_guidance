@@ -49,6 +49,7 @@ struct RuntimeConfig {
 struct InferenceConfig {
     InferenceBackendKind backend = InferenceBackendKind::bright_spot;
     std::filesystem::path model_path { };
+    int enemy_class_id = -1;
 };
 
 struct RtpConfig {
@@ -57,6 +58,7 @@ struct RtpConfig {
     int port = 5002;
     std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
     std::string encoder = "h264_nvenc";
+    std::string bitrate = "8M";
 };
 
 struct UdpConfig {
@@ -66,6 +68,7 @@ struct UdpConfig {
 };
 
 struct EkfConfig {
+    bool enabled = true;
     double process_noise_q     = 0.05;
     double measurement_noise_r = 0.5;
     double initial_pos_std     = 100.0;

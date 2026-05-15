@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <stdexcept>
 #include <string>
 
@@ -95,6 +96,14 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         }
         if (inference["model_path"])
             config.inference.model_path = inference["model_path"].as<std::string>();
+        if (inference["enemy_color"]) {
+            const auto ec = to_lower_copy(inference["enemy_color"].as<std::string>());
+            if (ec == "red")       config.inference.enemy_class_id = 1;
+            else if (ec == "blue") config.inference.enemy_class_id = 2;
+            else if (ec == "auto") config.inference.enemy_class_id = -1;
+            else throw std::runtime_error(
+                std::format("inference.enemy_color must be red/blue/auto, got '{}'", ec));
+        }
     }
 
     if (const YAML::Node streaming = yaml["streaming"]) {
@@ -103,6 +112,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (streaming["port"]) config.rtp.port = streaming["port"].as<int>();
         if (streaming["sdp_path"]) config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
         if (streaming["encoder"]) config.rtp.encoder = streaming["encoder"].as<std::string>();
+        if (streaming["bitrate"]) config.rtp.bitrate = streaming["bitrate"].as<std::string>();
     }
 
     if (const YAML::Node udp_cfg = yaml["udp"]) {
@@ -112,6 +122,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
     }
 
     if (const YAML::Node ekf = yaml["ekf"]) {
+        if (ekf["enabled"]) config.ekf.enabled = ekf["enabled"].as<bool>();
         if (ekf["process_noise_q"])
             config.ekf.process_noise_q = ekf["process_noise_q"].as<double>();
         if (ekf["measurement_noise_r"])

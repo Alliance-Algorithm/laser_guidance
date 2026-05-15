@@ -12,8 +12,10 @@
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
 - `Config` / `Frame` / `TargetObservation` / `Pipeline`
-- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker` / `Ft4222Spi`
+- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker` / `HitProgress` / `Ft4222Spi` / `GuidancePipeline` / `VoltageMapper` / `GalvoDriver` / `CameraProjection` / `DepthEstimator`
 - 自动测试与工具运行入口
+- 比赛模式统一守护进程 `tool_competition`（预览+引导+录制融合）
+- ONNX + TensorRT 双推理后端，运行时热切换
 
 当前明确**不是**闭环控制系统，不包含：
 
@@ -47,7 +49,7 @@
 - `src/streaming/`
   - 网络推流模块：`RtpStreamer`、`UdpSender`、`VideoShm`。
 - `src/tracking/`
-  - 跟踪/状态模块：`EkfTracker`、`HitState`、`FreshnessQueue`、`RuntimeMetrics`。
+  - 跟踪/状态模块：`EkfTracker`、`HitState`、`HitProgress`、`FreshnessQueue`、`RuntimeMetrics`。
 - `src/io/`
   - 硬件 I/O 模块：`Ft4222Spi`、LibFT4222 头文件。
 - `tools/`
@@ -101,22 +103,42 @@ internal：
 
 ### 当前核心链路
 ```text
-config/default.yaml
+config/direct_voltage_run.yaml (比赛) / config/default.yaml
 -> load_config()
 -> Config
 
 V4l2Capture / synthetic frame / replay frame
 -> Frame {image, timestamp}
--> Pipeline
--> selected backend
--> Detector / ModelInfer
--> ModelRuntime + ModelAdapter (when backend=model)
--> TargetObservation {detected, center, contour, brightness}
--> DebugRenderer / stdout / replay output
+-> ModelInfer (ONNX or TensorRT, dual-backend hot-switch)
+-> ModelRuntime + ModelAdapter (ONNX) / TensorRTEngine
+-> TargetObservation + candidates
+-> enemy_color filter (keep enemy class + purple)
+-> EkfTracker (optional, can bypass for raw detection)
+-> GuidancePipeline::process_ekf_guided()
+-> VoltageMapper (poly3) -> GalvoDriver (FT4222 SPI -> DAC8568 -> galvo)
+-> HitProgress (lock-progress, 3-stage P0)
+-> RtpStreamer (RTP + ffplay) / UdpSender / VideoShmProducer
+-> VideoSessionRecorder (optional, FIFO toggle)
+```
+
+### 比赛模式入口
+```text
+tool_competition
+-> V4l2Capture.open()
+-> ModelInfer (ONNX + TensorRT dual load)
+-> Ft4222Spi.open() -> GuidancePipeline
+-> read_frame() -> async infer -> EKF/raw -> guidance -> overlay
+-> RtpStreamer.push() + UdpSender + VideoShm + Recording
+-> FIFO control: stream/record/enemy/backend/ekf/quit
 ```
 
 ### 当前运行入口
 ```text
+tool_competition
+-> V4l2Capture.open() + ModelInfer + Ft4222Spi + GuidancePipeline
+-> async infer -> EKF/raw -> guidance -> RTP + UDP + SHM + Recording
+-> FIFO /tmp/laser_cmd: stream/record/enemy/backend/ekf/quit
+
 example_v4l2_preview
 -> V4l2Capture.open()
 -> read_frame()
@@ -161,9 +183,13 @@ example_replay_preview
 ### 当前构建关系
 ```text
 rmcs_laser_guidance_core
--> config / detector / model_runtime / model_adapter / training_data / renderer / replay / v4l2 / pipeline
+-> config / detector / model_runtime / model_adapter / tensorrt_engine / training_data
+   / renderer / replay / v4l2 / rtp_streamer / udp_sender / video_shm
+   / ekf_tracker / hit_state / hit_progress / freshness_queue / runtime_metrics
+   / ft4222_spi / guidance_pipeline / voltage_mapper / galvo_driver / galvo_kinematics
+   / camera_projection / depth_estimator / pipeline
 
-example_*
+tool_*
 -> rmcs_laser_guidance_core
 -> OpenCV
 

@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cmath>
-#include <iostream>
+#include <print>
 
 #include <opencv2/core.hpp>
 
@@ -30,7 +30,7 @@ void test_project_center() {
     assert(std::abs(P.y) < 1.0F);
     assert(std::abs(P.z - 10000.0F) < 1.0F);
 
-    std::cout << "  project_center: P=(" << P.x << "," << P.y << "," << P.z << ")" << std::endl;
+    std::println("  project_center: P=({},{},{})", P.x, P.y, P.z);
 }
 
 void test_project_offset() {
@@ -44,21 +44,21 @@ void test_project_offset() {
     assert(std::abs(P.x - expected_x) < 0.1F);
     assert(std::abs(P.y) < 0.1F);
 
-    std::cout << "  project_offset: P.x=" << P.x << " (expected " << expected_x << ")" << std::endl;
+    std::println("  project_offset: P.x={} (expected {})", P.x, expected_x);
 }
 
 void test_project_zero_depth() {
     CameraProjection proj(make_k_matrix(), cv::Mat{});
     auto P = proj.project({100, 200}, 0.0F);
     assert(P.x == -1.0F && P.y == -1.0F && P.z == -1.0F);
-    std::cout << "  project_zero_depth: OK" << std::endl;
+    std::println("  project_zero_depth: OK");
 }
 
 void test_project_negative_depth() {
     CameraProjection proj(make_k_matrix(), cv::Mat{});
     auto P = proj.project({100, 200}, -5.0F);
     assert(P.x == -1.0F && P.y == -1.0F && P.z == -1.0F);
-    std::cout << "  project_negative_depth: OK" << std::endl;
+    std::println("  project_negative_depth: OK");
 }
 
 void test_project_different_f() {
@@ -75,7 +75,7 @@ void test_project_different_f() {
     assert(std::abs(P.y - expected_y) < 0.1F);
     assert(std::abs(P.z - 5000.0F) < 0.1F);
 
-    std::cout << "  project_different_f: OK" << std::endl;
+    std::println("  project_different_f: OK");
 }
 
 void test_camera_matrix_access() {
@@ -84,19 +84,19 @@ void test_camera_matrix_access() {
     const auto& stored = proj.camera_matrix();
     assert(std::abs(stored.at<double>(0, 0) - 1234.0) < 0.01);
     assert(std::abs(stored.at<double>(1, 1) - 5678.0) < 0.01);
-    std::cout << "  camera_matrix_access: OK" << std::endl;
+    std::println("  camera_matrix_access: OK");
 }
 
 } // namespace
 
 int main() {
-    std::cout << "camera_projection_test:" << std::endl;
+    std::println("camera_projection_test:");
     test_project_center();
     test_project_offset();
     test_project_zero_depth();
     test_project_negative_depth();
     test_project_different_f();
     test_camera_matrix_access();
-    std::cout << "PASSED" << std::endl;
+    std::println("PASSED");
     return 0;
 }
