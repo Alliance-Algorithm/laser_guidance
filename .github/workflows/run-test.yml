@@ -18,6 +18,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             cmake g++-14 \
+            ffmpeg \
             libopencv-dev \
             libyaml-cpp-dev
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
