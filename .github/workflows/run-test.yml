@@ -17,13 +17,16 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            cmake g++ \
+            cmake g++-14 \
             libopencv-dev \
             libyaml-cpp-dev
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
 
       - name: Configure (standalone CMake)
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
             -DWITH_ONNXRUNTIME=OFF \
             -DWITH_TENSORRT=OFF \
             -DWITH_FT4222=OFF
