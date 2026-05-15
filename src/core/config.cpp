@@ -97,9 +97,11 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.inference.model_path = inference["model_path"].as<std::string>();
         if (inference["enemy_color"]) {
             const auto ec = to_lower_copy(inference["enemy_color"].as<std::string>());
-            if (ec == "red")       config.inference.enemy_class_id = 2;
-            else if (ec == "blue") config.inference.enemy_class_id = 1;
+            if (ec == "red")       config.inference.enemy_class_id = 1;
+            else if (ec == "blue") config.inference.enemy_class_id = 2;
             else if (ec == "auto") config.inference.enemy_class_id = -1;
+            else throw std::runtime_error(
+                std::format("inference.enemy_color must be red/blue/auto, got '{}'", ec));
         }
     }
 

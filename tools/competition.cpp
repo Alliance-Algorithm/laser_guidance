@@ -183,8 +183,8 @@ auto draw_status_bar(cv::Mat& image, bool streaming, bool recording,
     if (streaming) line += " [RTP]";
     if (recording) line += " [REC]";
     switch (enemy_class_id) {
-    case 1: line += " [BLUE]"; break;
-    case 2: line += " [RED]";  break;
+    case 1: line += " [RED]";  break;
+    case 2: line += " [BLUE]"; break;
     default: break;
     }
     if (line.empty()) return;
@@ -588,10 +588,10 @@ int main(int argc, char** argv) {
                         std::println("FIFO: recording OFF");
                     }
                 } else if (cmd.starts_with("enemy red")) {
-                    enemy_class_id = 2;
+                    enemy_class_id = 1;
                     std::println("FIFO: enemy → RED");
                 } else if (cmd.starts_with("enemy blue")) {
-                    enemy_class_id = 1;
+                    enemy_class_id = 2;
                     std::println("FIFO: enemy → BLUE");
                 } else if (cmd.starts_with("enemy auto")) {
                     enemy_class_id = -1;
