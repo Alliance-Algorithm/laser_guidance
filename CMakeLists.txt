@@ -19,6 +19,9 @@ find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc v
 find_package(yaml-cpp REQUIRED)
 
 file(GLOB_RECURSE ALL_SOURCES src/*.cpp)
+if(NOT WITH_FT4222)
+  list(FILTER ALL_SOURCES EXCLUDE REGEX "src/io/ft4222_spi\\.cpp")
+endif()
 
 # ---- ONNX Runtime (optional) --------------------------------------------------
 if(WITH_ONNXRUNTIME)
