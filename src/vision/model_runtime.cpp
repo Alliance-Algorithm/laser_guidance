@@ -1,6 +1,7 @@
 #include "vision/model_runtime.hpp"
 
 #include <algorithm>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -218,6 +219,15 @@ struct ModelRuntime::Details {
         : env(ORT_LOGGING_LEVEL_WARNING, "rmcs_laser_guidance")
         , session_options() {
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        try {
+            OrtCUDAProviderOptions cuda_options;
+            cuda_options.device_id = 0;
+            session_options.AppendExecutionProvider_CUDA(cuda_options);
+            execution_provider = "CUDA";
+        } catch (const Ort::Exception& e) {
+            execution_provider = "CPU";
+            provider_message   = std::string("CUDA EP unavailable, falling back to CPU: ") + e.what();
+        }
     }
 
     Ort::Env env;
@@ -225,6 +235,8 @@ struct ModelRuntime::Details {
     std::unique_ptr<Ort::Session> session { };
     std::vector<ModelValueInfo> inputs { };
     std::vector<ModelValueInfo> outputs { };
+    std::string execution_provider { "CPU" };
+    std::string provider_message { };
 };
 
 #else
@@ -253,6 +265,11 @@ auto ModelRuntime::load() -> std::string {
     try {
         details_->session = std::make_unique<Ort::Session>(
             details_->env, model_path_.string().c_str(), details_->session_options);
+        if (!details_->provider_message.empty()) {
+            std::clog << "[ModelRuntime] " << details_->provider_message << '\n';
+        }
+        std::clog << "[ModelRuntime] using ONNX Runtime execution provider: "
+                  << details_->execution_provider << '\n';
         Ort::AllocatorWithDefaultOptions allocator;
         details_->inputs  = extract_value_info(*details_->session, allocator, true);
         details_->outputs = extract_value_info(*details_->session, allocator, false);
