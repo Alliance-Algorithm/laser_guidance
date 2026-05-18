@@ -1,0 +1,10 @@
+# UGREEN 95348 capture card for laser_guidance
+# Creates persistent /dev/laser_capture symlink based on device attributes
+# Install: sudo cp .script/99-laser-capture.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# Primary match: serial number (unique per card)
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2b89", ATTRS{idProduct}=="5348", ATTRS{serial}=="20250910", SYMLINK+="laser_capture"
+
+# Fallback: if you have a second UGREEN card, copy this rule and change the serial number
+# Find serial: udevadm info -a -n /dev/video0 | grep ATTRS{serial}
