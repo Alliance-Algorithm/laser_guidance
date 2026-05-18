@@ -164,16 +164,14 @@ auto GuidancePipeline::process(const TargetObservation& observation) -> std::str
     if (!depth) return "depth estimate failed";
 
     const auto P_c = projection_->project(top.center, *depth);
-    const auto angles = kinematics_->compute(P_c);
+    auto angles = kinematics_->compute(P_c);
     if (!angles.valid) return "kinematics failed";
+    const float tx = angles.theta_x_optical_deg + config_.angle_offset_x_deg;
+    const float ty = angles.theta_y_optical_deg + config_.angle_offset_y_deg;
     if (config_.scan_mode == ScanMode::rectangle) {
-        return update_scan_center(angles.theta_x_optical_deg,
-                                  angles.theta_y_optical_deg,
-                                  *depth, top.center);
+        return update_scan_center(tx, ty, *depth, top.center);
     }
-    return write_single(angles.theta_x_optical_deg,
-                        angles.theta_y_optical_deg,
-                        *depth, top.center);
+    return write_single(tx, ty, *depth, top.center);
 }
 
 auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
@@ -207,18 +205,17 @@ auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
     if (io_depth_mm <= 0.0F) return "no valid depth";
 
     const auto P_c = projection_->project(ekf_center, io_depth_mm);
-    const auto angles = kinematics_->compute(P_c);
+    auto angles = kinematics_->compute(P_c);
     if (!angles.valid) return "kinematics failed";
 
+    const float tx = angles.theta_x_optical_deg + config_.angle_offset_x_deg;
+    const float ty = angles.theta_y_optical_deg + config_.angle_offset_y_deg;
+
     if (config_.scan_mode == ScanMode::rectangle) {
-        return update_scan_center(angles.theta_x_optical_deg,
-                                  angles.theta_y_optical_deg,
-                                  io_depth_mm, ekf_center);
+        return update_scan_center(tx, ty, io_depth_mm, ekf_center);
     }
 
-    return write_single(angles.theta_x_optical_deg,
-                        angles.theta_y_optical_deg,
-                        io_depth_mm, ekf_center);
+    return write_single(tx, ty, io_depth_mm, ekf_center);
 }
 
 auto GuidancePipeline::process_direct_voltage_guided(const cv::Point2f& ekf_center,
@@ -265,20 +262,18 @@ auto GuidancePipeline::write_single(float theta_x, float theta_y,
                                      float depth_mm, const cv::Point2f& center)
     -> std::string {
     static int log_counter = 0;
-    const float tx = theta_x + config_.angle_offset_x_deg;
-    const float ty = theta_y + config_.angle_offset_y_deg;
     if (++log_counter % 30 == 0) {
         std::println("guidance: depth={:.1f}mm aim=({:.1f},{:.1f}) θ=[{:.2f}°,{:.2f}°]",
-                     depth_mm, center.x, center.y, tx, ty);
+                     depth_mm, center.x, center.y, theta_x, theta_y);
     }
-    last_output_theta_x_deg_.store(tx, std::memory_order_relaxed);
-    last_output_theta_y_deg_.store(ty, std::memory_order_relaxed);
-    last_output_vx_.store(driver_->optical_to_voltage(tx), std::memory_order_relaxed);
-    last_output_vy_.store(driver_->optical_to_voltage(ty), std::memory_order_relaxed);
+    last_output_theta_x_deg_.store(theta_x, std::memory_order_relaxed);
+    last_output_theta_y_deg_.store(theta_y, std::memory_order_relaxed);
+    last_output_vx_.store(driver_->optical_to_voltage(theta_x), std::memory_order_relaxed);
+    last_output_vy_.store(driver_->optical_to_voltage(theta_y), std::memory_order_relaxed);
     has_output_angles_.store(true, std::memory_order_relaxed);
     has_output_voltages_.store(true, std::memory_order_relaxed);
     std::scoped_lock driver_lock(driver_mutex_);
-    if (auto r = driver_->set_angles(tx, ty); !r) {
+    if (auto r = driver_->set_angles(theta_x, theta_y); !r) {
         return "galvo write failed: " + r.error();
     }
     return "";
