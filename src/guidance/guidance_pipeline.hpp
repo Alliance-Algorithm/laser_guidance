@@ -17,6 +17,7 @@
 namespace rmcs_laser_guidance {
 
 class DepthEstimator;
+class LidarDepthEstimator;
 class CameraProjection;
 class GalvoKinematics;
 class GalvoDriver;
@@ -33,8 +34,9 @@ public:
     auto process(const TargetObservation& observation) -> std::string;
 
     auto process_ekf_guided(const cv::Point2f& ekf_center,
-                             const ModelCandidate* candidate,
-                             float& io_depth_mm) -> std::string;
+                              const ModelCandidate* candidate,
+                              const LidarFrame* lidar_frame,
+                              float& io_depth_mm) -> std::string;
 
     auto set_center() -> std::string;
 
@@ -45,7 +47,8 @@ public:
     auto project_to_camera(const cv::Point2f& pixel, float depth_mm) const
         -> cv::Point3f;
 
-    auto estimate_depth(const ModelCandidate& candidate) const
+    auto estimate_depth(const ModelCandidate& candidate,
+                        const LidarFrame* lidar_frame = nullptr) const
         -> std::optional<float>;
 
     [[nodiscard]] auto latest_output_angles() const -> std::optional<cv::Point2f>;
@@ -73,6 +76,7 @@ private:
     Ft4222Spi& spi_;
     GuidanceConfig config_;
     std::unique_ptr<DepthEstimator> depth_estimator_;
+    std::unique_ptr<LidarDepthEstimator> lidar_depth_estimator_;
     std::unique_ptr<CameraProjection> projection_;
     std::unique_ptr<GalvoKinematics> kinematics_;
     std::unique_ptr<GalvoDriver> driver_;

@@ -511,7 +511,7 @@ int main(int argc, char** argv) {
                     if (observation.detected && !observation.candidates.empty()) {
                         auto* cand = &observation.candidates.front();
                         guidance_msg = guidance->process_ekf_guided(
-                            observation.center, cand, last_valid_depth_mm);
+                            observation.center, cand, nullptr, last_valid_depth_mm);
                         depth_valid = true;
                     } else if (depth_valid) {
                         guidance_msg = guidance->set_center();
@@ -530,7 +530,7 @@ int main(int argc, char** argv) {
                             ekf_state.position.x + ekf_state.velocity.x * latency_s,
                             ekf_state.position.y + ekf_state.velocity.y * latency_s);
                         guidance_msg = guidance->process_ekf_guided(
-                            aim_pos, cand, last_valid_depth_mm);
+                            aim_pos, cand, nullptr, last_valid_depth_mm);
                     }
                 } else if (ekf_state.lost) {
                     if (!ekf_was_lost) {
