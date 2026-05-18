@@ -463,17 +463,7 @@ message=model backend requires ONNX Runtime support
 
 当前仓库存在一个已知的构建系统虫：
 
-- `CMakeLists.txt` 定义的编译宏是 `WITH_ONNXRUNTIME`
-- 但 C++ 代码检查的是 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`
-
-结果：即使 ONNX Runtime 库已成功找到并链接，C++ 代码仍然判定"未启用"，然后在运行时静默退化到 stub 实现。
-
-**当前修复**（已在 89426e7 附近的提交中修正）是把 CMakeLists.txt 的编译宏统一成 C++ 代码期望的 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`。
-
-**后续重构方向**（计划中）：
-
-- 短期：在 `model_runtime.cpp` 加 `#error` 守卫，使得名字不一致在编译阶段就炸掉，而不是运行时静默退化
-- 长期：把 `model_runtime.cpp` 拆成 `model_runtime_onnx.cpp` 和 `model_runtime_stub.cpp`，由 CMake 在源文件层面决定编译哪个。这样宏彻底消失，不会再有名字不一致的可能
+> **历史记录**：早期版本中存在编译宏命名不一致问题（`CMakeLists.txt` 定义 `WITH_ONNXRUNTIME`，而 C++ 代码检查 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`），导致 ONNX Runtime 运行时静默退化。此问题已在提交 `89426e7` 中修复，CMakeLists.txt 的编译宏已统一为 `RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME`。
 
 ## 振镜驱动输入接线
 

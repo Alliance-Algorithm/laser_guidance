@@ -24,14 +24,14 @@ This document defines the frozen model contract for the first deployable target-
 
 | Field         | Value                                | Notes |
 |---------------|--------------------------------------|-------|
-| Class count   | 3 | `0=Red`, `1=Blue`, `2=Purple` |
+| Class count   | 3 | `0=Purple`, `1=Red`, `2=Blue` |
 | Class names   | `Red`, `Blue`, `Purple` | |
 | NMS location  | `[DECISION NEEDED: inside model or C++ postprocess — confirm after export]` | |
 | Bbox format   | `[DECISION NEEDED: xyxy / cxcywh / other — confirm after export]` | |
 | Output tensors | `[DECISION NEEDED: exact YOLO output tensor contract after export]` | Tensor names, shapes, and semantics must be confirmed after `.onnx` export |
 | Confidence    | Float                                | |
 
-> **Important**: Single model with 3 classes shares a common backbone. Purple is a model class (id=2), not a separate model. Runtime filters by `match_color` config: red team accepts Blue+Purple, rejects Red; blue team accepts Red+Purple, rejects Blue.
+> **Important**: Single model with 3 classes shares a common backbone. Purple is a model class (id=0), not a separate model. Runtime filters by `match_color` config: red team accepts Blue+Purple, rejects Red; blue team accepts Red+Purple, rejects Blue.
 
 ## Runtime Color Filter
 
