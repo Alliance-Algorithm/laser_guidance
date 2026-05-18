@@ -18,6 +18,18 @@ else
 fi
 
 echo ""
+echo "=== 稳定路径 (by-path, 拔插不变) ==="
+echo ""
+for link in /dev/v4l/by-path/*-video-index0; do
+    if [ -L "$link" ]; then
+        target="$(readlink -f "$link")"
+        card="$(v4l2-ctl -d "$target" --info 2>/dev/null | grep 'Card type' | cut -d: -f2- | xargs)"
+        echo "  $link"
+        echo "    -> $target  ($card)"
+        echo ""
+    fi
+done
+
 echo "=== 支持的分辨率/格式 (v4l2-ctl --list-formats-ext) ==="
 echo ""
 for dev in /dev/video*; do
