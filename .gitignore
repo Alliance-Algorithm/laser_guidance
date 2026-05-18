@@ -6,10 +6,6 @@ videos/
 label_upload/
 .sisyphus/
 
-# model binaries
-models/*.onnx
-models/*.engine
-
 # python
 __pycache__/
 *.pyc
