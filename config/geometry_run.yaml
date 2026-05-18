@@ -1,5 +1,5 @@
 v4l2:
-  device_path: /dev/video2
+  device_path: /dev/video0
   width: 1920
   height: 1080
   framerate: 60.0
@@ -50,13 +50,13 @@ udp:
 
 ekf:
   enabled: true
-  process_noise_q: 0.20
-  measurement_noise_r: 0.03
+  process_noise_q: 0.35
+  measurement_noise_r: 0.015
   initial_pos_std: 100.0
   initial_vel_std: 100.0
   initial_acc_std: 35.0
   max_missed_frames: 5
-  lookahead_ms: 25.0
+  lookahead_ms: 30.0
 
 guidance:
   enabled: true
@@ -90,8 +90,8 @@ guidance:
     x_minus_channel: 2
     y_plus_channel: 1
     y_minus_channel: 3
-  angle_offset_x_deg: 0.0
-  angle_offset_y_deg: 0.0
+  angle_offset_x_deg: 0.03
+  angle_offset_y_deg: -0.3
   scan_mode: rectangle
   scan_width_deg: 0.08
   scan_height_deg: 0.10
