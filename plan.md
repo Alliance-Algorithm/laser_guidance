@@ -58,8 +58,8 @@ python scripts/train_voltage_lut.py \
 | t_y_mm | 15.1 | 相机在振镜上面 15.1mm |
 | t_z_mm | 146.0 | 相机在振镜后面 146mm |
 | r_x_deg | 0.31 | 旋转（pitch） |
-| r_y_deg | 0.08 | 旋转（yaw） |
-| r_z_deg | 1.74 | 旋转（roll） |
+| r_y_deg | 0.05 | 旋转（yaw） |
+| r_z_deg | 1.82 | 旋转（roll） |
 
 ## 标定工作流
 
