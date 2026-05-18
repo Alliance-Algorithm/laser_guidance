@@ -45,6 +45,16 @@ namespace {
             "guidance.command_model must be one of: geometry, direct_voltage");
     }
 
+    auto parse_guidance_depth_source(const std::string_view value)
+        -> GuidanceDepthSourceKind {
+        const std::string lower = to_lower_copy(std::string(value));
+        if (lower == "monocular_bbox") return GuidanceDepthSourceKind::monocular_bbox;
+        if (lower == "lidar_target_cluster") return GuidanceDepthSourceKind::lidar_target_cluster;
+
+        throw std::runtime_error(
+            "guidance.depth_source must be one of: monocular_bbox, lidar_target_cluster");
+    }
+
 } // namespace
 
 auto load_config(const std::filesystem::path& config_path) -> Config {
@@ -121,6 +131,19 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (udp_cfg["port"]) config.udp.port = udp_cfg["port"].as<int>();
     }
 
+    if (const YAML::Node ws30 = yaml["ws30"]) {
+        if (ws30["enabled"]) config.ws30.enabled = ws30["enabled"].as<bool>();
+        if (ws30["host"]) config.ws30.host = ws30["host"].as<std::string>();
+        if (ws30["points_port"]) config.ws30.points_port = ws30["points_port"].as<int>();
+        if (ws30["imu_port"]) config.ws30.imu_port = ws30["imu_port"].as<int>();
+        if (ws30["scan_port"]) config.ws30.scan_port = ws30["scan_port"].as<int>();
+        if (ws30["handshake_interval_ms"])
+            config.ws30.handshake_interval_ms = ws30["handshake_interval_ms"].as<int>();
+        if (ws30["receive_imu"]) config.ws30.receive_imu = ws30["receive_imu"].as<bool>();
+        if (ws30["grid_cols"]) config.ws30.grid_cols = ws30["grid_cols"].as<int>();
+        if (ws30["grid_rows"]) config.ws30.grid_rows = ws30["grid_rows"].as<int>();
+    }
+
     if (const YAML::Node ekf = yaml["ekf"]) {
         if (ekf["enabled"]) config.ekf.enabled = ekf["enabled"].as<bool>();
         if (ekf["process_noise_q"])
@@ -145,6 +168,9 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (guidance["command_model"])
             config.guidance.command_model =
                 parse_guidance_command_model(guidance["command_model"].as<std::string>());
+        if (guidance["depth_source"])
+            config.guidance.depth_source =
+                parse_guidance_depth_source(guidance["depth_source"].as<std::string>());
         if (guidance["camera_calib_path"])
             config.guidance.camera_calib_path =
                 guidance["camera_calib_path"].as<std::string>();
@@ -180,6 +206,14 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
                 guidance["voltage_use_ekf_center"].as<bool>();
         if (guidance["voltage_limit_v"])
             config.guidance.voltage_limit_v = guidance["voltage_limit_v"].as<float>();
+        if (guidance["voltage_offset_vx"])
+            config.guidance.voltage_offset_vx = guidance["voltage_offset_vx"].as<float>();
+        if (guidance["voltage_offset_vy"])
+            config.guidance.voltage_offset_vy = guidance["voltage_offset_vy"].as<float>();
+        if (guidance["angle_offset_x_deg"])
+            config.guidance.angle_offset_x_deg = guidance["angle_offset_x_deg"].as<float>();
+        if (guidance["angle_offset_y_deg"])
+            config.guidance.angle_offset_y_deg = guidance["angle_offset_y_deg"].as<float>();
 
         if (const YAML::Node geom_list = guidance["target_geometry"]) {
             config.guidance.target_geometry.clear();
@@ -225,6 +259,16 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.scan_height_deg = guidance["scan_height_deg"].as<float>();
         if (guidance["scan_grid_n"])
             config.guidance.scan_grid_n = guidance["scan_grid_n"].as<int>();
+        if (guidance["lidar_bbox_margin_px"])
+            config.guidance.lidar_bbox_margin_px = guidance["lidar_bbox_margin_px"].as<float>();
+        if (guidance["lidar_cluster_tolerance_mm"])
+            config.guidance.lidar_cluster_tolerance_mm =
+                guidance["lidar_cluster_tolerance_mm"].as<float>();
+        if (guidance["lidar_min_cluster_points"])
+            config.guidance.lidar_min_cluster_points =
+                guidance["lidar_min_cluster_points"].as<int>();
+        if (guidance["lidar_max_depth_mm"])
+            config.guidance.lidar_max_depth_mm = guidance["lidar_max_depth_mm"].as<float>();
         if (guidance["calib_mode"])
             config.guidance.calib_mode = guidance["calib_mode"].as<bool>();
         if (guidance["calib_angle_x_deg"])
@@ -254,6 +298,26 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         throw std::runtime_error("runtime.debug_max_fps must be positive");
     if (config.runtime.record_queue_size <= 0)
         throw std::runtime_error("runtime.record_queue_size must be positive");
+    if (config.ws30.points_port <= 0)
+        throw std::runtime_error("ws30.points_port must be positive");
+    if (config.ws30.imu_port <= 0)
+        throw std::runtime_error("ws30.imu_port must be positive");
+    if (config.ws30.scan_port <= 0)
+        throw std::runtime_error("ws30.scan_port must be positive");
+    if (config.ws30.handshake_interval_ms <= 0)
+        throw std::runtime_error("ws30.handshake_interval_ms must be positive");
+    if (config.ws30.grid_cols <= 0)
+        throw std::runtime_error("ws30.grid_cols must be positive");
+    if (config.ws30.grid_rows <= 0)
+        throw std::runtime_error("ws30.grid_rows must be positive");
+    if (config.guidance.lidar_bbox_margin_px < 0.0F)
+        throw std::runtime_error("guidance.lidar_bbox_margin_px must be non-negative");
+    if (config.guidance.lidar_cluster_tolerance_mm <= 0.0F)
+        throw std::runtime_error("guidance.lidar_cluster_tolerance_mm must be positive");
+    if (config.guidance.lidar_min_cluster_points <= 0)
+        throw std::runtime_error("guidance.lidar_min_cluster_points must be positive");
+    if (config.guidance.lidar_max_depth_mm <= 0.0F)
+        throw std::runtime_error("guidance.lidar_max_depth_mm must be positive");
 
     return config;
 }

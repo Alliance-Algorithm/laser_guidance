@@ -50,8 +50,8 @@ udp:
 
 ekf:
   enabled: true
-  process_noise_q: 0.15
-  measurement_noise_r: 0.05
+  process_noise_q: 0.20
+  measurement_noise_r: 0.03
   initial_pos_std: 100.0
   initial_vel_std: 100.0
   initial_acc_std: 35.0
@@ -60,7 +60,8 @@ ekf:
 
 guidance:
   enabled: true
-  command_model: direct_voltage
+  command_model: geometry
+  depth_source: monocular_bbox
   calib_mode: false
   target_geometry:
     - class_id: 0
@@ -72,11 +73,6 @@ guidance:
     - class_id: 2
       width_mm: 72.0
       height_mm: 50.0
-  voltage_model_path: "models/vision_voltage_poly_v4.yaml"
-  voltage_use_ekf_center: true
-  voltage_limit_v: 5.0
-  voltage_offset_vx: 0.0
-  voltage_offset_vy: 0.0
   camera_calib_path: "config/camera_calib.yaml"
   t_x_mm: -97.0
   t_y_mm: 15.1
@@ -94,6 +90,8 @@ guidance:
     x_minus_channel: 2
     y_plus_channel: 1
     y_minus_channel: 3
+  angle_offset_x_deg: 0.0
+  angle_offset_y_deg: -0.05
   scan_mode: rectangle
   scan_width_deg: 0.08
   scan_height_deg: 0.10

@@ -54,12 +54,12 @@ python scripts/train_voltage_lut.py \
 
 | 参数 | 值 | 含义 |
 |---|---|---|
-| t_x_mm | -92.5 | 相机在激光右边 92.5mm |
-| t_y_mm | 30.0 | 相机在激光上面 30mm |
-| t_z_mm | 100.0 | 相机在激光后面 100mm |
-| r_x_deg | 待求解 | 旋转（pitch） |
-| r_y_deg | 待求解 | 旋转（yaw） |
-| r_z_deg | 待求解 | 旋转（roll） |
+| t_x_mm | -97.0 | 相机在振镜右边 97mm |
+| t_y_mm | 15.1 | 相机在振镜上面 15.1mm |
+| t_z_mm | 146.0 | 相机在振镜后面 146mm |
+| r_x_deg | 0.31 | 旋转（pitch） |
+| r_y_deg | 0.08 | 旋转（yaw） |
+| r_z_deg | 1.74 | 旋转（roll） |
 
 ## 标定工作流
 
