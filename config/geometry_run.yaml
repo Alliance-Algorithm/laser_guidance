@@ -91,7 +91,7 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   angle_offset_x_deg: 0.0
-  angle_offset_y_deg: -0.02
+  angle_offset_y_deg: 0.01
   scan_mode: rectangle
   scan_width_deg: 0.08
   scan_height_deg: 0.10

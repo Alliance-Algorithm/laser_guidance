@@ -86,6 +86,9 @@ if [ "$STREAMING_ENABLED" = "True" ]; then
         sleep 0.05
     done
     launch_ffplay
+    echo "ffplay closed, stopping daemon..."
+    echo "quit" > "$FIFO" 2>/dev/null || true
+    kill "$COMPETITION_PID" 2>/dev/null || true
 else
-    wait
+    wait $COMPETITION_PID
 fi
