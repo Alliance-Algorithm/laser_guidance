@@ -1,5 +1,5 @@
 v4l2:
-  device_path: /dev/laser_capture
+  device_path: /dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0
   width: 1920
   height: 1080
   framerate: 60.0
