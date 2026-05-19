@@ -13,7 +13,7 @@
 - YOLO26 ONNX/TensorRT 端到端推理 ✅（3 class：purple/red/blue）
 - 实时检测可视化（框+置信度+准星） ✅
 - 采集卡配置（UGREEN 1080p@60 MJPG） ✅
-- EKF tracker（常加速度模型）+ lookahead 40ms 超前预测 ✅
+- EKF tracker（常加速度模型）+ lookahead 30ms 超前预测 ✅
 - FT4222 → DAC8568 振镜 SPI 控制（30MHz SCK）✅
 - 单目测距（靶物理尺寸 + bbox 尺度，72×50mm） ✅
 - 相机→振镜外参（平移已知：t_x=-92.5, t_y=30, t_z=100mm） ✅
@@ -50,7 +50,9 @@ python scripts/train_voltage_lut.py \
   --output models/vision_voltage_lut_v2.yaml
 ```
 
-## 物理外参（已确定，不动）
+## 物理外参（当前标定值）
+
+> 242 点标定，18.4m 距离，2026-05-19。旋转外参随重新标定变化。
 
 | 参数 | 值 | 含义 |
 |---|---|---|

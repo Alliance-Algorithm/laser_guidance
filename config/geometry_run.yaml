@@ -77,6 +77,7 @@ guidance:
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0
+  # Rotation extrinsics from 242-point calibration at 18.4m (2026-05-19)
   r_x_deg: 0.31
   r_y_deg: 0.05
   r_z_deg: 1.82
@@ -91,7 +92,7 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   angle_offset_x_deg: 0.01
-  angle_offset_y_deg: 0.05
+  angle_offset_y_deg: 0.01
   scan_mode: rectangle
   scan_width_deg: 0.08
   scan_height_deg: 0.10
