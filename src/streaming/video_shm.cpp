@@ -50,7 +50,7 @@ bool VideoShmProducer::open(int width, int height) {
     header_->frame_seq.store(0, std::memory_order_relaxed);
     header_->write_idx.store(0, std::memory_order_relaxed);
 
-    std::println("[shm] created {} ({}x{}, {:.1f} MB)",
+    std::println(stderr, "[shm] created {} ({}x{}, {:.1f} MB)",
                  kShmName, width, height,
                  static_cast<double>(map_size_) / (1024.0 * 1024.0));
     return true;
