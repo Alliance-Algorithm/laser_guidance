@@ -75,8 +75,6 @@ guidance:
       height_mm: 50.0
   camera_calib_path: "config/camera_calib.yaml"
   depth_scale: 1.0
-  voltage_gain_x: 1.0
-  voltage_gain_y: 2.0
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0
@@ -96,4 +94,7 @@ guidance:
     y_minus_channel: 3
   angle_offset_x_deg: 0.03
   angle_offset_y_deg: 0.0
-  scan_mode: single
+  scan_mode: rectangle
+  scan_width_deg: 0.08
+  scan_height_deg: 0.10
+  scan_grid_n: 6

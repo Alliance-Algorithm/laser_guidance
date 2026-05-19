@@ -212,10 +212,6 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.voltage_offset_vy = guidance["voltage_offset_vy"].as<float>();
         if (guidance["depth_scale"])
             config.guidance.depth_scale = guidance["depth_scale"].as<float>();
-        if (guidance["voltage_gain_x"])
-            config.guidance.voltage_gain_x = guidance["voltage_gain_x"].as<float>();
-        if (guidance["voltage_gain_y"])
-            config.guidance.voltage_gain_y = guidance["voltage_gain_y"].as<float>();
         if (guidance["angle_offset_x_deg"])
             config.guidance.angle_offset_x_deg = guidance["angle_offset_x_deg"].as<float>();
         if (guidance["angle_offset_y_deg"])

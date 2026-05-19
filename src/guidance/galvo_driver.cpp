@@ -100,10 +100,10 @@ auto GalvoDriver::set_voltages(float x_voltage, float y_voltage)
     const auto& w = config_.wiring;
     const bool diff = w.mode == GalvoWiringMode::differential;
 
-    const float x_pos_v = (diff ? x_voltage : x_voltage) * config_.voltage_gain_x;
-    const float x_neg_v = (diff ? -x_voltage : 0.0F) * config_.voltage_gain_x;
-    const float y_pos_v = (diff ? y_voltage : y_voltage) * config_.voltage_gain_y;
-    const float y_neg_v = (diff ? -y_voltage : 0.0F) * config_.voltage_gain_y;
+    const float x_pos_v = diff ? x_voltage : x_voltage;
+    const float x_neg_v = diff ? -x_voltage : 0.0F;
+    const float y_pos_v = diff ? y_voltage : y_voltage;
+    const float y_neg_v = diff ? -y_voltage : 0.0F;
 
     if (auto r = write_voltage(static_cast<std::uint8_t>(w.x_plus_channel),
                                x_pos_v, "x_plus"); !r)
