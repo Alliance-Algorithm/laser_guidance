@@ -75,6 +75,8 @@ guidance:
       height_mm: 50.0
   camera_calib_path: "config/camera_calib.yaml"
   depth_scale: 1.0
+  voltage_gain_x: 1.0
+  voltage_gain_y: 2.0
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0
