@@ -74,6 +74,7 @@ guidance:
       width_mm: 72.0
       height_mm: 50.0
   camera_calib_path: "config/camera_calib.yaml"
+  depth_scale: 1.0
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0
@@ -92,8 +93,8 @@ guidance:
     y_plus_channel: 1
     y_minus_channel: 3
   angle_offset_x_deg: 0.03
-  angle_offset_y_deg: -0.01
+  angle_offset_y_deg: 0.0
   scan_mode: rectangle
-  scan_width_deg: 0.08
-  scan_height_deg: 0.10
+  scan_width_deg: 0.14
+  scan_height_deg: 0.16
   scan_grid_n: 12

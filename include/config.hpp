@@ -144,6 +144,7 @@ struct GuidanceConfig {
     float voltage_limit_v = 5.0F;
     float voltage_offset_vx = 0.0F;
     float voltage_offset_vy = 0.0F;
+    float depth_scale = 1.0F;
     float angle_offset_x_deg = 0.0F;
     float angle_offset_y_deg = 0.0F;
     GalvoWiringConfig wiring {};

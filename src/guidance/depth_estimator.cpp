@@ -28,7 +28,7 @@ auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::opt
     const float depth_mm = fx * physical_width_mm / pixel_size;
     if (depth_mm <= 0.0F) return std::nullopt;
 
-    return depth_mm;
+    return depth_mm * config_.depth_scale;
 }
 
 } // namespace rmcs_laser_guidance
