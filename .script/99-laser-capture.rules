@@ -3,7 +3,8 @@
 # Install: sudo cp .script/99-laser-capture.rules /etc/udev/rules.d/
 #          sudo udevadm control --reload-rules && sudo udevadm trigger
 
-SUBSYSTEM=="video4linux", ENV{ID_SERIAL_SHORT}=="20250910", SYMLINK+="laser_capture"
-
-# If both cards have the SAME serial, use USB port instead:
-# SUBSYSTEM=="video4linux", KERNELS=="2-4", SYMLINK+="laser_capture"
+# Bind laser capture by vendor:product (portable across machines and USB ports).
+# Only select UVC index 0 so the symlink never lands on the index 1 metadata node.
+# Check with: udevadm info -q property -n /dev/videoX | grep ID_VENDOR_ID
+# MiniPC laser card (Hagibis MACROSILICON 345f:2130):
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="345f", ATTRS{idProduct}=="2130", ATTR{index}=="0", SYMLINK+="laser_capture"
