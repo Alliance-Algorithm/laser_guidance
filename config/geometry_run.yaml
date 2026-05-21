@@ -49,7 +49,7 @@ udp:
   port: 5001
 
 ekf:
-  enabled: true
+  enabled: false
   process_noise_q: 0.35
   measurement_noise_r: 0.015
   initial_pos_std: 100.0
