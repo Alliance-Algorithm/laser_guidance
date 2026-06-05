@@ -1,5 +1,6 @@
 #include "streaming/rtp_streamer.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -21,7 +22,7 @@ struct RtpStreamer::Details {
     cv::Mat latest_frame;
     uint64_t frame_seq = 0;
     uint64_t written_seq = 0;
-    bool running = false;
+    std::atomic<bool> running { false };
 };
 
 RtpStreamer::RtpStreamer(RtpConfig config)
@@ -70,14 +71,14 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
     details_->writer = std::thread([this] {
         uint64_t frame_count = 0;
 
-        while (details_->running) {
+        while (details_->running.load()) {
             cv::Mat frame;
             {
                 std::unique_lock lock(details_->mtx);
                 details_->cv.wait(lock, [this] {
-                    return !details_->running || details_->frame_seq != details_->written_seq;
+                    return !details_->running.load() || details_->frame_seq != details_->written_seq;
                 });
-                if (!details_->running) break;
+                if (!details_->running.load()) break;
                 if (details_->latest_frame.empty()) continue;
                 frame = std::move(details_->latest_frame);
                 details_->written_seq = details_->frame_seq;
@@ -101,7 +102,7 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
 }
 
 auto RtpStreamer::push(const cv::Mat& bgr_frame) -> void {
-    if (!details_->running) return;
+    if (!details_->running.load()) return;
     if (bgr_frame.empty()) return;
     if (bgr_frame.type() != CV_8UC3) return;
     {
@@ -113,7 +114,7 @@ auto RtpStreamer::push(const cv::Mat& bgr_frame) -> void {
 }
 
 auto RtpStreamer::push(cv::Mat&& bgr_frame) -> void {
-    if (!details_->running) return;
+    if (!details_->running.load()) return;
     if (bgr_frame.empty()) return;
     if (bgr_frame.type() != CV_8UC3) return;
     {
@@ -140,7 +141,7 @@ auto RtpStreamer::stop() -> void {
 }
 
 auto RtpStreamer::is_active() const -> bool {
-    return details_->running;
+    return details_->running.load();
 }
 
 }

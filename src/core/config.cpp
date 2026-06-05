@@ -1,10 +1,13 @@
 #include "config.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cctype>
 #include <format>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #include <yaml-cpp/yaml.h>
 
@@ -17,41 +20,61 @@ namespace {
         return value;
     }
 
-    auto parse_v4l2_pixel_format(const std::string_view value) -> V4l2PixelFormat {
+    template <typename Enum, std::size_t N>
+    auto parse_enum(std::string_view value,
+                    const std::pair<std::string_view, Enum> (&mapping)[N],
+                    std::string_view error_message) -> Enum {
         const std::string lower = to_lower_copy(std::string(value));
-        if (lower == "mjpeg") return V4l2PixelFormat::mjpeg;
-        if (lower == "yuyv") return V4l2PixelFormat::yuyv;
-        if (lower == "bgr24") return V4l2PixelFormat::bgr24;
+        for (const auto& [name, kind] : mapping) {
+            if (lower == name) return kind;
+        }
 
-        throw std::runtime_error("v4l2.pixel_format must be one of: mjpeg, yuyv, bgr24");
+        throw std::runtime_error(std::string(error_message));
+    }
+
+    template <typename T>
+    auto read_opt(const YAML::Node& node, const char* key, T& dest) -> void {
+        if (const auto child = node[key]) dest = child.as<T>();
+    }
+
+    auto parse_v4l2_pixel_format(const std::string_view value) -> V4l2PixelFormat {
+        constexpr std::pair<std::string_view, V4l2PixelFormat> kMapping[] = {
+            {"mjpeg", V4l2PixelFormat::mjpeg},
+            {"yuyv", V4l2PixelFormat::yuyv},
+            {"bgr24", V4l2PixelFormat::bgr24},
+        };
+        return parse_enum(value, kMapping,
+                          "v4l2.pixel_format must be one of: mjpeg, yuyv, bgr24");
     }
 
     auto parse_inference_backend(const std::string_view value) -> InferenceBackendKind {
-        const std::string lower = to_lower_copy(std::string(value));
-        if (lower == "bright_spot") return InferenceBackendKind::bright_spot;
-        if (lower == "model") return InferenceBackendKind::model;
-        if (lower == "tensorrt") return InferenceBackendKind::tensorrt;
-
-        throw std::runtime_error("inference.backend must be one of: bright_spot, model, tensorrt");
+        constexpr std::pair<std::string_view, InferenceBackendKind> kMapping[] = {
+            {"bright_spot", InferenceBackendKind::bright_spot},
+            {"model", InferenceBackendKind::model},
+            {"tensorrt", InferenceBackendKind::tensorrt},
+        };
+        return parse_enum(
+            value, kMapping, "inference.backend must be one of: bright_spot, model, tensorrt");
     }
 
     auto parse_guidance_command_model(const std::string_view value)
         -> GuidanceCommandModelKind {
-        const std::string lower = to_lower_copy(std::string(value));
-        if (lower == "geometry") return GuidanceCommandModelKind::geometry;
-        if (lower == "direct_voltage") return GuidanceCommandModelKind::direct_voltage;
-
-        throw std::runtime_error(
-            "guidance.command_model must be one of: geometry, direct_voltage");
+        constexpr std::pair<std::string_view, GuidanceCommandModelKind> kMapping[] = {
+            {"geometry", GuidanceCommandModelKind::geometry},
+            {"direct_voltage", GuidanceCommandModelKind::direct_voltage},
+        };
+        return parse_enum(
+            value, kMapping, "guidance.command_model must be one of: geometry, direct_voltage");
     }
 
     auto parse_guidance_depth_source(const std::string_view value)
         -> GuidanceDepthSourceKind {
-        const std::string lower = to_lower_copy(std::string(value));
-        if (lower == "monocular_bbox") return GuidanceDepthSourceKind::monocular_bbox;
-        if (lower == "lidar_target_cluster") return GuidanceDepthSourceKind::lidar_target_cluster;
-
-        throw std::runtime_error(
+        constexpr std::pair<std::string_view, GuidanceDepthSourceKind> kMapping[] = {
+            {"monocular_bbox", GuidanceDepthSourceKind::monocular_bbox},
+            {"lidar_target_cluster", GuidanceDepthSourceKind::lidar_target_cluster},
+        };
+        return parse_enum(
+            value, kMapping,
             "guidance.depth_source must be one of: monocular_bbox, lidar_target_cluster");
     }
 
@@ -64,18 +87,18 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
 
     if (const YAML::Node v4l2 = yaml["v4l2"]) {
         if (v4l2["device_path"]) config.v4l2.device_path = v4l2["device_path"].as<std::string>();
-        if (v4l2["width"]) config.v4l2.width = v4l2["width"].as<int>();
-        if (v4l2["height"]) config.v4l2.height = v4l2["height"].as<int>();
-        if (v4l2["framerate"]) config.v4l2.framerate = v4l2["framerate"].as<float>();
+        read_opt(v4l2, "width", config.v4l2.width);
+        read_opt(v4l2, "height", config.v4l2.height);
+        read_opt(v4l2, "framerate", config.v4l2.framerate);
         if (v4l2["pixel_format"])
             config.v4l2.pixel_format =
                 parse_v4l2_pixel_format(v4l2["pixel_format"].as<std::string>());
-        if (v4l2["invert_image"]) config.v4l2.invert_image = v4l2["invert_image"].as<bool>();
+        read_opt(v4l2, "invert_image", config.v4l2.invert_image);
     }
 
     if (const YAML::Node debug = yaml["debug"]) {
-        if (debug["show_window"]) config.debug.show_window = debug["show_window"].as<bool>();
-        if (debug["draw_overlay"]) config.debug.draw_overlay = debug["draw_overlay"].as<bool>();
+        read_opt(debug, "show_window", config.debug.show_window);
+        read_opt(debug, "draw_overlay", config.debug.draw_overlay);
     }
 
     if (const YAML::Node runtime = yaml["runtime"]) {

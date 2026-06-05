@@ -9,7 +9,8 @@ int main() {
         using namespace rmcs_laser_guidance::tests;
 
         const auto default_config = rmcs_laser_guidance::load_config(default_config_path());
-        require(default_config.v4l2.device_path == std::filesystem::path("/dev/video2"),
+        require(default_config.v4l2.device_path == std::filesystem::path(
+            "/dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0"),
             "default device path mismatch");
         require(default_config.v4l2.width == 1920, "default width mismatch");
         require(default_config.v4l2.height == 1080, "default height mismatch");
@@ -90,7 +91,8 @@ int main() {
         const auto capture_profile_path =
             default_config_path().parent_path() / "capture_red_20m.yaml";
         const auto capture_profile = rmcs_laser_guidance::load_config(capture_profile_path);
-        require(capture_profile.v4l2.device_path == std::filesystem::path("/dev/video2"),
+        require(capture_profile.v4l2.device_path == std::filesystem::path(
+            "/dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0"),
             "capture profile device path mismatch");
         require(capture_profile.v4l2.width == 1920, "capture profile width mismatch");
         require(capture_profile.v4l2.height == 1080, "capture profile height mismatch");

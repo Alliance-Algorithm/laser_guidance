@@ -138,6 +138,45 @@ struct ModelInfer::Details {
         };
     }
 
+    auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
+#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
+        std::vector<float> input = preprocess_for_tensorrt(frame.image);
+        std::vector<float> output(300 * 6);
+        auto run_result = tensorrt_engine->run(input, output);
+        if (!run_result) {
+            result.message = "TensorRT inference: " + run_result.error();
+            return result;
+        }
+        float scale = std::min(kInputWidth / static_cast<float>(frame.image.cols),
+                               kInputHeight / static_cast<float>(frame.image.rows));
+        int rw = std::max(1, static_cast<int>(std::lround(frame.image.cols * scale)));
+        int rh = std::max(1, static_cast<int>(std::lround(frame.image.rows * scale)));
+        float pad_x = (kInputWidth - rw) / 2.0f;
+        float pad_y = (kInputHeight - rh) / 2.0f;
+        auto run_model = build_tensorrt_run_result(
+            {}, output, frame.image.cols, frame.image.rows, scale, pad_x, pad_y);
+        auto adapter_result = adapt_yolov5_outputs(frame, run_model);
+        result.success = adapter_result.success;
+        result.contract_supported = adapter_result.contract_supported;
+        result.observation = adapter_result.observation;
+        result.candidates = adapter_result.candidates;
+        result.message = adapter_result.message;
+#else
+        (void)frame;
+#endif
+        return result;
+    }
+
+    auto infer_onnx(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
+        const auto adapter_result = adapter->adapt(frame, runtime);
+        result.success = adapter_result.success;
+        result.contract_supported = adapter_result.contract_supported;
+        result.observation = adapter_result.observation;
+        result.candidates = adapter_result.candidates;
+        result.message = adapter_result.message;
+        return result;
+    }
+
     InferenceConfig config;
     bool runtime_enabled = false;
     bool startup_ready = false;
@@ -167,39 +206,11 @@ auto ModelInfer::infer(const Frame& frame) const -> ModelInferResult {
     }
 
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
-    if (details_->tensorrt_engine) {
-        std::vector<float> input = preprocess_for_tensorrt(frame.image);
-        std::vector<float> output(300 * 6);
-        auto run_result = details_->tensorrt_engine->run(input, output);
-        if (!run_result) {
-            result.message = "TensorRT inference: " + run_result.error();
-            return result;
-        }
-        float scale = std::min(kInputWidth / static_cast<float>(frame.image.cols),
-                               kInputHeight / static_cast<float>(frame.image.rows));
-        int rw = std::max(1, static_cast<int>(std::lround(frame.image.cols * scale)));
-        int rh = std::max(1, static_cast<int>(std::lround(frame.image.rows * scale)));
-        float pad_x = (kInputWidth - rw) / 2.0f;
-        float pad_y = (kInputHeight - rh) / 2.0f;
-        auto run_model = build_tensorrt_run_result(
-            {}, output, frame.image.cols, frame.image.rows, scale, pad_x, pad_y);
-        auto adapter_result = adapt_yolov5_outputs(frame, run_model);
-        result.success = adapter_result.success;
-        result.contract_supported = adapter_result.contract_supported;
-        result.observation = adapter_result.observation;
-        result.candidates = adapter_result.candidates;
-        result.message = adapter_result.message;
-        return result;
-    }
+    if (details_->tensorrt_engine)
+        return details_->infer_tensorrt(frame, std::move(result));
 #endif
 
-    const auto adapter_result = details_->adapter->adapt(frame, details_->runtime);
-    result.success = adapter_result.success;
-    result.contract_supported = adapter_result.contract_supported;
-    result.observation = adapter_result.observation;
-    result.candidates = adapter_result.candidates;
-    result.message = adapter_result.message;
-    return result;
+    return details_->infer_onnx(frame, std::move(result));
 }
 
 }
