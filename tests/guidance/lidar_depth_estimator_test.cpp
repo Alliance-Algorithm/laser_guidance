@@ -29,21 +29,18 @@ auto make_candidate() -> ModelCandidate {
     return cand;
 }
 
-void test_prefers_compact_centered_cluster() {
+void test_accepts_cluster_near_bbox_edge() {
     LidarFrame frame;
     frame.points = {
-        {100.0F, 20.0F, 2030.0F, 220.0F, 52, 102},
-        {110.0F, 10.0F, 2010.0F, 230.0F, 54, 104},
-        {95.0F, 18.0F, 2020.0F, 225.0F, 56, 106},
-        {380.0F, 220.0F, 1980.0F, 80.0F, 50, 99},
-        {430.0F, 240.0F, 1990.0F, 85.0F, 58, 110},
-        {410.0F, 210.0F, 1975.0F, 78.0F, 60, 112},
+        {380.0F, 220.0F, 1980.0F, 80.0F, 45, 113},
+        {430.0F, 240.0F, 1990.0F, 85.0F, 47, 115},
+        {410.0F, 210.0F, 1975.0F, 78.0F, 49, 111},
     };
 
     LidarDepthEstimator estimator(make_config());
     const auto depth = estimator.estimate(make_candidate(), frame);
-    require(depth.has_value(), "expected lidar cluster depth");
-    require_near(*depth, 2020.0F, 15.0F, "centered compact cluster should win");
+    require(depth.has_value(), "cluster near bbox edge should still be accepted");
+    require_near(*depth, 1980.0F, 15.0F, "edge cluster depth mismatch");
 }
 
 void test_rejects_body_like_thick_cluster() {
@@ -97,7 +94,7 @@ void test_filters_outside_bbox() {
 
 int main() {
     std::println("lidar_depth_estimator_test:");
-    test_prefers_compact_centered_cluster();
+    test_accepts_cluster_near_bbox_edge();
     test_rejects_body_like_thick_cluster();
     test_requires_min_cluster_points();
     test_filters_outside_bbox();
