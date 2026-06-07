@@ -29,7 +29,7 @@ namespace {
             if (lower == name) return kind;
         }
 
-        throw std::runtime_error(std::string(error_message));
+        throw std::runtime_error(std::format("{}, got '{}'", error_message, value));
     }
 
     template <typename T>

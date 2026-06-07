@@ -24,24 +24,46 @@ namespace {
 constexpr int kInputWidth = 640;
 constexpr int kInputHeight = 640;
 
-auto preprocess_for_tensorrt(const cv::Mat& image) -> std::vector<float> {
+struct LetterboxParams {
+    float scale = 1.0F;
+    int resized_width = kInputWidth;
+    int resized_height = kInputHeight;
+    float pad_x = 0.0F;
+    float pad_y = 0.0F;
+};
+
+struct TensorrtPreprocessResult {
+    std::vector<float> input;
+    LetterboxParams params;
+};
+
+auto compute_letterbox_params(int width, int height) -> LetterboxParams {
+    LetterboxParams params;
+    params.scale = std::min(static_cast<float>(kInputWidth) / width,
+                            static_cast<float>(kInputHeight) / height);
+    params.resized_width = std::max(1, static_cast<int>(std::lround(width * params.scale)));
+    params.resized_height = std::max(1, static_cast<int>(std::lround(height * params.scale)));
+    params.pad_x = static_cast<float>((kInputWidth - params.resized_width) / 2);
+    params.pad_y = static_cast<float>((kInputHeight - params.resized_height) / 2);
+    return params;
+}
+
+auto preprocess_for_tensorrt(const cv::Mat& image) -> TensorrtPreprocessResult {
     cv::Mat bgr;
     if (image.channels() == 4) cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
     else if (image.channels() == 1) cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
     else bgr = image;
 
-    float scale = std::min(static_cast<float>(kInputWidth) / bgr.cols,
-                           static_cast<float>(kInputHeight) / bgr.rows);
-    int rw = std::max(1, static_cast<int>(std::lround(bgr.cols * scale)));
-    int rh = std::max(1, static_cast<int>(std::lround(bgr.rows * scale)));
+    const auto params = compute_letterbox_params(bgr.cols, bgr.rows);
 
     cv::Mat resized;
-    cv::resize(bgr, resized, cv::Size(rw, rh), 0.0, 0.0, cv::INTER_LINEAR);
+    cv::resize(bgr, resized, cv::Size(params.resized_width, params.resized_height),
+               0.0, 0.0, cv::INTER_LINEAR);
 
     cv::Mat letterbox(kInputHeight, kInputWidth, CV_8UC3, cv::Scalar(114, 114, 114));
-    int pad_x = (kInputWidth - rw) / 2;
-    int pad_y = (kInputHeight - rh) / 2;
-    resized.copyTo(letterbox(cv::Rect(pad_x, pad_y, rw, rh)));
+    resized.copyTo(letterbox(cv::Rect(static_cast<int>(params.pad_x),
+                                      static_cast<int>(params.pad_y),
+                                      params.resized_width, params.resized_height)));
 
     cv::Mat rgb;
     cv::cvtColor(letterbox, rgb, cv::COLOR_BGR2RGB);
@@ -56,7 +78,10 @@ auto preprocess_for_tensorrt(const cv::Mat& image) -> std::vector<float> {
     for (std::size_t c = 0; c < 3; ++c)
         std::copy(channels[c].ptr<float>(0), channels[c].ptr<float>(0) + ch_size,
                   input.begin() + c * ch_size);
-    return input;
+    return {
+        .input = std::move(input),
+        .params = params,
+    };
 }
 
 auto build_tensorrt_run_result(
@@ -140,21 +165,16 @@ struct ModelInfer::Details {
 
     auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
-        std::vector<float> input = preprocess_for_tensorrt(frame.image);
+        const auto preprocess = preprocess_for_tensorrt(frame.image);
         std::vector<float> output(300 * 6);
-        auto run_result = tensorrt_engine->run(input, output);
+        auto run_result = tensorrt_engine->run(preprocess.input, output);
         if (!run_result) {
             result.message = "TensorRT inference: " + run_result.error();
             return result;
         }
-        float scale = std::min(kInputWidth / static_cast<float>(frame.image.cols),
-                               kInputHeight / static_cast<float>(frame.image.rows));
-        int rw = std::max(1, static_cast<int>(std::lround(frame.image.cols * scale)));
-        int rh = std::max(1, static_cast<int>(std::lround(frame.image.rows * scale)));
-        float pad_x = (kInputWidth - rw) / 2.0f;
-        float pad_y = (kInputHeight - rh) / 2.0f;
         auto run_model = build_tensorrt_run_result(
-            {}, output, frame.image.cols, frame.image.rows, scale, pad_x, pad_y);
+            {}, output, frame.image.cols, frame.image.rows,
+            preprocess.params.scale, preprocess.params.pad_x, preprocess.params.pad_y);
         auto adapter_result = adapt_yolov5_outputs(frame, run_model);
         result.success = adapter_result.success;
         result.contract_supported = adapter_result.contract_supported;
