@@ -1,0 +1,40 @@
+# laser_guidance .clang-tidy
+# Scope: correctness + performance + modern C++ patterns.
+# Naming and code style are enforced by .clang-format and code review, not by clang-tidy.
+
+Checks: >
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+
+  cert-err33-c,
+
+  performance-*,
+  -performance-no-int-to-ptr,
+
+  modernize-use-nullptr,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-use-override,
+  modernize-use-std-print,
+  modernize-make-unique,
+  modernize-make-shared,
+  modernize-pass-by-value,
+  modernize-return-braced-init-list,
+  modernize-use-noexcept,
+
+  misc-const-correctness,
+
+  readability-container-size-empty,
+  readability-redundant-control-flow,
+  readability-redundant-declaration,
+  readability-redundant-string-cstr,
+  readability-redundant-string-init,
+  readability-redundant-member-init, # Disable if {} init is intentional project style
+  readability-simplify-boolean-expr,
+
+CheckOptions:
+  misc-const-correctness.AnalyzeParameters: false
+  readability-simplify-boolean-expr.IgnoreMacros: true
+  readability-simplify-boolean-expr.ChainedConditionalReturn: true

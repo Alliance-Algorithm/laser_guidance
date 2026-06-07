@@ -1,33 +1,53 @@
-Language: Cpp
+BasedOnStyle: LLVM
 
-BasedOnStyle: WebKit
-
-# 使用空格而不是 Tab
-UseTab: Never
-
-# 缩进 4 字符
-IndentWidth: 4
-TabWidth: 4
-
-# 访问修饰符（public）等靠左对齐
-AccessModifierOffset: -4
-AlignTrailingComments: true
-
-# 大括号的换行规则
-BreakBeforeBraces: Attach
-
-# 模板定义的换行规则
-BreakTemplateDeclarations: true
-
-# 最大列宽度
 ColumnLimit: 100
 
-# 是否允许短的函数，语句块等单独一行
-AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+
+Standard: c++23
+
+MaxEmptyLinesToKeep: 1
+
+AlignAfterOpenBracket: AlwaysBreak
+
+AlignConsecutiveAssignments:
+  Enabled: false
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveDeclarations:
+  Enabled: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignEscapedNewlines: Left
+AlignOperands: AlignAfterOperator
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 64
+PointerAlignment: Left
+
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: Empty
-AllowShortFunctionsOnASingleLine: All
+AllowShortCaseLabelsOnASingleLine: true
+
+IndentPPDirectives: AfterHash
+PPIndentWidth: 1
 
 BreakBeforeBinaryOperators: NonAssignment
-PenaltyBreakAssignment: 2
-PenaltyBreakString: 2
-AlignConsecutiveAssignments: true
+BreakBeforeConceptDeclarations: Always
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
+FixNamespaceComments: true
+IncludeBlocks: Preserve
+IndentWrappedFunctionNames: true
+
+AlwaysBreakTemplateDeclarations: Yes
+IndentRequiresClause: false
+RequiresClausePosition: SingleLine
