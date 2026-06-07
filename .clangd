@@ -11,6 +11,11 @@ Diagnostics:
     Remove:
       - readability-inconsistent-declaration-parameter-name # Unable to be suppressed by NOLINT
       - readability-identifier-naming # Naming enforced by .clang-format + code review
+If:
+  PathMatch: vendor/.*
+  Diagnostics:
+    Suppress: '*'
+
 CompileFlags:
   Add:
     - "-Wextra-semi"

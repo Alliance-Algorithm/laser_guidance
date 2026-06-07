@@ -71,7 +71,7 @@ endif()
 # ---- FT4222H (optional) --------------------------------------------------------
 if(WITH_FT4222)
   find_library(FT4222_LIBRARY ft4222
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR} /usr/local/lib /usr/lib NO_DEFAULT_PATH)
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222/lib /usr/local/lib /usr/lib NO_DEFAULT_PATH)
   if(NOT FT4222_LIBRARY)
     find_library(FT4222_LIBRARY ft4222)
   endif()
@@ -90,7 +90,9 @@ endif()
 
 set(COMMON_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cuda)
 
 set(DEFAULT_PATH_DEFS
   RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/default.yaml"

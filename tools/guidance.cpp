@@ -17,11 +17,11 @@
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 #include "guidance/guidance_pipeline.hpp"
 #include "io/ft4222_spi.hpp"
 #include "tracking/ekf_tracker.hpp"
-#include "tracking/hit_state.hpp"
+#include "tracking/hit_state_machine.hpp"
 #include "types.hpp"
 #include "vision/model_infer.hpp"
 

@@ -20,7 +20,7 @@
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 #include "streaming/rtp_streamer.hpp"
 #include "streaming/udp_sender.hpp"
 #include "streaming/video_shm.hpp"

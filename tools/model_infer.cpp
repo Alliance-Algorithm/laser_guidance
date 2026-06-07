@@ -5,7 +5,7 @@
 
 #include "config.hpp"
 #include "core/replay.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 #include "vision/model_infer.hpp"
 
 namespace {

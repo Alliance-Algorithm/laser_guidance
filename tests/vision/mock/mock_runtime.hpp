@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "tracking/freshness_queue.hpp"
-#include "tracking/hit_state.hpp"
+#include "tracking/hit_state_machine.hpp"
 #include "tracking/runtime_metrics.hpp"
 #include "types.hpp"
 

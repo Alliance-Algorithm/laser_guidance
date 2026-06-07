@@ -8,7 +8,7 @@
 #include <utility>
 
 #ifdef WITH_FT4222
-# include "io/libft4222.h"
+# include "libft4222.h"
 #endif
 
 #ifdef WITH_FT4222

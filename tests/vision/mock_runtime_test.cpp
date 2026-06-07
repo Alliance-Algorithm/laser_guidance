@@ -4,10 +4,10 @@
 #include <thread>
 
 #include "test_utils.hpp"
-#include "tracking/hit_state.hpp"
+#include "tracking/hit_state_machine.hpp"
 #include "tracking/runtime_metrics.hpp"
 #include "types.hpp"
-#include "vision/mock_runtime.hpp"
+#include "mock/mock_runtime.hpp"
 
 namespace {
 

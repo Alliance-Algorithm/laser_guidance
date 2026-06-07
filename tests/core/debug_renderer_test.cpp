@@ -7,7 +7,7 @@
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
 #include "test_utils.hpp"
-#include "vision/detector.hpp"
+#include "types.hpp"
 
 int main() {
     try {
@@ -27,21 +27,22 @@ int main() {
             rmcs_laser_guidance::DebugConfig{.show_window = false, .draw_overlay = true});
         enabled_renderer.draw(empty_image, {});
 
-        const rmcs_laser_guidance::Config config;
-        rmcs_laser_guidance::Detector detector(config);
-        cv::Mat target_image = cv::Mat::zeros(240, 320, CV_8UC3);
-        cv::circle(target_image, {160, 100}, 8, {255, 255, 255}, -1);
-        rmcs_laser_guidance::Frame target_frame{
-            .image = target_image,
-            .timestamp = rmcs_laser_guidance::Clock::now(),
-        };
-        const auto positive_observation = detector.detect(target_frame);
-        require(positive_observation.detected, "positive observation setup failed");
+        // 手动构造 positive observation，不依赖 Detector
+        rmcs_laser_guidance::TargetObservation positive_observation;
+        positive_observation.detected = true;
+        positive_observation.center = {160, 100};
+        rmcs_laser_guidance::ModelCandidate candidate;
+        candidate.score = 0.9F;
+        candidate.class_id = 1;
+        candidate.bbox = cv::Rect2f(150, 90, 20, 20);
+        candidate.center = {160, 100};
+        positive_observation.candidates.push_back(candidate);
 
-        cv::Mat rendered_target = target_image.clone();
+        cv::Mat rendered_target = cv::Mat::zeros(240, 320, CV_8UC3);
+        const cv::Mat target_before = rendered_target.clone();
         enabled_renderer.draw(rendered_target, positive_observation);
         require(
-            cv::norm(rendered_target, target_image, cv::NORM_INF) > 0.0,
+            cv::norm(rendered_target, target_before, cv::NORM_INF) > 0.0,
             "positive renderer should change image");
 
         cv::Mat negative_image = cv::Mat::zeros(240, 320, CV_8UC3);

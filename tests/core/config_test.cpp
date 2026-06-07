@@ -1,7 +1,7 @@
 #include <print>
 
 #include "config.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 #include "test_utils.hpp"
 
 int main() {

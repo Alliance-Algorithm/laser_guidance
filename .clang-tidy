@@ -2,6 +2,8 @@
 # Scope: correctness + performance + modern C++ patterns.
 # Naming and code style are enforced by .clang-format and code review, not by clang-tidy.
 
+HeaderFilterRegex: '^(src|include|tools|tests)/.*$'
+
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,

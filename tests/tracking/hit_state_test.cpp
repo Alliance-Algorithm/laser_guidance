@@ -2,7 +2,7 @@
 #include <print>
 
 #include "test_utils.hpp"
-#include "tracking/hit_state.hpp"
+#include "tracking/hit_state_machine.hpp"
 
 int main() {
     try {

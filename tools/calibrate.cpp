@@ -20,7 +20,7 @@
 
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 
 namespace {
 

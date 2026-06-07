@@ -22,14 +22,16 @@
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "example_support.hpp"
+#include "tool_support.hpp"
 #include "guidance/guidance_pipeline.hpp"
 #include "io/ft4222_spi.hpp"
 #include "streaming/rtp_streamer.hpp"
 #include "streaming/udp_sender.hpp"
 #include "streaming/video_shm.hpp"
 #include "tracking/ekf_tracker.hpp"
+#include "tracking/freshness_queue.hpp"
 #include "tracking/hit_progress.hpp"
+#include "tracking/runtime_metrics.hpp"
 #include "types.hpp"
 #include "vision/model_infer.hpp"
 #include "vision/training_data.hpp"
@@ -270,12 +272,15 @@ int main(int argc, char** argv) {
         int enemy_class_id = config.inference.enemy_class_id;
         bool ekf_enabled = config.ekf.enabled;
 
-        std::mutex infer_mtx;
-        std::condition_variable infer_cv;
-        cv::Mat pending_frame;
-        bool has_pending = false;
+        rg::LatestValue<cv::Mat> frame_queue;
+        std::mutex result_mutex;
         rg::TargetObservation latest_observation;
         rg::EkfState latest_ekf_state;
+        const rg::StaleFramePolicy stale_policy{
+            .max_input_age_ms = std::chrono::milliseconds(config.runtime.max_input_age_ms),
+            .max_observation_age_ms =
+                std::chrono::milliseconds(config.runtime.max_observation_age_ms),
+        };
 
         std::thread infer_thread;
         if (config.inference.backend != rg::InferenceBackendKind::bright_spot) {
@@ -284,22 +289,28 @@ int main(int argc, char** argv) {
                 try {
                     while (running) {
                         cv::Mat frame_to_process;
-                        {
-                            std::unique_lock lock(infer_mtx);
-                            infer_cv.wait(lock, [&] { return has_pending || !running; });
-                            if (!running)
-                                break;
-                            frame_to_process = std::move(pending_frame);
-                            has_pending = false;
+                        try {
+                            frame_to_process = frame_queue.pop();
+                        } catch (const std::exception&) {
+                            break;
                         }
+                        const auto worker_start = rg::Clock::now();
                         rg::Frame infer_frame{
                             .image = frame_to_process,
-                            .timestamp = rg::Clock::now(),
+                            .timestamp = worker_start,
                         };
                         auto* engine = active_infer.load();
                         if (engine == nullptr)
                             continue;
+
                         auto result = engine->infer(infer_frame);
+                        const auto infer_done = rg::Clock::now();
+
+                        const auto obs_age =
+                            rg::age_ms(infer_frame.timestamp, infer_done);
+                        if (obs_age > stale_policy.max_observation_age_ms.count())
+                            continue;
+
                         filter_candidates(result.candidates, enemy_class_id);
                         if (!result.candidates.empty()
                             && result.candidates.front().score >= 0.25F) {
@@ -314,7 +325,7 @@ int main(int argc, char** argv) {
                             tracker.predict(infer_frame.timestamp);
                         }
                         {
-                            std::scoped_lock lock(infer_mtx);
+                            std::scoped_lock lock(result_mutex);
                             latest_observation = result.observation;
                             latest_observation.candidates = result.candidates;
                             latest_ekf_state = tracker.state();
@@ -358,19 +369,15 @@ int main(int argc, char** argv) {
             rg::TargetObservation observation;
             rg::EkfState ekf_state;
             {
-                std::scoped_lock lock(infer_mtx);
+                std::scoped_lock lock(result_mutex);
                 if (latest_observation.detected || !latest_observation.candidates.empty())
                     rg::draw_candidates(display, latest_observation.candidates);
                 rg::draw_ekf_state(display, latest_ekf_state);
-                if (active_infer.load() != nullptr) {
-                    pending_frame = std::move(frame->image);
-                    has_pending = true;
-                }
                 observation = latest_observation;
                 ekf_state = latest_ekf_state;
             }
             if (active_infer.load() != nullptr)
-                infer_cv.notify_one();
+                frame_queue.push(std::move(frame->image));
 
             udp.send(observation);
 
@@ -514,7 +521,7 @@ int main(int argc, char** argv) {
         }
 
         running = false;
-        infer_cv.notify_one();
+        frame_queue.shutdown();
         if (infer_thread.joinable())
             infer_thread.join();
 
