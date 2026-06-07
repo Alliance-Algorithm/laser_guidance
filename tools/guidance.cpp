@@ -14,15 +14,15 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "types.hpp"
 #include "example_support.hpp"
-#include "capture/v4l2_capture.hpp"
 #include "guidance/guidance_pipeline.hpp"
 #include "io/ft4222_spi.hpp"
 #include "tracking/ekf_tracker.hpp"
 #include "tracking/hit_state.hpp"
+#include "types.hpp"
 #include "vision/model_infer.hpp"
 
 namespace {
@@ -34,7 +34,8 @@ constexpr std::string_view kGeometryHitPath = "test_data/calib/geometry_hit_cali
 constexpr std::string_view kVoltageCalibPath = "test_data/calib/voltage_records.csv";
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
-    if (argc > 1) return argv[1];
+    if (argc > 1)
+        return argv[1];
     return rg::examples::default_config_path();
 }
 
@@ -51,10 +52,9 @@ int main(int argc, char** argv) {
             std::println(stderr, "Failed to open camera: {}", open_result.error());
             return 1;
         }
-        std::println("Camera: {} {}x{} @ {:.0f}fps",
-                     open_result->device_path.string(),
-                     open_result->width, open_result->height,
-                     open_result->framerate);
+        std::println(
+            "Camera: {} {}x{} @ {:.0f}fps", open_result->device_path.string(), open_result->width,
+            open_result->height, open_result->framerate);
 
         std::unique_ptr<rg::ModelInfer> infer;
         std::future<void> model_ready;
@@ -67,14 +67,15 @@ int main(int argc, char** argv) {
         std::unique_ptr<rg::Ft4222Spi> spi;
         std::unique_ptr<rg::GuidancePipeline> guidance;
         if (config.guidance.enabled) {
-            auto spi_result = rg::Ft4222Spi::open(rg::Ft4222Config{
-                .sys_clock = rg::Ft4222SysClock::k60MHz,
-                .clock_div = rg::Ft4222SpiDiv::kDiv2,
-                .cpol = rg::Ft4222Cpol::kIdleLow,
-                .cpha = rg::Ft4222Cpha::kTrailing,
-                .cs_active = rg::Ft4222CsActive::kLow,
-                .cs_channel = 0,
-            });
+            auto spi_result = rg::Ft4222Spi::open(
+                rg::Ft4222Config{
+                    .sys_clock = rg::Ft4222SysClock::k60MHz,
+                    .clock_div = rg::Ft4222SpiDiv::kDiv2,
+                    .cpol = rg::Ft4222Cpol::kIdleLow,
+                    .cpha = rg::Ft4222Cpha::kTrailing,
+                    .cs_active = rg::Ft4222CsActive::kLow,
+                    .cs_channel = 0,
+                });
             if (!spi_result) {
                 std::println(stderr, "Failed to open FT4222: {}", spi_result.error());
                 std::println(stderr, "Continuing without galvo control");
@@ -83,8 +84,9 @@ int main(int argc, char** argv) {
                 std::println("FT4222: opened, SCLK ~{} Hz", spi->negotiated_clock_hz());
                 guidance = std::make_unique<rg::GuidancePipeline>(config, *spi);
                 if (!guidance->is_initialized()) {
-                    std::println(stderr, "Guidance pipeline failed to initialize; "
-                                         "check camera_calib_path and FT4222");
+                    std::println(
+                        stderr, "Guidance pipeline failed to initialize; "
+                                "check camera_calib_path and FT4222");
                 }
             }
         }
@@ -113,7 +115,7 @@ int main(int argc, char** argv) {
         float calib_voltage_step_v = 0.005F;
         constexpr float kMinVoltageStepV = 0.001F;
         constexpr float kMaxVoltageStepV = 0.5F;
-        cv::Point3f calib_last_P_c { -1, -1, -1 };
+        cv::Point3f calib_last_P_c{-1, -1, -1};
         bool calib_has_P_c = false;
 
         std::ofstream calib_file;
@@ -129,7 +131,8 @@ int main(int argc, char** argv) {
             voltage_file.open(kVoltageCalibPath.data(), std::ios::app);
             std::println("CALIB: saving records to {}", kVoltageCalibPath);
             if (voltage_file.tellp() == 0) {
-                voltage_file << "timestamp_ns,center_x,center_y,bbox_x,bbox_y,bbox_w,bbox_h,bbox_area,score,class_id,manual_vx,manual_vy\n";
+                voltage_file << "timestamp_ns,center_x,center_y,bbox_x,bbox_y,bbox_w,bbox_h,bbox_"
+                                "area,score,class_id,manual_vx,manual_vy\n";
             }
         }
 
@@ -140,8 +143,7 @@ int main(int argc, char** argv) {
         }
 
         rg::HitStateMachine hit_state_machine(
-            config.runtime.hit_confirm_frames,
-            config.runtime.hit_release_frames);
+            config.runtime.hit_confirm_frames, config.runtime.hit_release_frames);
         auto last_hit_state = rg::HitState::None;
 
         std::thread infer_thread;
@@ -149,32 +151,33 @@ int main(int argc, char** argv) {
             infer_thread = std::thread([&] {
                 model_ready.wait();
                 try {
-                while (running) {
-                    cv::Mat frame_to_process;
-                    {
-                        std::unique_lock lock(infer_mtx);
-                        infer_cv.wait(lock, [&] { return has_pending || !running; });
-                        if (!running) break;
-                        frame_to_process = std::move(pending_frame);
-                        has_pending = false;
+                    while (running) {
+                        cv::Mat frame_to_process;
+                        {
+                            std::unique_lock lock(infer_mtx);
+                            infer_cv.wait(lock, [&] { return has_pending || !running; });
+                            if (!running)
+                                break;
+                            frame_to_process = std::move(pending_frame);
+                            has_pending = false;
+                        }
+                        rg::Frame infer_frame{
+                            .image = frame_to_process,
+                            .timestamp = rg::Clock::now(),
+                        };
+                        const auto result = infer->infer(infer_frame);
+                        if (result.observation.detected) {
+                            tracker.process(result.observation.center, infer_frame.timestamp);
+                        } else {
+                            tracker.predict(infer_frame.timestamp);
+                        }
+                        {
+                            std::scoped_lock lock(infer_mtx);
+                            latest_observation = result.observation;
+                            latest_observation.candidates = result.candidates;
+                            latest_ekf_state = tracker.state();
+                        }
                     }
-                    rg::Frame infer_frame{
-                        .image = frame_to_process,
-                        .timestamp = rg::Clock::now(),
-                    };
-                    const auto result = infer->infer(infer_frame);
-                    if (result.observation.detected) {
-                        tracker.process(result.observation.center, infer_frame.timestamp);
-                    } else {
-                        tracker.predict(infer_frame.timestamp);
-                    }
-                    {
-                        std::scoped_lock lock(infer_mtx);
-                        latest_observation = result.observation;
-                        latest_observation.candidates = result.candidates;
-                        latest_ekf_state = tracker.state();
-                    }
-                }
                 } catch (const std::exception& e) {
                     std::println(stderr, "[infer] error: {}", e.what());
                 }
@@ -208,17 +211,21 @@ int main(int argc, char** argv) {
                 observation = latest_observation;
                 ekf_state = latest_ekf_state;
             }
-            if (infer) infer_cv.notify_one();
+            if (infer)
+                infer_cv.notify_one();
 
             if (guidance && guidance->is_initialized()) {
                 if (config.guidance.calib_mode) {
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage) {
-                        guidance_msg = guidance->process_calib_voltage(calib_voltage_x, calib_voltage_y);
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage) {
+                        guidance_msg =
+                            guidance->process_calib_voltage(calib_voltage_x, calib_voltage_y);
                     } else {
                         guidance_msg = guidance->process_calib_angle(calib_angle_x, calib_angle_y);
                     }
                     if (observation.detected && !observation.candidates.empty()
-                        && config.guidance.command_model == rg::GuidanceCommandModelKind::geometry) {
+                        && config.guidance.command_model
+                               == rg::GuidanceCommandModelKind::geometry) {
                         const auto& top = observation.candidates.front();
                         if (top.bbox.width > 0.0F) {
                             const auto depth = guidance->estimate_depth(top);
@@ -228,15 +235,16 @@ int main(int argc, char** argv) {
                             }
                         }
                         if (depth_valid && last_valid_depth_mm > 0.0F) {
-                            calib_last_P_c = guidance->project_to_camera(
-                                top.center, last_valid_depth_mm);
+                            calib_last_P_c =
+                                guidance->project_to_camera(top.center, last_valid_depth_mm);
                             calib_has_P_c = true;
                             static int calib_log = 0;
                             if (++calib_log % 15 == 0) {
-                                std::println("CALIB: θ=({:.2f}°,{:.2f}°) "
-                                             "P_c=({:.1f},{:.1f},{:.1f})mm",
-                                             calib_angle_x, calib_angle_y,
-                                             calib_last_P_c.x, calib_last_P_c.y, calib_last_P_c.z);
+                                std::println(
+                                    "CALIB: θ=({:.2f}°,{:.2f}°) "
+                                    "P_c=({:.1f},{:.1f},{:.1f})mm",
+                                    calib_angle_x, calib_angle_y, calib_last_P_c.x,
+                                    calib_last_P_c.y, calib_last_P_c.z);
                             }
                         }
                     }
@@ -265,34 +273,28 @@ int main(int argc, char** argv) {
                 ekf_was_lost = ekf_state.lost;
             }
 
-            const auto top_candidate = observation.candidates.empty()
-                ? nullptr
-                : &observation.candidates.front();
-            const bool is_purple = observation.detected
-                && top_candidate != nullptr
-                && top_candidate->class_id == 0
-                && top_candidate->score >= 0.25F;
+            const auto top_candidate =
+                observation.candidates.empty() ? nullptr : &observation.candidates.front();
+            const bool is_purple = observation.detected && top_candidate != nullptr
+                                && top_candidate->class_id == 0 && top_candidate->score >= 0.25F;
             const auto hit_state = hit_state_machine.update(is_purple);
-            const bool hit_edge = hit_state == rg::HitState::Confirmed
-                && last_hit_state != rg::HitState::Confirmed;
+            const bool hit_edge =
+                hit_state == rg::HitState::Confirmed && last_hit_state != rg::HitState::Confirmed;
             last_hit_state = hit_state;
 
-            if (hit_edge
-                && guidance
-                && guidance->is_initialized()
-                && !config.guidance.calib_mode
+            if (hit_edge && guidance && guidance->is_initialized() && !config.guidance.calib_mode
                 && top_candidate != nullptr) {
                 const auto hit_depth = guidance->estimate_depth(*top_candidate);
                 const auto hit_angles = guidance->latest_output_angles();
                 if (hit_depth && hit_angles) {
-                    const auto P_c = guidance->project_to_camera(
-                        top_candidate->center, *hit_depth);
-                    std::println(">>> HIT-CALIB RECORD: θ=({:.2f}°,{:.2f}°) P_c=({:.1f},{:.1f},{:.1f})mm class=purple",
-                                 hit_angles->x, hit_angles->y,
-                                 P_c.x, P_c.y, P_c.z);
-                    hit_calib_file << std::format("{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n",
-                        hit_angles->x, hit_angles->y,
-                        P_c.x, P_c.y, P_c.z);
+                    const auto P_c = guidance->project_to_camera(top_candidate->center, *hit_depth);
+                    std::println(
+                        ">>> HIT-CALIB RECORD: θ=({:.2f}°,{:.2f}°) "
+                        "P_c=({:.1f},{:.1f},{:.1f})mm class=purple",
+                        hit_angles->x, hit_angles->y, P_c.x, P_c.y, P_c.z);
+                    hit_calib_file << std::format(
+                        "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n", hit_angles->x, hit_angles->y, P_c.x,
+                        P_c.y, P_c.z);
                     hit_calib_file.flush();
                 }
             }
@@ -302,16 +304,21 @@ int main(int argc, char** argv) {
             const bool ekf_ok = ekf_state.initialized && !ekf_state.lost;
 
             if (calib) {
-                const auto label = config.guidance.command_model
-                        == rg::GuidanceCommandModelKind::direct_voltage
-                    ? std::format("CALIB voltage=({:.3f}V,{:.3f}V) step={:.3f}V [WASD move, </> step]",
-                                  calib_voltage_x, calib_voltage_y, calib_voltage_step_v)
-                    : std::format("CALIB galvo=({:.3f}°,{:.3f}°) step={:.3f}° [WASD move, </> step]",
-                                  calib_angle_x, calib_angle_y, calib_angle_step_deg);
-                cv::putText(display, label, {10, 90},
-                            cv::FONT_HERSHEY_SIMPLEX, 0.6, {0, 255, 255}, 2);
+                const auto label =
+                    config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage
+                        ? std::format(
+                              "CALIB voltage=({:.3f}V,{:.3f}V) step={:.3f}V [WASD move, </> "
+                              "step]",
+                              calib_voltage_x, calib_voltage_y, calib_voltage_step_v)
+                        : std::format(
+                              "CALIB galvo=({:.3f}°,{:.3f}°) step={:.3f}° [WASD move, </> "
+                              "step]",
+                              calib_angle_x, calib_angle_y, calib_angle_step_deg);
+                cv::putText(
+                    display, label, {10, 90}, cv::FONT_HERSHEY_SIMPLEX, 0.6, {0, 255, 255}, 2);
             } else {
-                rg::draw_guidance_status(display, guidance_active, ekf_ok, depth_valid, guidance_msg);
+                rg::draw_guidance_status(
+                    display, guidance_active, ekf_ok, depth_valid, guidance_msg);
             }
 
             cv::imshow("laser_guidance", display);
@@ -319,96 +326,119 @@ int main(int argc, char** argv) {
 
             if (calib) {
                 switch (key) {
-                case 'w': case 'W':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage)
+                case 'w':
+                case 'W':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage)
                         calib_voltage_y -= calib_voltage_step_v;
                     else
                         calib_angle_y -= calib_angle_step_deg;
                     break;
-                case 's': case 'S':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage)
+                case 's':
+                case 'S':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage)
                         calib_voltage_y += calib_voltage_step_v;
                     else
                         calib_angle_y += calib_angle_step_deg;
                     break;
-                case 'a': case 'A':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage)
+                case 'a':
+                case 'A':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage)
                         calib_voltage_x -= calib_voltage_step_v;
                     else
                         calib_angle_x -= calib_angle_step_deg;
                     break;
-                case 'd': case 'D':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage)
+                case 'd':
+                case 'D':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage)
                         calib_voltage_x += calib_voltage_step_v;
                     else
                         calib_angle_x += calib_angle_step_deg;
                     break;
-                case ',': case '<':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage) {
-                        calib_voltage_step_v = std::max(kMinVoltageStepV, calib_voltage_step_v * 0.5F);
+                case ',':
+                case '<':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage) {
+                        calib_voltage_step_v =
+                            std::max(kMinVoltageStepV, calib_voltage_step_v * 0.5F);
                         std::println("CALIB: voltage step -> {:.3f}V", calib_voltage_step_v);
                     } else {
-                        calib_angle_step_deg = std::max(kMinAngleStepDeg, calib_angle_step_deg * 0.5F);
+                        calib_angle_step_deg =
+                            std::max(kMinAngleStepDeg, calib_angle_step_deg * 0.5F);
                         std::println("CALIB: angle step -> {:.3f}°", calib_angle_step_deg);
                     }
                     break;
-                case '.': case '>':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage) {
-                        calib_voltage_step_v = std::min(kMaxVoltageStepV, calib_voltage_step_v * 2.0F);
+                case '.':
+                case '>':
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage) {
+                        calib_voltage_step_v =
+                            std::min(kMaxVoltageStepV, calib_voltage_step_v * 2.0F);
                         std::println("CALIB: voltage step -> {:.3f}V", calib_voltage_step_v);
                     } else {
-                        calib_angle_step_deg = std::min(kMaxAngleStepDeg, calib_angle_step_deg * 2.0F);
+                        calib_angle_step_deg =
+                            std::min(kMaxAngleStepDeg, calib_angle_step_deg * 2.0F);
                         std::println("CALIB: angle step -> {:.3f}°", calib_angle_step_deg);
                     }
                     break;
                 case ' ':
-                    if (config.guidance.command_model == rg::GuidanceCommandModelKind::direct_voltage) {
+                    if (config.guidance.command_model
+                        == rg::GuidanceCommandModelKind::direct_voltage) {
                         if (observation.detected && !observation.candidates.empty()) {
                             const auto& top = observation.candidates.front();
                             const float area = top.bbox.width * top.bbox.height;
-                            std::println(">>> VOLTAGE RECORD: V=({:.3f}V,{:.3f}V) center=({:.1f},{:.1f}) area={:.1f}",
-                                         calib_voltage_x, calib_voltage_y,
-                                         top.center.x, top.center.y, area);
-                            voltage_file << std::format("{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.5f},{},{:.5f},{:.5f}\n",
+                            std::println(
+                                ">>> VOLTAGE RECORD: V=({:.3f}V,{:.3f}V) "
+                                "center=({:.1f},{:.1f}) area={:.1f}",
+                                calib_voltage_x, calib_voltage_y, top.center.x, top.center.y, area);
+                            voltage_file << std::format(
+                                "{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:."
+                                "3f},{:.3f},{:.5f},{},{:.5f},{:.5f}\n",
                                 std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                    rg::Clock::now().time_since_epoch()).count(),
-                                top.center.x, top.center.y,
-                                top.bbox.x, top.bbox.y,
-                                top.bbox.width, top.bbox.height,
-                                area,
-                                top.score, top.class_id,
-                                calib_voltage_x, calib_voltage_y);
+                                    rg::Clock::now().time_since_epoch())
+                                    .count(),
+                                top.center.x, top.center.y, top.bbox.x, top.bbox.y, top.bbox.width,
+                                top.bbox.height, area, top.score, top.class_id, calib_voltage_x,
+                                calib_voltage_y);
                             voltage_file.flush();
                         }
                     } else if (calib_has_P_c) {
-                        std::println(">>> RECORD: θ=({:.2f}°,{:.2f}°) "
-                                     "P_c=({:.1f},{:.1f},{:.1f})mm",
-                                     calib_angle_x, calib_angle_y,
-                                     calib_last_P_c.x, calib_last_P_c.y, calib_last_P_c.z);
-                        calib_file << std::format("{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n",
-                            calib_angle_x, calib_angle_y,
+                        std::println(
+                            ">>> RECORD: θ=({:.2f}°,{:.2f}°) "
+                            "P_c=({:.1f},{:.1f},{:.1f})mm",
+                            calib_angle_x, calib_angle_y, calib_last_P_c.x, calib_last_P_c.y,
+                            calib_last_P_c.z);
+                        calib_file << std::format(
+                            "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n", calib_angle_x, calib_angle_y,
                             calib_last_P_c.x, calib_last_P_c.y, calib_last_P_c.z);
                         calib_file.flush();
                     }
                     break;
                 default: break;
                 }
-                calib_voltage_x = std::clamp(calib_voltage_x,
-                    -config.guidance.voltage_limit_v,
+                calib_voltage_x = std::clamp(
+                    calib_voltage_x, -config.guidance.voltage_limit_v,
                     config.guidance.voltage_limit_v);
-                calib_voltage_y = std::clamp(calib_voltage_y,
-                    -config.guidance.voltage_limit_v,
+                calib_voltage_y = std::clamp(
+                    calib_voltage_y, -config.guidance.voltage_limit_v,
                     config.guidance.voltage_limit_v);
             }
 
-            if (rg::examples::should_exit_from_key(key)) running = false;
-            if (cv::getWindowProperty("laser_guidance", cv::WND_PROP_VISIBLE) < 1) running = false;
+            if (rg::examples::should_exit_from_key(key))
+                running = false;
+            if (cv::getWindowProperty("laser_guidance", cv::WND_PROP_VISIBLE) < 1)
+                running = false;
 
             if (++loop_frames % 30 == 0) {
-                const auto elapsed = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - loop_t0).count();
-                std::println(stderr, "[main] {} frames {:.1f}s ({:.0f}fps)",
-                             loop_frames, elapsed, loop_frames / elapsed);
+                const auto elapsed =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - loop_t0)
+                        .count();
+                std::println(
+                    stderr, "[main] {} frames {:.1f}s ({:.0f}fps)", loop_frames, elapsed,
+                    loop_frames / elapsed);
                 loop_t0 = std::chrono::steady_clock::now();
                 loop_frames = 0;
             }
@@ -416,7 +446,8 @@ int main(int argc, char** argv) {
 
         running = false;
         infer_cv.notify_one();
-        if (infer_thread.joinable()) infer_thread.join();
+        if (infer_thread.joinable())
+            infer_thread.join();
 
         if (guidance) {
             if (auto r = guidance->set_center(); !r.empty())

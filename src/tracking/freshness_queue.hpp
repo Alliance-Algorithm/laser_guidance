@@ -44,7 +44,8 @@ public:
 
     auto try_pop(T& value) -> bool {
         std::scoped_lock lock(mutex_);
-        if (!value_.has_value()) return false;
+        if (!value_.has_value())
+            return false;
 
         value = std::move(*value_);
         value_.reset();

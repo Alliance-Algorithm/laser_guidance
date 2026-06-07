@@ -1,15 +1,15 @@
-#include <filesystem>
 #include <cstdio>
+#include <filesystem>
 #include <print>
 #include <string>
 
 #include <opencv2/highgui.hpp>
 
-#include "example_support.hpp"
-#include "config.hpp"
-#include "pipeline.hpp"
-#include "core/replay.hpp"
 #include "capture/v4l2_capture.hpp"
+#include "config.hpp"
+#include "core/replay.hpp"
+#include "example_support.hpp"
+#include "pipeline.hpp"
 
 namespace {
 
@@ -31,22 +31,16 @@ auto resolve_max_frames(int argc, char** argv) -> std::size_t {
     return 300;
 }
 
-auto print_mode(const rmcs_laser_guidance::V4l2Config& requested,
-                const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
+auto print_mode(
+    const rmcs_laser_guidance::V4l2Config& requested,
+    const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
     std::println(
-        "requested device={} mode={}x{}@{} format={}",
-        requested.device_path.string(),
-        requested.width,
-        requested.height,
-        requested.framerate,
+        "requested device={} mode={}x{}@{} format={}", requested.device_path.string(),
+        requested.width, requested.height, requested.framerate,
         rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
     std::println(
-        "actual    device={} mode={}x{}@{} format={}",
-        actual.device_path.string(),
-        actual.width,
-        actual.height,
-        actual.framerate,
-        actual.fourcc);
+        "actual    device={} mode={}x{}@{} format={}", actual.device_path.string(), actual.width,
+        actual.height, actual.framerate, actual.fourcc);
 }
 
 } // namespace

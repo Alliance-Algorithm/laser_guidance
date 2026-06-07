@@ -45,7 +45,8 @@ public:
         addr.sin_family = AF_INET;
         addr.sin_port = htons(kPointsPort);
         inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-        require(bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0,
+        require(
+            bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0,
             "failed to bind fake WS30 points socket");
         worker_ = std::thread([this] { run(); });
     }
@@ -58,7 +59,8 @@ public:
         inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
         char wake = 0;
         sendto(sock_, &wake, sizeof(wake), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-        if (worker_.joinable()) worker_.join();
+        if (worker_.joinable())
+            worker_.join();
         close(sock_);
     }
 
@@ -68,10 +70,12 @@ private:
             sockaddr_in client{};
             socklen_t client_len = sizeof(client);
             char buf[256]{};
-            const auto received = recvfrom(sock_, buf, sizeof(buf), 0,
-                                           reinterpret_cast<sockaddr*>(&client), &client_len);
-            if (received <= 0) continue;
-            if (std::strcmp(buf, "hello,points") != 0) continue;
+            const auto received = recvfrom(
+                sock_, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&client), &client_len);
+            if (received <= 0)
+                continue;
+            if (std::strcmp(buf, "hello,points") != 0)
+                continue;
             for (int packet_idx = 0; packet_idx < 450; ++packet_idx) {
                 VendorPointsPacket packet{};
                 packet.data_type[0] = 0x5A;
@@ -87,8 +91,9 @@ private:
                     packet.point_y[i] = static_cast<std::int16_t>(2000 + i);
                     packet.point_z[i] = static_cast<std::int16_t>(3000 + i);
                 }
-                const auto sent = sendto(sock_, &packet, sizeof(packet), 0,
-                                         reinterpret_cast<sockaddr*>(&client), client_len);
+                const auto sent = sendto(
+                    sock_, &packet, sizeof(packet), 0, reinterpret_cast<sockaddr*>(&client),
+                    client_len);
                 require(sent == static_cast<ssize_t>(sizeof(packet)), "fake WS30 send failed");
             }
         }
@@ -117,7 +122,8 @@ void test_reassembles_complete_frame() {
     std::optional<LidarFrame> frame;
     for (int attempt = 0; attempt < 120; ++attempt) {
         frame = receiver.latest_frame();
-        if (frame.has_value()) break;
+        if (frame.has_value())
+            break;
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 

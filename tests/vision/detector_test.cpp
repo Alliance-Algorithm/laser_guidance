@@ -3,8 +3,8 @@
 
 #include <opencv2/imgproc.hpp>
 
-#include "test_utils.hpp"
 #include "config.hpp"
+#include "test_utils.hpp"
 #include "vision/detector.hpp"
 
 int main() {

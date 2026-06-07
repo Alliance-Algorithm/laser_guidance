@@ -19,35 +19,35 @@ enum class InferenceBackendKind {
 
 struct V4l2Config {
     std::filesystem::path device_path = "/dev/video0";
-    int width                         = 1920;
-    int height                        = 1080;
-    float framerate                   = 60.0F;
-    V4l2PixelFormat pixel_format      = V4l2PixelFormat::mjpeg;
-    bool invert_image                 = false;
+    int width = 1920;
+    int height = 1080;
+    float framerate = 60.0F;
+    V4l2PixelFormat pixel_format = V4l2PixelFormat::mjpeg;
+    bool invert_image = false;
 };
 
 struct DebugConfig {
-    bool show_window  = true;
+    bool show_window = true;
     bool draw_overlay = true;
 };
 
 struct RuntimeConfig {
-    int max_input_age_ms       = 25;
+    int max_input_age_ms = 25;
     int max_observation_age_ms = 35;
-    int max_infer_fps          = 60;
-    int warmup_frames          = 30;
-    std::filesystem::path engine_path { };
-    int hit_confirm_frames     = 3;
-    int hit_release_frames     = 5;
-    bool debug_enabled         = false;
-    int debug_max_fps          = 30;
-    bool record_enabled        = false;
-    int record_queue_size      = 16;
+    int max_infer_fps = 60;
+    int warmup_frames = 30;
+    std::filesystem::path engine_path{};
+    int hit_confirm_frames = 3;
+    int hit_release_frames = 5;
+    bool debug_enabled = false;
+    int debug_max_fps = 30;
+    bool record_enabled = false;
+    int record_queue_size = 16;
 };
 
 struct InferenceConfig {
     InferenceBackendKind backend = InferenceBackendKind::bright_spot;
-    std::filesystem::path model_path { };
+    std::filesystem::path model_path{};
     int enemy_class_id = -1;
 };
 
@@ -80,13 +80,13 @@ struct Ws30Config {
 
 struct EkfConfig {
     bool enabled = true;
-    double process_noise_q     = 0.05;
+    double process_noise_q = 0.05;
     double measurement_noise_r = 0.5;
-    double initial_pos_std     = 100.0;
-    double initial_vel_std     = 100.0;
-    double initial_acc_std     = 50.0;
-    int max_missed_frames      = 5;
-    double lookahead_ms        = 12.0;
+    double initial_pos_std = 100.0;
+    double initial_vel_std = 100.0;
+    double initial_acc_std = 50.0;
+    int max_missed_frames = 5;
+    double lookahead_ms = 12.0;
 };
 
 enum class GalvoWiringMode : int {
@@ -127,9 +127,9 @@ struct GuidanceConfig {
     bool enabled = false;
     GuidanceCommandModelKind command_model = GuidanceCommandModelKind::geometry;
     GuidanceDepthSourceKind depth_source = GuidanceDepthSourceKind::monocular_bbox;
-    std::vector<TargetGeometry> target_geometry {};
-    std::filesystem::path camera_calib_path {};
-    std::filesystem::path voltage_model_path {};
+    std::vector<TargetGeometry> target_geometry{};
+    std::filesystem::path camera_calib_path{};
+    std::filesystem::path voltage_model_path{};
     float t_x_mm = 0.0F;
     float t_y_mm = 0.0F;
     float t_z_mm = 0.0F;
@@ -149,7 +149,7 @@ struct GuidanceConfig {
     float voltage_gain_y = 1.0F;
     float angle_offset_x_deg = 0.0F;
     float angle_offset_y_deg = 0.0F;
-    GalvoWiringConfig wiring {};
+    GalvoWiringConfig wiring{};
     ScanMode scan_mode = ScanMode::single;
     float scan_width_deg = 1.0F;
     float scan_height_deg = 0.8F;
@@ -164,15 +164,15 @@ struct GuidanceConfig {
 };
 
 struct Config {
-    V4l2Config v4l2 { };
-    DebugConfig debug { };
-    RuntimeConfig runtime { };
-    InferenceConfig inference { };
-    RtpConfig rtp { };
-    UdpConfig udp { };
-    Ws30Config ws30 { };
-    EkfConfig ekf { };
-    GuidanceConfig guidance { };
+    V4l2Config v4l2{};
+    DebugConfig debug{};
+    RuntimeConfig runtime{};
+    InferenceConfig inference{};
+    RtpConfig rtp{};
+    UdpConfig udp{};
+    Ws30Config ws30{};
+    EkfConfig ekf{};
+    GuidanceConfig guidance{};
 };
 
 auto load_config(const std::filesystem::path& config_path) -> Config;

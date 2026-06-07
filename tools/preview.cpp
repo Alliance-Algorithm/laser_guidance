@@ -17,34 +17,36 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "example_support.hpp"
+#include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "tracking/ekf_tracker.hpp"
-#include "vision/model_infer.hpp"
+#include "example_support.hpp"
 #include "streaming/rtp_streamer.hpp"
 #include "streaming/udp_sender.hpp"
 #include "streaming/video_shm.hpp"
-#include "capture/v4l2_capture.hpp"
+#include "tracking/ekf_tracker.hpp"
+#include "vision/model_infer.hpp"
 
 namespace {
 
 constexpr const char* kFifoPath = "/tmp/laser_cmd";
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
-    if (argc > 1) return argv[1];
+    if (argc > 1)
+        return argv[1];
     return rmcs_laser_guidance::examples::default_config_path();
 }
 
-auto print_mode(const rmcs_laser_guidance::V4l2Config& requested,
-                const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
-    std::println("requested device={} mode={}x{}@{} format={}",
-                 requested.device_path.string(), requested.width, requested.height,
-                 requested.framerate,
-                 rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
-    std::println("actual    device={} mode={}x{}@{} format={}",
-                 actual.device_path.string(), actual.width, actual.height,
-                 actual.framerate, actual.fourcc);
+auto print_mode(
+    const rmcs_laser_guidance::V4l2Config& requested,
+    const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
+    std::println(
+        "requested device={} mode={}x{}@{} format={}", requested.device_path.string(),
+        requested.width, requested.height, requested.framerate,
+        rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
+    std::println(
+        "actual    device={} mode={}x{}@{} format={}", actual.device_path.string(), actual.width,
+        actual.height, actual.framerate, actual.fourcc);
 }
 
 auto setup_fifo() -> int {
@@ -60,15 +62,15 @@ auto setup_fifo() -> int {
 
 auto read_command(int fd, char* buf, int size) -> std::string_view {
     ssize_t n = read(fd, buf, size - 1);
-    if (n <= 0) return {};
+    if (n <= 0)
+        return {};
     buf[n] = '\0';
     return std::string_view(buf, static_cast<std::size_t>(n));
 }
 
-auto handle_command(std::string_view cmd,
-                    rmcs_laser_guidance::RtpStreamer& streamer,
-                    const rmcs_laser_guidance::Config& config,
-                    bool& running) -> void {
+auto handle_command(
+    std::string_view cmd, rmcs_laser_guidance::RtpStreamer& streamer,
+    const rmcs_laser_guidance::Config& config, bool& running) -> void {
     if (cmd.starts_with("stream on")) {
         if (!streamer.is_active()) {
             streamer.start(config.v4l2.width, config.v4l2.height, config.v4l2.framerate);
@@ -105,8 +107,9 @@ int main(int argc, char** argv) {
 
         rmcs_laser_guidance::RtpStreamer streamer(config.rtp);
         if (config.rtp.enabled)
-            streamer.start(open_result->width, open_result->height,
-                           static_cast<float>(open_result->framerate));
+            streamer.start(
+                open_result->width, open_result->height,
+                static_cast<float>(open_result->framerate));
 
         rmcs_laser_guidance::UdpSender udp(config.udp);
 
@@ -116,7 +119,8 @@ int main(int argc, char** argv) {
         }
 
         int fifo_fd = setup_fifo();
-        if (fifo_fd < 0) return 1;
+        if (fifo_fd < 0)
+            return 1;
 
         char cmd_buf[256];
         bool running = true;
@@ -144,12 +148,14 @@ int main(int argc, char** argv) {
                     {
                         std::unique_lock lock(infer_mtx);
                         infer_cv.wait(lock, [&] { return has_pending || !running; });
-                        if (!running) break;
+                        if (!running)
+                            break;
                         frame_to_process = std::move(pending_frame);
                         has_pending = false;
                     }
                     const auto t0 = std::chrono::steady_clock::now();
-                    rmcs_laser_guidance::Frame infer_frame{.image = frame_to_process, .timestamp = rmcs_laser_guidance::Clock::now()};
+                    rmcs_laser_guidance::Frame infer_frame{
+                        .image = frame_to_process, .timestamp = rmcs_laser_guidance::Clock::now()};
                     const auto result = infer->infer(infer_frame);
                     const auto t1 = std::chrono::steady_clock::now();
 
@@ -167,8 +173,9 @@ int main(int argc, char** argv) {
                     }
                     infer_total_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
                     if (++infer_cnt % 30 == 0)
-                        std::println(stderr, "[infer] {:.0f} us avg over {} frames",
-                                     infer_total_us / infer_cnt, infer_cnt);
+                        std::println(
+                            stderr, "[infer] {:.0f} us avg over {} frames",
+                            infer_total_us / infer_cnt, infer_cnt);
                 }
             });
         }
@@ -197,8 +204,7 @@ int main(int argc, char** argv) {
 
                 static unsigned frame_count = 0;
                 if (++frame_count % 60 == 0)
-                    std::println(stderr, "[video] sent {} frames",
-                                 frame_count);
+                    std::println(stderr, "[video] sent {} frames", frame_count);
             }
 
             cv::Mat display = frame->image.clone();
@@ -218,7 +224,8 @@ int main(int argc, char** argv) {
                 observation = latest_observation;
                 ekf_state = latest_ekf_state;
             }
-            if (infer) infer_cv.notify_one();
+            if (infer)
+                infer_cv.notify_one();
             udp.send(observation);
 
             auto cmd = read_command(fifo_fd, cmd_buf, sizeof(cmd_buf));
@@ -237,14 +244,18 @@ int main(int argc, char** argv) {
             }
 
             if (++loop_frames % 30 == 0) {
-                const auto elapsed = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - loop_t0).count();
-                const double cap_ms = std::chrono::duration<double, std::milli>(t_cap1 - t_cap0).count();
-                const double push_ms = std::chrono::duration<double, std::milli>(t_push0 - t_cap1).count();
-                std::println(stderr, "[main] {} frames {:.1f}s ({:.0f}fps) cap={:.0f}ms push={:.0f}ms infer={}",
-                             loop_frames, elapsed, loop_frames / elapsed,
-                             cap_ms, push_ms,
-                             infer ? "ready" : "waiting");
+                const auto elapsed =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - loop_t0)
+                        .count();
+                const double cap_ms =
+                    std::chrono::duration<double, std::milli>(t_cap1 - t_cap0).count();
+                const double push_ms =
+                    std::chrono::duration<double, std::milli>(t_push0 - t_cap1).count();
+                std::println(
+                    stderr,
+                    "[main] {} frames {:.1f}s ({:.0f}fps) cap={:.0f}ms push={:.0f}ms infer={}",
+                    loop_frames, elapsed, loop_frames / elapsed, cap_ms, push_ms,
+                    infer ? "ready" : "waiting");
                 loop_t0 = std::chrono::steady_clock::now();
                 loop_frames = 0;
             }

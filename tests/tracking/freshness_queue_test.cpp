@@ -5,8 +5,8 @@
 #include <stop_token>
 #include <thread>
 
-#include "tracking/freshness_queue.hpp"
 #include "test_utils.hpp"
+#include "tracking/freshness_queue.hpp"
 
 int main() {
     try {
@@ -44,7 +44,8 @@ int main() {
             });
 
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            require(future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready,
+            require(
+                future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready,
                 "pop should block until push");
 
             require(queue.push(42) == 0, "push after block should not overwrite");

@@ -2,14 +2,14 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <print>
 #include <numeric>
+#include <print>
 #include <vector>
 
-#include "example_support.hpp"
 #include "config.hpp"
-#include "vision/detector.hpp"
 #include "core/replay.hpp"
+#include "example_support.hpp"
+#include "vision/detector.hpp"
 
 namespace {
 
@@ -77,15 +77,10 @@ int main(int argc, char** argv) {
         const double p95 = latencies_us[percentile_index(latencies_us.size(), 0.95)];
 
         std::println(
-            "frames={} iterations={} samples={} mean_us={} min_us={} max_us={} p50_us={} p95_us={}",
-            frames.size(),
-            iterations,
-            latencies_us.size(),
-            mean_latency,
-            min_latency,
-            max_latency,
-            p50,
-            p95);
+            "frames={} iterations={} samples={} mean_us={} min_us={} max_us={} p50_us={} "
+            "p95_us={}",
+            frames.size(), iterations, latencies_us.size(), mean_latency, min_latency, max_latency,
+            p50, p95);
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "example_detector_benchmark failed: {}", e.what());

@@ -14,7 +14,8 @@ enum class HitState : std::uint8_t {
 class HitStateMachine {
 public:
     explicit HitStateMachine(int confirm_frames = 3, int release_frames = 5)
-        : confirm_frames_(confirm_frames), release_frames_(release_frames) {}
+        : confirm_frames_(confirm_frames)
+        , release_frames_(release_frames) {}
 
     auto update(bool is_purple) -> HitState {
         if (!has_last_ || is_purple != last_is_purple_) {
@@ -34,13 +35,9 @@ public:
         return state_;
     }
 
-    [[nodiscard]] auto state() const -> HitState {
-        return state_;
-    }
+    [[nodiscard]] auto state() const -> HitState { return state_; }
 
-    [[nodiscard]] auto consecutive() const -> int {
-        return consecutive_;
-    }
+    [[nodiscard]] auto consecutive() const -> int { return consecutive_; }
 
     auto reset() -> void {
         state_ = HitState::None;

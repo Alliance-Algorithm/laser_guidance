@@ -1,8 +1,8 @@
 #include "config.hpp"
 
 #include <algorithm>
-#include <cstddef>
 #include <cctype>
+#include <cstddef>
 #include <format>
 #include <stdexcept>
 #include <string>
@@ -14,69 +14,69 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-    auto to_lower_copy(std::string value) -> std::string {
-        std::transform(value.begin(), value.end(), value.begin(),
-            [](const unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-        return value;
+auto to_lower_copy(std::string value) -> std::string {
+    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value;
+}
+
+template <typename Enum, std::size_t N>
+auto parse_enum(
+    std::string_view value, const std::pair<std::string_view, Enum> (&mapping)[N],
+    std::string_view error_message) -> Enum {
+    const std::string lower = to_lower_copy(std::string(value));
+    for (const auto& [name, kind] : mapping) {
+        if (lower == name)
+            return kind;
     }
 
-    template <typename Enum, std::size_t N>
-    auto parse_enum(std::string_view value,
-                    const std::pair<std::string_view, Enum> (&mapping)[N],
-                    std::string_view error_message) -> Enum {
-        const std::string lower = to_lower_copy(std::string(value));
-        for (const auto& [name, kind] : mapping) {
-            if (lower == name) return kind;
-        }
+    throw std::runtime_error(std::format("{}, got '{}'", error_message, value));
+}
 
-        throw std::runtime_error(std::format("{}, got '{}'", error_message, value));
-    }
+template <typename T>
+auto read_opt(const YAML::Node& node, const char* key, T& dest) -> void {
+    if (const auto child = node[key])
+        dest = child.as<T>();
+}
 
-    template <typename T>
-    auto read_opt(const YAML::Node& node, const char* key, T& dest) -> void {
-        if (const auto child = node[key]) dest = child.as<T>();
-    }
+auto parse_v4l2_pixel_format(const std::string_view value) -> V4l2PixelFormat {
+    constexpr std::pair<std::string_view, V4l2PixelFormat> kMapping[] = {
+        {"mjpeg", V4l2PixelFormat::mjpeg},
+        {"yuyv", V4l2PixelFormat::yuyv},
+        {"bgr24", V4l2PixelFormat::bgr24},
+    };
+    return parse_enum(value, kMapping, "v4l2.pixel_format must be one of: mjpeg, yuyv, bgr24");
+}
 
-    auto parse_v4l2_pixel_format(const std::string_view value) -> V4l2PixelFormat {
-        constexpr std::pair<std::string_view, V4l2PixelFormat> kMapping[] = {
-            {"mjpeg", V4l2PixelFormat::mjpeg},
-            {"yuyv", V4l2PixelFormat::yuyv},
-            {"bgr24", V4l2PixelFormat::bgr24},
-        };
-        return parse_enum(value, kMapping,
-                          "v4l2.pixel_format must be one of: mjpeg, yuyv, bgr24");
-    }
+auto parse_inference_backend(const std::string_view value) -> InferenceBackendKind {
+    constexpr std::pair<std::string_view, InferenceBackendKind> kMapping[] = {
+        {"bright_spot", InferenceBackendKind::bright_spot},
+        {"model", InferenceBackendKind::model},
+        {"tensorrt", InferenceBackendKind::tensorrt},
+    };
+    return parse_enum(
+        value, kMapping, "inference.backend must be one of: bright_spot, model, tensorrt");
+}
 
-    auto parse_inference_backend(const std::string_view value) -> InferenceBackendKind {
-        constexpr std::pair<std::string_view, InferenceBackendKind> kMapping[] = {
-            {"bright_spot", InferenceBackendKind::bright_spot},
-            {"model", InferenceBackendKind::model},
-            {"tensorrt", InferenceBackendKind::tensorrt},
-        };
-        return parse_enum(
-            value, kMapping, "inference.backend must be one of: bright_spot, model, tensorrt");
-    }
+auto parse_guidance_command_model(const std::string_view value) -> GuidanceCommandModelKind {
+    constexpr std::pair<std::string_view, GuidanceCommandModelKind> kMapping[] = {
+        {"geometry", GuidanceCommandModelKind::geometry},
+        {"direct_voltage", GuidanceCommandModelKind::direct_voltage},
+    };
+    return parse_enum(
+        value, kMapping, "guidance.command_model must be one of: geometry, direct_voltage");
+}
 
-    auto parse_guidance_command_model(const std::string_view value)
-        -> GuidanceCommandModelKind {
-        constexpr std::pair<std::string_view, GuidanceCommandModelKind> kMapping[] = {
-            {"geometry", GuidanceCommandModelKind::geometry},
-            {"direct_voltage", GuidanceCommandModelKind::direct_voltage},
-        };
-        return parse_enum(
-            value, kMapping, "guidance.command_model must be one of: geometry, direct_voltage");
-    }
-
-    auto parse_guidance_depth_source(const std::string_view value)
-        -> GuidanceDepthSourceKind {
-        constexpr std::pair<std::string_view, GuidanceDepthSourceKind> kMapping[] = {
-            {"monocular_bbox", GuidanceDepthSourceKind::monocular_bbox},
-            {"lidar_target_cluster", GuidanceDepthSourceKind::lidar_target_cluster},
-        };
-        return parse_enum(
-            value, kMapping,
-            "guidance.depth_source must be one of: monocular_bbox, lidar_target_cluster");
-    }
+auto parse_guidance_depth_source(const std::string_view value) -> GuidanceDepthSourceKind {
+    constexpr std::pair<std::string_view, GuidanceDepthSourceKind> kMapping[] = {
+        {"monocular_bbox", GuidanceDepthSourceKind::monocular_bbox},
+        {"lidar_target_cluster", GuidanceDepthSourceKind::lidar_target_cluster},
+    };
+    return parse_enum(
+        value, kMapping,
+        "guidance.depth_source must be one of: monocular_bbox, lidar_target_cluster");
+}
 
 } // namespace
 
@@ -86,7 +86,8 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
     Config config;
 
     if (const YAML::Node v4l2 = yaml["v4l2"]) {
-        if (v4l2["device_path"]) config.v4l2.device_path = v4l2["device_path"].as<std::string>();
+        if (v4l2["device_path"])
+            config.v4l2.device_path = v4l2["device_path"].as<std::string>();
         read_opt(v4l2, "width", config.v4l2.width);
         read_opt(v4l2, "height", config.v4l2.height);
         read_opt(v4l2, "framerate", config.v4l2.framerate);
@@ -116,10 +117,14 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.runtime.hit_confirm_frames = runtime["hit_confirm_frames"].as<int>();
         if (runtime["hit_release_frames"])
             config.runtime.hit_release_frames = runtime["hit_release_frames"].as<int>();
-        if (runtime["debug_enabled"]) config.runtime.debug_enabled = runtime["debug_enabled"].as<bool>();
-        if (runtime["debug_max_fps"]) config.runtime.debug_max_fps = runtime["debug_max_fps"].as<int>();
-        if (runtime["record_enabled"]) config.runtime.record_enabled = runtime["record_enabled"].as<bool>();
-        if (runtime["record_queue_size"]) config.runtime.record_queue_size = runtime["record_queue_size"].as<int>();
+        if (runtime["debug_enabled"])
+            config.runtime.debug_enabled = runtime["debug_enabled"].as<bool>();
+        if (runtime["debug_max_fps"])
+            config.runtime.debug_max_fps = runtime["debug_max_fps"].as<int>();
+        if (runtime["record_enabled"])
+            config.runtime.record_enabled = runtime["record_enabled"].as<bool>();
+        if (runtime["record_queue_size"])
+            config.runtime.record_queue_size = runtime["record_queue_size"].as<int>();
     }
 
     if (const YAML::Node inference = yaml["inference"]) {
@@ -131,44 +136,66 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.inference.model_path = inference["model_path"].as<std::string>();
         if (inference["enemy_color"]) {
             const auto ec = to_lower_copy(inference["enemy_color"].as<std::string>());
-            if (ec == "red")       config.inference.enemy_class_id = 1;
-            else if (ec == "blue") config.inference.enemy_class_id = 2;
-            else if (ec == "auto") config.inference.enemy_class_id = -1;
-            else throw std::runtime_error(
-                std::format("inference.enemy_color must be red/blue/auto, got '{}'", ec));
+            if (ec == "red")
+                config.inference.enemy_class_id = 1;
+            else if (ec == "blue")
+                config.inference.enemy_class_id = 2;
+            else if (ec == "auto")
+                config.inference.enemy_class_id = -1;
+            else
+                throw std::runtime_error(
+                    std::format("inference.enemy_color must be red/blue/auto, got '{}'", ec));
         }
     }
 
     if (const YAML::Node streaming = yaml["streaming"]) {
-        if (streaming["enabled"]) config.rtp.enabled = streaming["enabled"].as<bool>();
-        if (streaming["host"]) config.rtp.host = streaming["host"].as<std::string>();
-        if (streaming["port"]) config.rtp.port = streaming["port"].as<int>();
-        if (streaming["sdp_path"]) config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
-        if (streaming["encoder"]) config.rtp.encoder = streaming["encoder"].as<std::string>();
-        if (streaming["bitrate"]) config.rtp.bitrate = streaming["bitrate"].as<std::string>();
+        if (streaming["enabled"])
+            config.rtp.enabled = streaming["enabled"].as<bool>();
+        if (streaming["host"])
+            config.rtp.host = streaming["host"].as<std::string>();
+        if (streaming["port"])
+            config.rtp.port = streaming["port"].as<int>();
+        if (streaming["sdp_path"])
+            config.rtp.sdp_path = streaming["sdp_path"].as<std::string>();
+        if (streaming["encoder"])
+            config.rtp.encoder = streaming["encoder"].as<std::string>();
+        if (streaming["bitrate"])
+            config.rtp.bitrate = streaming["bitrate"].as<std::string>();
     }
 
     if (const YAML::Node udp_cfg = yaml["udp"]) {
-        if (udp_cfg["enabled"]) config.udp.enabled = udp_cfg["enabled"].as<bool>();
-        if (udp_cfg["host"]) config.udp.host = udp_cfg["host"].as<std::string>();
-        if (udp_cfg["port"]) config.udp.port = udp_cfg["port"].as<int>();
+        if (udp_cfg["enabled"])
+            config.udp.enabled = udp_cfg["enabled"].as<bool>();
+        if (udp_cfg["host"])
+            config.udp.host = udp_cfg["host"].as<std::string>();
+        if (udp_cfg["port"])
+            config.udp.port = udp_cfg["port"].as<int>();
     }
 
     if (const YAML::Node ws30 = yaml["ws30"]) {
-        if (ws30["enabled"]) config.ws30.enabled = ws30["enabled"].as<bool>();
-        if (ws30["host"]) config.ws30.host = ws30["host"].as<std::string>();
-        if (ws30["points_port"]) config.ws30.points_port = ws30["points_port"].as<int>();
-        if (ws30["imu_port"]) config.ws30.imu_port = ws30["imu_port"].as<int>();
-        if (ws30["scan_port"]) config.ws30.scan_port = ws30["scan_port"].as<int>();
+        if (ws30["enabled"])
+            config.ws30.enabled = ws30["enabled"].as<bool>();
+        if (ws30["host"])
+            config.ws30.host = ws30["host"].as<std::string>();
+        if (ws30["points_port"])
+            config.ws30.points_port = ws30["points_port"].as<int>();
+        if (ws30["imu_port"])
+            config.ws30.imu_port = ws30["imu_port"].as<int>();
+        if (ws30["scan_port"])
+            config.ws30.scan_port = ws30["scan_port"].as<int>();
         if (ws30["handshake_interval_ms"])
             config.ws30.handshake_interval_ms = ws30["handshake_interval_ms"].as<int>();
-        if (ws30["receive_imu"]) config.ws30.receive_imu = ws30["receive_imu"].as<bool>();
-        if (ws30["grid_cols"]) config.ws30.grid_cols = ws30["grid_cols"].as<int>();
-        if (ws30["grid_rows"]) config.ws30.grid_rows = ws30["grid_rows"].as<int>();
+        if (ws30["receive_imu"])
+            config.ws30.receive_imu = ws30["receive_imu"].as<bool>();
+        if (ws30["grid_cols"])
+            config.ws30.grid_cols = ws30["grid_cols"].as<int>();
+        if (ws30["grid_rows"])
+            config.ws30.grid_rows = ws30["grid_rows"].as<int>();
     }
 
     if (const YAML::Node ekf = yaml["ekf"]) {
-        if (ekf["enabled"]) config.ekf.enabled = ekf["enabled"].as<bool>();
+        if (ekf["enabled"])
+            config.ekf.enabled = ekf["enabled"].as<bool>();
         if (ekf["process_noise_q"])
             config.ekf.process_noise_q = ekf["process_noise_q"].as<double>();
         if (ekf["measurement_noise_r"])
@@ -195,11 +222,9 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.depth_source =
                 parse_guidance_depth_source(guidance["depth_source"].as<std::string>());
         if (guidance["camera_calib_path"])
-            config.guidance.camera_calib_path =
-                guidance["camera_calib_path"].as<std::string>();
+            config.guidance.camera_calib_path = guidance["camera_calib_path"].as<std::string>();
         if (guidance["voltage_model_path"])
-            config.guidance.voltage_model_path =
-                guidance["voltage_model_path"].as<std::string>();
+            config.guidance.voltage_model_path = guidance["voltage_model_path"].as<std::string>();
         if (guidance["t_x_mm"])
             config.guidance.t_x_mm = guidance["t_x_mm"].as<float>();
         if (guidance["t_y_mm"])
@@ -213,20 +238,15 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (guidance["r_z_deg"])
             config.guidance.r_z_deg = guidance["r_z_deg"].as<float>();
         if (guidance["mirror_separation_mm"])
-            config.guidance.mirror_separation_mm =
-                guidance["mirror_separation_mm"].as<float>();
+            config.guidance.mirror_separation_mm = guidance["mirror_separation_mm"].as<float>();
         if (guidance["max_optical_angle_deg"])
-            config.guidance.max_optical_angle_deg =
-                guidance["max_optical_angle_deg"].as<float>();
+            config.guidance.max_optical_angle_deg = guidance["max_optical_angle_deg"].as<float>();
         if (guidance["input_voltage_range_v"])
-            config.guidance.input_voltage_range_v =
-                guidance["input_voltage_range_v"].as<float>();
+            config.guidance.input_voltage_range_v = guidance["input_voltage_range_v"].as<float>();
         if (guidance["dac_voltage_range_v"])
-            config.guidance.dac_voltage_range_v =
-                guidance["dac_voltage_range_v"].as<float>();
+            config.guidance.dac_voltage_range_v = guidance["dac_voltage_range_v"].as<float>();
         if (guidance["voltage_use_ekf_center"])
-            config.guidance.voltage_use_ekf_center =
-                guidance["voltage_use_ekf_center"].as<bool>();
+            config.guidance.voltage_use_ekf_center = guidance["voltage_use_ekf_center"].as<bool>();
         if (guidance["voltage_limit_v"])
             config.guidance.voltage_limit_v = guidance["voltage_limit_v"].as<float>();
         if (guidance["voltage_offset_vx"])
@@ -248,9 +268,12 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.target_geometry.clear();
             for (const auto& item : geom_list) {
                 TargetGeometry geom;
-                if (item["class_id"]) geom.class_id = item["class_id"].as<int>();
-                if (item["width_mm"]) geom.width_mm = item["width_mm"].as<float>();
-                if (item["height_mm"]) geom.height_mm = item["height_mm"].as<float>();
+                if (item["class_id"])
+                    geom.class_id = item["class_id"].as<int>();
+                if (item["width_mm"])
+                    geom.width_mm = item["width_mm"].as<float>();
+                if (item["height_mm"])
+                    geom.height_mm = item["height_mm"].as<float>();
                 config.guidance.target_geometry.push_back(geom);
             }
         }
@@ -264,17 +287,13 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
                     config.guidance.wiring.mode = GalvoWiringMode::single_ended;
             }
             if (wiring["x_plus_channel"])
-                config.guidance.wiring.x_plus_channel =
-                    wiring["x_plus_channel"].as<int>();
+                config.guidance.wiring.x_plus_channel = wiring["x_plus_channel"].as<int>();
             if (wiring["x_minus_channel"])
-                config.guidance.wiring.x_minus_channel =
-                    wiring["x_minus_channel"].as<int>();
+                config.guidance.wiring.x_minus_channel = wiring["x_minus_channel"].as<int>();
             if (wiring["y_plus_channel"])
-                config.guidance.wiring.y_plus_channel =
-                    wiring["y_plus_channel"].as<int>();
+                config.guidance.wiring.y_plus_channel = wiring["y_plus_channel"].as<int>();
             if (wiring["y_minus_channel"])
-                config.guidance.wiring.y_minus_channel =
-                    wiring["y_minus_channel"].as<int>();
+                config.guidance.wiring.y_minus_channel = wiring["y_minus_channel"].as<int>();
         }
 
         if (guidance["scan_mode"]) {
@@ -308,9 +327,12 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
 
     if (config.v4l2.device_path.empty())
         throw std::runtime_error("v4l2.device_path must not be empty");
-    if (config.v4l2.width <= 0) throw std::runtime_error("v4l2.width must be positive");
-    if (config.v4l2.height <= 0) throw std::runtime_error("v4l2.height must be positive");
-    if (config.v4l2.framerate <= 0.0F) throw std::runtime_error("v4l2.framerate must be positive");
+    if (config.v4l2.width <= 0)
+        throw std::runtime_error("v4l2.width must be positive");
+    if (config.v4l2.height <= 0)
+        throw std::runtime_error("v4l2.height must be positive");
+    if (config.v4l2.framerate <= 0.0F)
+        throw std::runtime_error("v4l2.framerate must be positive");
     if (config.runtime.max_input_age_ms <= 0)
         throw std::runtime_error("runtime.max_input_age_ms must be positive");
     if (config.runtime.max_observation_age_ms <= 0)

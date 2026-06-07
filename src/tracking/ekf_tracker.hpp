@@ -46,4 +46,4 @@ private:
     std::unique_ptr<Details> details_;
 };
 
-}
+} // namespace rmcs_laser_guidance

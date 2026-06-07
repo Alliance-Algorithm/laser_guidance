@@ -1,25 +1,25 @@
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
 
-#include "vision/tensorrt_engine.hpp"
+# include "vision/tensorrt_engine.hpp"
 
-#include <cuda_runtime_api.h>
+# include <cuda_runtime_api.h>
 
-#include <NvInfer.h>
+# include <NvInfer.h>
 
-#include <algorithm>
-#include <cerrno>
-#include <cmath>
-#include <cstddef>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <print>
-#include <iterator>
-#include <limits>
-#include <memory>
-#include <numeric>
-#include <sstream>
-#include <string_view>
+# include <algorithm>
+# include <cerrno>
+# include <cmath>
+# include <cstddef>
+# include <cstring>
+# include <filesystem>
+# include <fstream>
+# include <iterator>
+# include <limits>
+# include <memory>
+# include <numeric>
+# include <print>
+# include <sstream>
+# include <string_view>
 
 namespace rmcs_laser_guidance {
 
@@ -28,7 +28,8 @@ namespace {
 class TensorRTLogger final : public nvinfer1::ILogger {
 public:
     void log(Severity severity, const char* message) noexcept override {
-        if (severity > Severity::kWARNING || message == nullptr) return;
+        if (severity > Severity::kWARNING || message == nullptr)
+            return;
         std::println(stderr, "[TensorRT] {}", message);
     }
 };
@@ -48,7 +49,8 @@ auto tensor_shape_string(const std::vector<std::int64_t>& shape) -> std::string 
     std::ostringstream oss;
     oss << '[';
     for (std::size_t index = 0; index < shape.size(); ++index) {
-        if (index != 0) oss << ',';
+        if (index != 0)
+            oss << ',';
         oss << shape[index];
     }
     oss << ']';
@@ -60,19 +62,22 @@ auto meta_string(const TensorRTMeta& meta) -> std::string {
     oss << "engine='" << meta.engine_path << "' device='" << meta.device_name << "'";
     oss << " inputs={";
     for (std::size_t index = 0; index < meta.inputs.size(); ++index) {
-        if (index != 0) oss << ", ";
+        if (index != 0)
+            oss << ", ";
         oss << meta.inputs[index].name << tensor_shape_string(meta.inputs[index].shape);
     }
     oss << "} outputs={";
     for (std::size_t index = 0; index < meta.outputs.size(); ++index) {
-        if (index != 0) oss << ", ";
+        if (index != 0)
+            oss << ", ";
         oss << meta.outputs[index].name << tensor_shape_string(meta.outputs[index].shape);
     }
     oss << '}';
     return oss.str();
 }
 
-auto tensor_element_count(const std::vector<std::int64_t>& shape) -> std::expected<std::size_t, std::string> {
+auto tensor_element_count(const std::vector<std::int64_t>& shape)
+    -> std::expected<std::size_t, std::string> {
     std::size_t count = 1;
     for (const std::int64_t dim : shape) {
         if (dim <= 0) {
@@ -105,9 +110,7 @@ auto cleanup_cuda(void*& device_ptr) noexcept -> void {
 } // namespace
 
 struct TensorRTEngine::Impl {
-    ~Impl() {
-        cleanup();
-    }
+    ~Impl() { cleanup(); }
 
     auto cleanup() noexcept -> void {
         cleanup_cuda(device_input);
@@ -132,15 +135,15 @@ struct TensorRTEngine::Impl {
         }
     }
 
-    TensorRTMeta meta { };
-    nvinfer1::IRuntime* runtime { nullptr };
-    nvinfer1::ICudaEngine* engine { nullptr };
-    nvinfer1::IExecutionContext* context { nullptr };
-    cudaStream_t stream { nullptr };
-    void* device_input { nullptr };
-    void* device_output { nullptr };
-    std::size_t input_element_count { 0 };
-    std::size_t output_element_count { 0 };
+    TensorRTMeta meta{};
+    nvinfer1::IRuntime* runtime{nullptr};
+    nvinfer1::ICudaEngine* engine{nullptr};
+    nvinfer1::IExecutionContext* context{nullptr};
+    cudaStream_t stream{nullptr};
+    void* device_input{nullptr};
+    void* device_output{nullptr};
+    std::size_t input_element_count{0};
+    std::size_t output_element_count{0};
 };
 
 TensorRTEngine::~TensorRTEngine() = default;
@@ -152,7 +155,7 @@ auto TensorRTEngine::operator=(TensorRTEngine&&) noexcept -> TensorRTEngine& = d
 auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngine, std::string> {
     TensorRTEngine engine_wrapper;
     engine_wrapper.impl_ = std::make_unique<Impl>();
-    auto& impl           = *engine_wrapper.impl_;
+    auto& impl = *engine_wrapper.impl_;
 
     std::error_code ec;
     const std::filesystem::path engine_path(path);
@@ -169,7 +172,8 @@ auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngi
         return std::unexpected(oss.str());
     }
 
-    std::vector<char> blob((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::vector<char> blob(
+        (std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     if (blob.empty()) {
         std::ostringstream oss;
         oss << "TensorRT engine file is empty: '" << path << "'";
@@ -194,7 +198,7 @@ auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngi
     }
 
     impl.meta.engine_path = path;
-    impl.meta.device_name  = "cuda-device-0";
+    impl.meta.device_name = "cuda-device-0";
 
     const int tensor_count = impl.engine->getNbIOTensors();
     if (tensor_count <= 0) {
@@ -222,13 +226,13 @@ auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngi
         const nvinfer1::DataType tensor_type = impl.engine->getTensorDataType(tensor_name);
         if (tensor_type != nvinfer1::DataType::kFLOAT) {
             std::ostringstream oss;
-            oss << "TensorRT tensor '" << tensor_name << "' must use float32 for this skeleton, got "
-                << static_cast<int>(tensor_type);
+            oss << "TensorRT tensor '" << tensor_name
+                << "' must use float32 for this skeleton, got " << static_cast<int>(tensor_type);
             return std::unexpected(oss.str());
         }
 
         TensorRTMeta::TensorInfo info;
-        info.name  = tensor_name;
+        info.name = tensor_name;
         info.shape = std::move(shape);
 
         const nvinfer1::TensorIOMode mode = impl.engine->getTensorIOMode(tensor_name);
@@ -249,23 +253,27 @@ auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngi
     }
 
     const auto input_elements = tensor_element_count(impl.meta.inputs.front().shape);
-    if (!input_elements) return std::unexpected(input_elements.error());
+    if (!input_elements)
+        return std::unexpected(input_elements.error());
     const auto output_elements = tensor_element_count(impl.meta.outputs.front().shape);
-    if (!output_elements) return std::unexpected(output_elements.error());
+    if (!output_elements)
+        return std::unexpected(output_elements.error());
 
-    impl.input_element_count  = *input_elements;
+    impl.input_element_count = *input_elements;
     impl.output_element_count = *output_elements;
 
     if (const cudaError_t status = cudaStreamCreate(&impl.stream); status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaStreamCreate"));
     }
 
-    if (const cudaError_t status = cudaMalloc(&impl.device_input, impl.input_element_count * sizeof(float));
+    if (const cudaError_t status =
+            cudaMalloc(&impl.device_input, impl.input_element_count * sizeof(float));
         status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaMalloc(input)"));
     }
 
-    if (const cudaError_t status = cudaMalloc(&impl.device_output, impl.output_element_count * sizeof(float));
+    if (const cudaError_t status =
+            cudaMalloc(&impl.device_output, impl.output_element_count * sizeof(float));
         status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaMalloc(output)"));
     }
@@ -273,7 +281,8 @@ auto TensorRTEngine::load(const std::string& path) -> std::expected<TensorRTEngi
     if (!impl.context->setTensorAddress(impl.meta.inputs.front().name.c_str(), impl.device_input)) {
         return std::unexpected("failed to bind TensorRT input buffer to execution context");
     }
-    if (!impl.context->setTensorAddress(impl.meta.outputs.front().name.c_str(), impl.device_output)) {
+    if (!impl.context->setTensorAddress(
+            impl.meta.outputs.front().name.c_str(), impl.device_output)) {
         return std::unexpected("failed to bind TensorRT output buffer to execution context");
     }
 
@@ -298,8 +307,9 @@ auto TensorRTEngine::run(const std::vector<float>& input, std::vector<float>& ou
 
     output.resize(impl_->output_element_count);
 
-    if (const cudaError_t status = cudaMemcpyAsync(impl_->device_input, input.data(),
-            impl_->input_element_count * sizeof(float), cudaMemcpyHostToDevice, impl_->stream);
+    if (const cudaError_t status = cudaMemcpyAsync(
+            impl_->device_input, input.data(), impl_->input_element_count * sizeof(float),
+            cudaMemcpyHostToDevice, impl_->stream);
         status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaMemcpyAsync(H2D)"));
     }
@@ -310,8 +320,9 @@ auto TensorRTEngine::run(const std::vector<float>& input, std::vector<float>& ou
         return std::unexpected(oss.str());
     }
 
-    if (const cudaError_t status = cudaMemcpyAsync(output.data(), impl_->device_output,
-            impl_->output_element_count * sizeof(float), cudaMemcpyDeviceToHost, impl_->stream);
+    if (const cudaError_t status = cudaMemcpyAsync(
+            output.data(), impl_->device_output, impl_->output_element_count * sizeof(float),
+            cudaMemcpyDeviceToHost, impl_->stream);
         status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaMemcpyAsync(D2H)"));
     }
@@ -320,12 +331,13 @@ auto TensorRTEngine::run(const std::vector<float>& input, std::vector<float>& ou
         return std::unexpected(cuda_error_message(status, "cudaStreamSynchronize"));
     }
 
-    return { };
+    return {};
 }
 
 auto TensorRTEngine::meta() const -> const TensorRTMeta& {
-    static const TensorRTMeta empty_meta { };
-    if (impl_ == nullptr) return empty_meta;
+    static const TensorRTMeta empty_meta{};
+    if (impl_ == nullptr)
+        return empty_meta;
     return impl_->meta;
 }
 
@@ -337,7 +349,7 @@ auto TensorRTEngine::meta() const -> const TensorRTMeta& {
 // without TensorRT support. The compile-time flag RMCS_LASER_GUIDANCE_WITH_TENSORRT
 // controls the real implementation above.
 
-#include "vision/tensorrt_engine.hpp"
+# include "vision/tensorrt_engine.hpp"
 
 namespace rmcs_laser_guidance {
 
@@ -349,7 +361,8 @@ auto TensorRTEngine::load(const std::string&) -> std::expected<TensorRTEngine, s
     return std::unexpected(std::string("TensorRT support was not enabled at build time"));
 }
 
-auto TensorRTEngine::run(const std::vector<float>&, std::vector<float>&) -> std::expected<void, std::string> {
+auto TensorRTEngine::run(const std::vector<float>&, std::vector<float>&)
+    -> std::expected<void, std::string> {
     return std::unexpected(std::string("TensorRT is not available in this build"));
 }
 

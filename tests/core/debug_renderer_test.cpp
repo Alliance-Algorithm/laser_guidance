@@ -4,9 +4,9 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "test_utils.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
+#include "test_utils.hpp"
 #include "vision/detector.hpp"
 
 int main() {
@@ -18,7 +18,9 @@ int main() {
         rmcs_laser_guidance::DebugRenderer disabled_renderer(
             rmcs_laser_guidance::DebugConfig{.show_window = false, .draw_overlay = false});
         disabled_renderer.draw(untouched, {});
-        require(cv::norm(untouched, untouched_before, cv::NORM_INF) == 0.0, "disabled renderer changed image");
+        require(
+            cv::norm(untouched, untouched_before, cv::NORM_INF) == 0.0,
+            "disabled renderer changed image");
 
         cv::Mat empty_image;
         rmcs_laser_guidance::DebugRenderer enabled_renderer(

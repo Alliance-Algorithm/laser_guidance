@@ -11,13 +11,16 @@ int main() {
     using namespace rmcs_laser_guidance::tests;
 
     const auto path = make_temp_path("voltage_mapper_poly_test");
-    write_text_file(path,
+    write_text_file(
+        path,
         "model:\n"
         "  type: poly3\n"
         "  log_area_mean: 0.0\n"
         "  log_area_std: 1.0\n"
-        "  vx_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]\n"
-        "  vy_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0]\n");
+        "  vx_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "
+        "0.0, 0.0, 0.0, 0.0, 1.0]\n"
+        "  vy_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "
+        "0.0, 0.0, 0.0, 0.0, -1.0]\n");
 
     GuidanceConfig cfg;
     cfg.command_model = GuidanceCommandModelKind::direct_voltage;

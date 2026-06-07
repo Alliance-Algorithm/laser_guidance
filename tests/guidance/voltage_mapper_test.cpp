@@ -11,20 +11,20 @@ int main() {
     using namespace rmcs_laser_guidance::tests;
 
     const auto path = make_temp_path("voltage_mapper_test");
-    write_text_file(path,
-        "model:\n"
-        "  type: lut\n"
-        "  u_axis: [0.0, 1.0]\n"
-        "  v_axis: [0.0, 1.0]\n"
-        "  log_area_axis: [0.0]\n"
-        "  vx_values:\n"
-        "    -\n"
-        "      - [-1.0, 1.0]\n"
-        "      - [-1.0, 1.0]\n"
-        "  vy_values:\n"
-        "    -\n"
-        "      - [-1.0, -1.0]\n"
-        "      - [1.0, 1.0]\n");
+    write_text_file(
+        path, "model:\n"
+              "  type: lut\n"
+              "  u_axis: [0.0, 1.0]\n"
+              "  v_axis: [0.0, 1.0]\n"
+              "  log_area_axis: [0.0]\n"
+              "  vx_values:\n"
+              "    -\n"
+              "      - [-1.0, 1.0]\n"
+              "      - [-1.0, 1.0]\n"
+              "  vy_values:\n"
+              "    -\n"
+              "      - [-1.0, -1.0]\n"
+              "      - [1.0, 1.0]\n");
 
     GuidanceConfig cfg;
     cfg.command_model = GuidanceCommandModelKind::direct_voltage;

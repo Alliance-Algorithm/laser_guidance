@@ -10,42 +10,17 @@
 
 namespace rmcs_laser_guidance {
 
-struct ModelValueInfo {
-    std::string name { };
-    std::vector<std::int64_t> shape { };
-    std::string element_type { };
-};
-
-struct ModelTensorData {
-    std::string name { };
-    std::vector<std::int64_t> shape { };
-    std::string element_type { };
-    std::vector<float> values { };
-};
-
-struct ModelImageTransform {
-    int original_width  = 0;
-    int original_height = 0;
-    int input_width     = 0;
-    int input_height    = 0;
-    float scale         = 1.0F;
-    float pad_x         = 0.0F;
-    float pad_y         = 0.0F;
-};
-
-struct ModelRunResult {
-    bool success = false;
-    std::string message { };
-    ModelImageTransform transform { };
-    std::vector<ModelTensorData> outputs { };
-};
+struct ModelValueInfo;
+struct ModelTensorData;
+struct ModelImageTransform;
+struct ModelRunResult;
 
 class ModelRuntime {
 public:
     explicit ModelRuntime(std::filesystem::path model_path);
     ~ModelRuntime();
 
-    ModelRuntime(const ModelRuntime&)                    = delete;
+    ModelRuntime(const ModelRuntime&) = delete;
     auto operator=(const ModelRuntime&) -> ModelRuntime& = delete;
 
     ModelRuntime(ModelRuntime&&) noexcept;
@@ -62,6 +37,36 @@ private:
     struct Details;
     std::filesystem::path model_path_;
     std::unique_ptr<Details> details_;
+};
+
+struct ModelValueInfo {
+    std::string name{};
+    std::vector<std::int64_t> shape{};
+    std::string element_type{};
+};
+
+struct ModelImageTransform {
+    int original_width = 0;
+    int original_height = 0;
+    int input_width = 0;
+    int input_height = 0;
+    float scale = 1.0F;
+    float pad_x = 0.0F;
+    float pad_y = 0.0F;
+};
+
+struct ModelTensorData {
+    std::string name{};
+    std::vector<std::int64_t> shape{};
+    std::string element_type{};
+    std::vector<float> values{};
+};
+
+struct ModelRunResult {
+    bool success = false;
+    std::string message{};
+    ModelImageTransform transform{};
+    std::vector<ModelTensorData> outputs{};
 };
 
 auto model_runtime_enabled_in_build() noexcept -> bool;

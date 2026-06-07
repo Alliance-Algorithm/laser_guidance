@@ -4,9 +4,9 @@
 #include <opencv2/imgcodecs.hpp>
 #include <print>
 
-#include "test_utils.hpp"
 #include "config.hpp"
 #include "pipeline.hpp"
+#include "test_utils.hpp"
 
 namespace {
 
@@ -65,9 +65,11 @@ int main() {
                 "sample image detected flag mismatch");
             if (expectation.detected) {
                 require_near(
-                    observation.center.x, expectation.center_x, expectation.tolerance, "sample center.x");
+                    observation.center.x, expectation.center_x, expectation.tolerance,
+                    "sample center.x");
                 require_near(
-                    observation.center.y, expectation.center_y, expectation.tolerance, "sample center.y");
+                    observation.center.y, expectation.center_y, expectation.tolerance,
+                    "sample center.y");
             }
         }
 

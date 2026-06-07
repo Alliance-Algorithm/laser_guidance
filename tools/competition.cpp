@@ -19,11 +19,10 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "core/debug_renderer.hpp"
-#include "types.hpp"
 #include "example_support.hpp"
-#include "capture/v4l2_capture.hpp"
 #include "guidance/guidance_pipeline.hpp"
 #include "io/ft4222_spi.hpp"
 #include "streaming/rtp_streamer.hpp"
@@ -31,6 +30,7 @@
 #include "streaming/video_shm.hpp"
 #include "tracking/ekf_tracker.hpp"
 #include "tracking/hit_progress.hpp"
+#include "types.hpp"
 #include "vision/model_infer.hpp"
 #include "vision/training_data.hpp"
 
@@ -38,7 +38,7 @@ namespace {
 
 namespace rg = rmcs_laser_guidance;
 
-constexpr const char* kFifoPath   = "/tmp/laser_cmd";
+constexpr const char* kFifoPath = "/tmp/laser_cmd";
 constexpr const char* kWindowName = "laser_guidance_competition";
 
 volatile std::sig_atomic_t g_stop_requested = 0;
@@ -51,15 +51,17 @@ auto install_signal_handlers() -> void {
 }
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
-    if (argc > 1) return argv[1];
+    if (argc > 1)
+        return argv[1];
     return rg::examples::default_config_path();
 }
 
-auto filter_candidates(std::vector<rg::ModelCandidate>& candidates,
-                       int enemy_class_id) -> void {
-    if (enemy_class_id < 0) return;
+auto filter_candidates(std::vector<rg::ModelCandidate>& candidates, int enemy_class_id) -> void {
+    if (enemy_class_id < 0)
+        return;
     candidates.erase(
-        std::remove_if(candidates.begin(), candidates.end(),
+        std::remove_if(
+            candidates.begin(), candidates.end(),
             [enemy_class_id](const rg::ModelCandidate& c) {
                 return c.class_id != 0 && c.class_id != enemy_class_id;
             }),
@@ -79,57 +81,62 @@ auto setup_fifo() -> int {
 
 auto read_command(int fd, char* buf, int size) -> std::string_view {
     ssize_t n = read(fd, buf, size - 1);
-    if (n <= 0) return {};
+    if (n <= 0)
+        return {};
     buf[n] = '\0';
     return std::string_view(buf, static_cast<std::size_t>(n));
 }
 
 auto start_recording(
-    const rg::V4l2NegotiatedFormat& fmt,
-    const rg::examples::RecordSessionOptions& opts) -> rg::VideoSessionRecorder {
+    const rg::V4l2NegotiatedFormat& fmt, const rg::examples::RecordSessionOptions& opts)
+    -> rg::VideoSessionRecorder {
     const auto capture_start = std::chrono::system_clock::now();
-    const auto session_id    = rg::format_session_id(capture_start);
-    return rg::VideoSessionRecorder(opts.output_root,
+    const auto session_id = rg::format_session_id(capture_start);
+    return rg::VideoSessionRecorder(
+        opts.output_root,
         rg::VideoSessionMetadata{
-            .session_id            = session_id,
-            .relative_video_path   = "raw.mp4",
-            .device_path           = fmt.device_path,
-            .width                 = fmt.width,
-            .height                = fmt.height,
-            .framerate             = fmt.framerate > 0.0
-                                         ? fmt.framerate : 60.0,
-            .fourcc                = fmt.fourcc,
+            .session_id = session_id,
+            .relative_video_path = "raw.mp4",
+            .device_path = fmt.device_path,
+            .width = fmt.width,
+            .height = fmt.height,
+            .framerate = fmt.framerate > 0.0 ? fmt.framerate : 60.0,
+            .fourcc = fmt.fourcc,
             .capture_start_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                         capture_start.time_since_epoch()).count(),
-            .duration_ms           = 0,
-            .lighting_tag          = opts.lighting_tag,
-            .background_tag        = opts.background_tag,
-            .distance_tag          = opts.distance_tag,
-            .target_color          = opts.target_color,
-            .operator_note_present  = false,
+                                         capture_start.time_since_epoch())
+                                         .count(),
+            .duration_ms = 0,
+            .lighting_tag = opts.lighting_tag,
+            .background_tag = opts.background_tag,
+            .distance_tag = opts.distance_tag,
+            .target_color = opts.target_color,
+            .operator_note_present = false,
         });
 }
 
-auto flush_recording(std::unique_ptr<rg::VideoSessionRecorder>& recorder,
-                     std::chrono::steady_clock::time_point recording_start) -> void {
-    if (!recorder) return;
+auto flush_recording(
+    std::unique_ptr<rg::VideoSessionRecorder>& recorder,
+    std::chrono::steady_clock::time_point recording_start) -> void {
+    if (!recorder)
+        return;
     const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - recording_start).count();
+                                 std::chrono::steady_clock::now() - recording_start)
+                                 .count();
     recorder->flush(duration_ms);
-    std::println("Recording flushed: {} frames, {}",
-                 recorder->recorded_frames(),
-                 recorder->session_root().string());
+    std::println(
+        "Recording flushed: {} frames, {}", recorder->recorded_frames(),
+        recorder->session_root().string());
     recorder.reset();
 }
 
-}
+} // namespace
 
 int main(int argc, char** argv) {
     try {
         install_signal_handlers();
 
         const auto config_path = resolve_config_path(argc, argv);
-        const auto config      = rg::load_config(config_path);
+        const auto config = rg::load_config(config_path);
 
         rg::examples::RecordSessionOptions record_opts;
         try {
@@ -145,8 +152,9 @@ int main(int argc, char** argv) {
             return 1;
         }
         const auto& fmt = *open_result;
-        std::println("Camera: {} {}x{} @ {:.0f}fps",
-                     fmt.device_path.string(), fmt.width, fmt.height, fmt.framerate);
+        std::println(
+            "Camera: {} {}x{} @ {:.0f}fps", fmt.device_path.string(), fmt.width, fmt.height,
+            fmt.framerate);
 
         bool running = true;
 
@@ -183,13 +191,13 @@ int main(int argc, char** argv) {
             }
 
             auto* preferred = (config.inference.backend == rg::InferenceBackendKind::tensorrt)
-                ? static_cast<rg::ModelInfer*>(infer_trt.get())
-                : static_cast<rg::ModelInfer*>(infer_onnx.get());
+                                ? static_cast<rg::ModelInfer*>(infer_trt.get())
+                                : static_cast<rg::ModelInfer*>(infer_onnx.get());
             if (preferred == nullptr)
                 preferred = infer_onnx ? infer_onnx.get() : infer_trt.get();
             active_infer = preferred;
-            std::println("Active backend: {}",
-                active_infer.load() == infer_trt.get() ? "TensorRT" : "ONNX");
+            std::println(
+                "Active backend: {}", active_infer.load() == infer_trt.get() ? "TensorRT" : "ONNX");
         };
 
         if (config.inference.backend != rg::InferenceBackendKind::bright_spot) {
@@ -199,17 +207,19 @@ int main(int argc, char** argv) {
         std::unique_ptr<rg::Ft4222Spi> spi;
         std::unique_ptr<rg::GuidancePipeline> guidance;
         if (config.guidance.enabled) {
-            auto spi_result = rg::Ft4222Spi::open(rg::Ft4222Config{
-                .sys_clock  = rg::Ft4222SysClock::k60MHz,
-                .clock_div  = rg::Ft4222SpiDiv::kDiv2,
-                .cpol       = rg::Ft4222Cpol::kIdleLow,
-                .cpha       = rg::Ft4222Cpha::kTrailing,
-                .cs_active  = rg::Ft4222CsActive::kLow,
-                .cs_channel = 0,
-            });
+            auto spi_result = rg::Ft4222Spi::open(
+                rg::Ft4222Config{
+                    .sys_clock = rg::Ft4222SysClock::k60MHz,
+                    .clock_div = rg::Ft4222SpiDiv::kDiv2,
+                    .cpol = rg::Ft4222Cpol::kIdleLow,
+                    .cpha = rg::Ft4222Cpha::kTrailing,
+                    .cs_active = rg::Ft4222CsActive::kLow,
+                    .cs_channel = 0,
+                });
             if (!spi_result) {
-                std::println(stderr, "FT4222 open failed: {} (continuing without galvo)",
-                             spi_result.error());
+                std::println(
+                    stderr, "FT4222 open failed: {} (continuing without galvo)",
+                    spi_result.error());
             } else {
                 spi = std::make_unique<rg::Ft4222Spi>(std::move(*spi_result));
                 std::println("FT4222: SCLK ~{} Hz", spi->negotiated_clock_hz());
@@ -225,8 +235,8 @@ int main(int argc, char** argv) {
         rg::RtpStreamer streamer(config.rtp);
         bool streaming_active = false;
         if (config.rtp.enabled) {
-            streaming_active = streamer.start(fmt.width, fmt.height,
-                                              static_cast<float>(fmt.framerate));
+            streaming_active =
+                streamer.start(fmt.width, fmt.height, static_cast<float>(fmt.framerate));
             if (streaming_active)
                 std::println("RTP streaming: {}:{}", config.rtp.host, config.rtp.port);
         }
@@ -242,8 +252,8 @@ int main(int argc, char** argv) {
         std::chrono::steady_clock::time_point recording_start;
         bool recording_active = false;
         if (config.runtime.record_enabled && !record_opts.output_root.empty()) {
-            recorder = std::make_unique<rg::VideoSessionRecorder>(
-                start_recording(fmt, record_opts));
+            recorder =
+                std::make_unique<rg::VideoSessionRecorder>(start_recording(fmt, record_opts));
             recording_start = std::chrono::steady_clock::now();
             recording_active = true;
             const auto& root = recorder->session_root();
@@ -251,7 +261,8 @@ int main(int argc, char** argv) {
         }
 
         int fifo_fd = setup_fifo();
-        if (fifo_fd < 0) return 1;
+        if (fifo_fd < 0)
+            return 1;
         char cmd_buf[256];
 
         rg::EkfTracker tracker(config.ekf);
@@ -276,16 +287,18 @@ int main(int argc, char** argv) {
                         {
                             std::unique_lock lock(infer_mtx);
                             infer_cv.wait(lock, [&] { return has_pending || !running; });
-                            if (!running) break;
+                            if (!running)
+                                break;
                             frame_to_process = std::move(pending_frame);
                             has_pending = false;
                         }
                         rg::Frame infer_frame{
-                            .image     = frame_to_process,
+                            .image = frame_to_process,
                             .timestamp = rg::Clock::now(),
                         };
                         auto* engine = active_infer.load();
-                        if (engine == nullptr) continue;
+                        if (engine == nullptr)
+                            continue;
                         auto result = engine->infer(infer_frame);
                         filter_candidates(result.candidates, enemy_class_id);
                         if (!result.candidates.empty()
@@ -314,7 +327,7 @@ int main(int argc, char** argv) {
         }
 
         cv::Mat output;
-        auto loop_t0     = std::chrono::steady_clock::now();
+        auto loop_t0 = std::chrono::steady_clock::now();
         unsigned loop_frames = 0;
 
         std::string guidance_msg;
@@ -354,18 +367,17 @@ int main(int argc, char** argv) {
                     has_pending = true;
                 }
                 observation = latest_observation;
-                ekf_state   = latest_ekf_state;
+                ekf_state = latest_ekf_state;
             }
-            if (active_infer.load() != nullptr) infer_cv.notify_one();
+            if (active_infer.load() != nullptr)
+                infer_cv.notify_one();
 
             udp.send(observation);
 
-            const auto top_candidate = observation.candidates.empty()
-                ? nullptr : &observation.candidates.front();
-            const bool is_purple = observation.detected
-                && top_candidate != nullptr
-                && top_candidate->class_id == 0
-                && top_candidate->score >= 0.25F;
+            const auto top_candidate =
+                observation.candidates.empty() ? nullptr : &observation.candidates.front();
+            const bool is_purple = observation.detected && top_candidate != nullptr
+                                && top_candidate->class_id == 0 && top_candidate->score >= 0.25F;
             const float frame_dt_s = 1.0F / static_cast<float>(fmt.framerate);
             hit_progress.update(is_purple, frame_dt_s);
 
@@ -406,15 +418,15 @@ int main(int argc, char** argv) {
             }
 
             const bool guidance_ok = guidance && guidance->is_initialized();
-            const bool ekf_ok = ekf_enabled
-                ? (ekf_state.initialized && !ekf_state.lost)
-                : depth_valid;
-            rg::draw_guidance_status(display, guidance_ok, ekf_ok, depth_valid,
-                                     ekf_enabled ? guidance_msg
-                                     : std::string("EKF OFF (raw)"));
+            const bool ekf_ok =
+                ekf_enabled ? (ekf_state.initialized && !ekf_state.lost) : depth_valid;
+            rg::draw_guidance_status(
+                display, guidance_ok, ekf_ok, depth_valid,
+                ekf_enabled ? guidance_msg : std::string("EKF OFF (raw)"));
             rg::draw_hit_progress(display, hit_progress);
-            rg::draw_status_bar(display, streaming_active, recording_active, enemy_class_id,
-                                active_infer.load() == infer_trt.get());
+            rg::draw_status_bar(
+                display, streaming_active, recording_active, enemy_class_id,
+                active_infer.load() == infer_trt.get());
 
             if (recording_active && recorder)
                 recorder->record_frame(display);
@@ -424,8 +436,7 @@ int main(int argc, char** argv) {
                 if (cmd.starts_with("stream on")) {
                     if (!streamer.is_active()) {
                         streaming_active = streamer.start(
-                            fmt.width, fmt.height,
-                            static_cast<float>(fmt.framerate));
+                            fmt.width, fmt.height, static_cast<float>(fmt.framerate));
                         std::println("FIFO: streaming ON");
                     }
                 } else if (cmd.starts_with("stream off")) {
@@ -441,8 +452,7 @@ int main(int argc, char** argv) {
                             start_recording(fmt, record_opts));
                         recording_start = std::chrono::steady_clock::now();
                         recording_active = true;
-                        std::println("FIFO: recording ON → {}",
-                                     recorder->session_root().string());
+                        std::println("FIFO: recording ON → {}", recorder->session_root().string());
                     }
                 } else if (cmd.starts_with("record off")) {
                     if (recording_active) {
@@ -492,10 +502,12 @@ int main(int argc, char** argv) {
             }
 
             if (++loop_frames % 30 == 0) {
-                const auto elapsed = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - loop_t0).count();
-                std::println(stderr, "[main] {} frames {:.1f}s ({:.0f}fps)",
-                             loop_frames, elapsed, loop_frames / elapsed);
+                const auto elapsed =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - loop_t0)
+                        .count();
+                std::println(
+                    stderr, "[main] {} frames {:.1f}s ({:.0f}fps)", loop_frames, elapsed,
+                    loop_frames / elapsed);
                 loop_t0 = std::chrono::steady_clock::now();
                 loop_frames = 0;
             }
@@ -503,9 +515,11 @@ int main(int argc, char** argv) {
 
         running = false;
         infer_cv.notify_one();
-        if (infer_thread.joinable()) infer_thread.join();
+        if (infer_thread.joinable())
+            infer_thread.join();
 
-        if (g_stop_requested) std::println("Signal received, shutting down…");
+        if (g_stop_requested)
+            std::println("Signal received, shutting down…");
 
         if (recording_active)
             flush_recording(recorder, recording_start);
@@ -519,7 +533,8 @@ int main(int argc, char** argv) {
         close(fifo_fd);
         unlink(kFifoPath);
         capture.close();
-        if (config.debug.show_window) cv::destroyWindow(kWindowName);
+        if (config.debug.show_window)
+            cv::destroyWindow(kWindowName);
 
         return 0;
     } catch (const std::exception& e) {

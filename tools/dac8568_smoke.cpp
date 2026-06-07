@@ -29,10 +29,12 @@ struct Options {
 
 auto print_help() -> void {
     std::println(
-        "usage: tool_dac8568_smoke [--channel A-H] [--hold-ms N] [--voltage V] [--keep-last]\n"
+        "usage: tool_dac8568_smoke [--channel A-H] [--hold-ms N] [--voltage V] "
+        "[--keep-last]\n"
         "\n"
         "Default behavior:\n"
-        "  Runs a safe communication smoke sequence on one channel: 0V -> +1V -> -1V -> 0V\n"
+        "  Runs a safe communication smoke sequence on one channel: 0V -> +1V -> -1V -> "
+        "0V\n"
         "\n"
         "Options:\n"
         "  --channel A-H   Select DAC output channel (default: A)\n"
@@ -44,8 +46,8 @@ auto print_help() -> void {
         "Notes:\n"
         "  - Requires FT4222 USB-to-SPI hardware and a DAC8568 +/-10V board.\n"
         "  - DAC board must have its own 5V supply and share GND with FT4222.\n"
-        "  - This tool validates the write path; use a multimeter on the selected channel to confirm analog output."
-    );
+        "  - This tool validates the write path; use a multimeter on the selected channel "
+        "to confirm analog output.");
 }
 
 auto parse_channel(std::string_view text) -> std::expected<uint8_t, std::string> {
@@ -129,25 +131,21 @@ auto parse_options(int argc, char** argv) -> std::expected<Options, std::string>
     return options;
 }
 
-auto channel_name(uint8_t channel) -> char {
-    return static_cast<char>('A' + channel);
-}
+auto channel_name(uint8_t channel) -> char { return static_cast<char>('A' + channel); }
 
-auto clamp_voltage(double voltage) -> double {
-    return std::clamp(voltage, -10.0, 10.0);
-}
+auto clamp_voltage(double voltage) -> double { return std::clamp(voltage, -10.0, 10.0); }
 
 auto voltage_to_code(double voltage) -> uint16_t {
     const double clipped = clamp_voltage(voltage);
-    const double code = ((clipped + 10.0) / 20.0) * static_cast<double>(std::numeric_limits<uint16_t>::max());
+    const double code =
+        ((clipped + 10.0) / 20.0) * static_cast<double>(std::numeric_limits<uint16_t>::max());
     return static_cast<uint16_t>(std::lround(code));
 }
 
-auto build_payload(uint8_t control, uint8_t address, uint16_t data, uint8_t feature = 0) -> uint32_t {
-    return (static_cast<uint32_t>(control) << 24)
-         | (static_cast<uint32_t>(address) << 20)
-         | (static_cast<uint32_t>(data) << 4)
-         | static_cast<uint32_t>(feature);
+auto build_payload(uint8_t control, uint8_t address, uint16_t data, uint8_t feature = 0)
+    -> uint32_t {
+    return (static_cast<uint32_t>(control) << 24) | (static_cast<uint32_t>(address) << 20)
+         | (static_cast<uint32_t>(data) << 4) | static_cast<uint32_t>(feature);
 }
 
 auto payload_bytes(uint32_t payload) -> std::array<uint8_t, 4> {
@@ -164,9 +162,7 @@ auto write_payload(rmcs_laser_guidance::Ft4222Spi& spi, uint32_t payload, std::s
 
     const auto bytes = payload_bytes(payload);
     std::println(
-        "{}: payload=0x{:08X} bytes=[0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}]",
-        label,
-        payload,
+        "{}: payload=0x{:08X} bytes=[0x{:02X}, 0x{:02X}, 0x{:02X}, 0x{:02X}]", label, payload,
         bytes[0], bytes[1], bytes[2], bytes[3]);
     return spi.write(bytes.data(), static_cast<uint16_t>(bytes.size()));
 }
@@ -182,17 +178,10 @@ auto write_voltage(rmcs_laser_guidance::Ft4222Spi& spi, uint8_t channel, double 
 
     const double clipped = clamp_voltage(voltage);
     const uint16_t code = voltage_to_code(clipped);
-    const uint32_t payload = build_payload(
-        0x03,
-        channel,
-        code,
-        0x00);
+    const uint32_t payload = build_payload(0x03, channel, code, 0x00);
 
     std::println(
-        "channel={} target_voltage={:.3f}V code=0x{:04X}",
-        channel_name(channel),
-        clipped,
-        code);
+        "channel={} target_voltage={:.3f}V code=0x{:04X}", channel_name(channel), clipped, code);
 
     return write_payload(spi, payload, "write_voltage");
 }
@@ -211,9 +200,9 @@ auto run_single_voltage(rmcs_laser_guidance::Ft4222Spi& spi, const Options& opti
 
     if (options.keep_last) {
         std::println(
-            "kept channel {} at {:.3f}V; measure it now with a multimeter and reset manually when done",
-            channel_name(options.channel),
-            clamp_voltage(options.single_voltage));
+            "kept channel {} at {:.3f}V; measure it now with a multimeter and reset "
+            "manually when done",
+            channel_name(options.channel), clamp_voltage(options.single_voltage));
         return {};
     }
 
@@ -231,11 +220,8 @@ auto run_sequence(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
     for (std::size_t i = 0; i < sequence.size(); ++i) {
         const double voltage = sequence[i];
         std::println(
-            "step {}/{}: set channel {} to {:.3f}V and observe the output",
-            i + 1,
-            sequence.size(),
-            channel_name(options.channel),
-            voltage);
+            "step {}/{}: set channel {} to {:.3f}V and observe the output", i + 1, sequence.size(),
+            channel_name(options.channel), voltage);
 
         if (auto result = write_voltage(spi, options.channel, voltage); !result)
             return result;
@@ -246,7 +232,8 @@ auto run_sequence(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
     }
 
     std::println(
-        "sequence finished; expected multimeter readings followed 0V -> +1V -> -1V -> 0V on channel {}",
+        "sequence finished; expected multimeter readings followed 0V -> +1V -> -1V -> 0V "
+        "on channel {}",
         channel_name(options.channel));
     return {};
 }
@@ -280,11 +267,10 @@ int main(int argc, char** argv) {
         }
 
         std::println(
-            "opened FT4222 on CS{} with estimated SCLK {} Hz",
-            0,
-            spi->negotiated_clock_hz());
+            "opened FT4222 on CS{} with estimated SCLK {} Hz", 0, spi->negotiated_clock_hz());
         std::println(
-            "selected channel {} on DAC8568; ensure the DAC board has independent 5V power and shared GND",
+            "selected channel {} on DAC8568; ensure the DAC board has independent 5V "
+            "power and shared GND",
             channel_name(options->channel));
 
         if (auto result = write_internal_reference_enable(*spi); !result) {
@@ -292,9 +278,8 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        const auto result = options->has_single_voltage
-            ? run_single_voltage(*spi, *options)
-            : run_sequence(*spi, *options);
+        const auto result = options->has_single_voltage ? run_single_voltage(*spi, *options)
+                                                        : run_sequence(*spi, *options);
         if (!result) {
             std::println(stderr, "tool_dac8568_smoke: {}", result.error());
             return 1;

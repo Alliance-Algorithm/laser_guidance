@@ -10,7 +10,8 @@ namespace {
 
 using namespace rmcs_laser_guidance;
 
-auto make_k_matrix(double fx = 2000.0, double fy = 2000.0, double cx = 960.0, double cy = 540.0) -> cv::Mat {
+auto make_k_matrix(double fx = 2000.0, double fy = 2000.0, double cx = 960.0, double cy = 540.0)
+    -> cv::Mat {
     cv::Mat K = cv::Mat::eye(3, 3, CV_64F);
     K.at<double>(0, 0) = fx;
     K.at<double>(1, 1) = fy;

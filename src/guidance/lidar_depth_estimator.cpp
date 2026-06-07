@@ -10,15 +10,13 @@ namespace rmcs_laser_guidance {
 namespace {
 
 auto bbox_contains(const cv::Rect2f& bbox, const cv::Point2f& p) -> bool {
-    return p.x >= bbox.x && p.x <= bbox.x + bbox.width
-        && p.y >= bbox.y && p.y <= bbox.y + bbox.height;
+    return p.x >= bbox.x && p.x <= bbox.x + bbox.width && p.y >= bbox.y
+        && p.y <= bbox.y + bbox.height;
 }
 
 auto sqr(float x) -> float { return x * x; }
 
-auto clamp01(float x) -> float {
-    return std::clamp(x, 0.0F, 1.0F);
-}
+auto clamp01(float x) -> float { return std::clamp(x, 0.0F, 1.0F); }
 
 } // namespace
 
@@ -46,7 +44,8 @@ auto LidarDepthEstimator::estimate(const ModelCandidate& candidate, const LidarF
 
     const auto target = choose_target_cluster(candidate, clusters);
     update_debug_info(roi_indices.size(), clusters, target);
-    if (!target) return std::nullopt;
+    if (!target)
+        return std::nullopt;
     if (target->mean_depth_mm <= 0.0F || target->mean_depth_mm > config_.lidar_max_depth_mm) {
         return std::nullopt;
     }
@@ -58,9 +57,8 @@ auto LidarDepthEstimator::last_debug_info() const -> DebugInfo {
     return last_debug_;
 }
 
-auto LidarDepthEstimator::collect_roi_points(const ModelCandidate& candidate,
-                                             const LidarFrame& frame) const
-    -> std::vector<std::size_t> {
+auto LidarDepthEstimator::collect_roi_points(
+    const ModelCandidate& candidate, const LidarFrame& frame) const -> std::vector<std::size_t> {
     std::vector<std::size_t> indices;
     indices.reserve(frame.points.size());
 
@@ -72,31 +70,35 @@ auto LidarDepthEstimator::collect_roi_points(const ModelCandidate& candidate,
 
     for (std::size_t i = 0; i < frame.points.size(); ++i) {
         const auto& point = frame.points[i];
-        if (!std::isfinite(point.z_mm) || point.z_mm <= 0.0F || point.z_mm > config_.lidar_max_depth_mm) {
+        if (!std::isfinite(point.z_mm) || point.z_mm <= 0.0F
+            || point.z_mm > config_.lidar_max_depth_mm) {
             continue;
         }
-        if (point.col < 0 || point.row < 0) continue;
+        if (point.col < 0 || point.row < 0)
+            continue;
 
-        const cv::Point2f image_point {
+        const cv::Point2f image_point{
             static_cast<float>(point.col),
             static_cast<float>(point.row),
         };
-        if (!bbox_contains(roi, image_point)) continue;
+        if (!bbox_contains(roi, image_point))
+            continue;
         indices.push_back(i);
     }
 
     return indices;
 }
 
-auto LidarDepthEstimator::cluster_points(const LidarFrame& frame,
-                                         const std::vector<std::size_t>& roi_indices) const
+auto LidarDepthEstimator::cluster_points(
+    const LidarFrame& frame, const std::vector<std::size_t>& roi_indices) const
     -> std::vector<ClusterStats> {
     std::vector<ClusterStats> clusters;
     std::vector<bool> visited(roi_indices.size(), false);
     const float tolerance_sq = sqr(config_.lidar_cluster_tolerance_mm);
 
     for (std::size_t seed = 0; seed < roi_indices.size(); ++seed) {
-        if (visited[seed]) continue;
+        if (visited[seed])
+            continue;
         visited[seed] = true;
 
         std::queue<std::size_t> q;
@@ -132,12 +134,14 @@ auto LidarDepthEstimator::cluster_points(const LidarFrame& frame,
             depth_values.push_back(point.z_mm);
 
             for (std::size_t other = 0; other < roi_indices.size(); ++other) {
-                if (visited[other]) continue;
+                if (visited[other])
+                    continue;
                 const auto& neighbor = frame.points[roi_indices[other]];
                 const float dist_sq = sqr(point.x_mm - neighbor.x_mm)
                                     + sqr(point.y_mm - neighbor.y_mm)
                                     + sqr(point.z_mm - neighbor.z_mm);
-                if (dist_sq > tolerance_sq) continue;
+                if (dist_sq > tolerance_sq)
+                    continue;
                 visited[other] = true;
                 q.push(other);
             }
@@ -168,10 +172,11 @@ auto LidarDepthEstimator::cluster_points(const LidarFrame& frame,
     return clusters;
 }
 
-auto LidarDepthEstimator::choose_target_cluster(const ModelCandidate& candidate,
-                                                const std::vector<ClusterStats>& clusters) const
+auto LidarDepthEstimator::choose_target_cluster(
+    const ModelCandidate& candidate, const std::vector<ClusterStats>& clusters) const
     -> std::optional<ClusterStats> {
-    if (clusters.empty()) return std::nullopt;
+    if (clusters.empty())
+        return std::nullopt;
 
     const float bbox_center_col = candidate.bbox.x + candidate.bbox.width * 0.5F;
     const float bbox_center_row = candidate.bbox.y + candidate.bbox.height * 0.5F;
@@ -184,8 +189,8 @@ auto LidarDepthEstimator::choose_target_cluster(const ModelCandidate& candidate,
 
     for (const auto& cluster : clusters) {
         ClusterStats scored = cluster;
-        scored.center_dist_px = std::hypot(scored.mean_col - bbox_center_col,
-                                           scored.mean_row - bbox_center_row);
+        scored.center_dist_px =
+            std::hypot(scored.mean_col - bbox_center_col, scored.mean_row - bbox_center_row);
         const float size_x = scored.max_x_mm - scored.min_x_mm;
         const float size_y = scored.max_y_mm - scored.min_y_mm;
         const float size_z = scored.max_z_mm - scored.min_z_mm;
@@ -210,19 +215,16 @@ auto LidarDepthEstimator::choose_target_cluster(const ModelCandidate& candidate,
 
         const float center_score = 1.0F - clamp01(scored.center_dist_px / max_center_dist_px);
         const float thin_score = 1.0F - clamp01(size_z / std::max(150.0F, target_span_mm * 2.5F));
-        const float size_score = 1.0F - clamp01(std::fabs(plane_extent - target_span_mm)
-                                                / std::max(1.0F, target_span_mm));
+        const float size_score =
+            1.0F
+            - clamp01(std::fabs(plane_extent - target_span_mm) / std::max(1.0F, target_span_mm));
         const float depth_score = 1.0F - clamp01(scored.depth_std_mm / 150.0F);
-        const float density = static_cast<float>(scored.point_count)
-                            / std::max(1.0F, size_x * size_y);
+        const float density =
+            static_cast<float>(scored.point_count) / std::max(1.0F, size_x * size_y);
         const float density_score = clamp01(density * 4000.0F);
         const float intensity_score = clamp01(scored.mean_intensity / 255.0F);
-        scored.score = center_score * 0.35F
-                     + thin_score * 0.20F
-                     + size_score * 0.20F
-                     + depth_score * 0.15F
-                     + density_score * 0.07F
-                     + intensity_score * 0.03F;
+        scored.score = center_score * 0.35F + thin_score * 0.20F + size_score * 0.20F
+                     + depth_score * 0.15F + density_score * 0.07F + intensity_score * 0.03F;
 
         if (scored.score > best_score) {
             second_score = best_score;
@@ -233,8 +235,10 @@ auto LidarDepthEstimator::choose_target_cluster(const ModelCandidate& candidate,
         }
     }
 
-    if (!best) return std::nullopt;
-    if (best->score < 0.60F) return std::nullopt;
+    if (!best)
+        return std::nullopt;
+    if (best->score < 0.60F)
+        return std::nullopt;
     if (second_score > std::numeric_limits<float>::lowest()
         && (best->score - second_score) < 0.10F) {
         return std::nullopt;
@@ -243,16 +247,16 @@ auto LidarDepthEstimator::choose_target_cluster(const ModelCandidate& candidate,
     return best;
 }
 
-auto LidarDepthEstimator::update_debug_info(std::size_t roi_points,
-                                            const std::vector<ClusterStats>& clusters,
-                                            const std::optional<ClusterStats>& target) const -> void {
+auto LidarDepthEstimator::update_debug_info(
+    std::size_t roi_points, const std::vector<ClusterStats>& clusters,
+    const std::optional<ClusterStats>& target) const -> void {
     DebugInfo debug;
     debug.roi_points = roi_points;
     debug.cluster_count = clusters.size();
     if (target) {
         debug.has_target = true;
-        debug.target_depth_mm = target->median_depth_mm > 0.0F
-            ? target->median_depth_mm : target->mean_depth_mm;
+        debug.target_depth_mm =
+            target->median_depth_mm > 0.0F ? target->median_depth_mm : target->mean_depth_mm;
         debug.target_score = target->score;
         debug.target_center_dist_px = target->center_dist_px;
         debug.target_size_x_mm = target->max_x_mm - target->min_x_mm;
@@ -260,18 +264,14 @@ auto LidarDepthEstimator::update_debug_info(std::size_t roi_points,
         debug.target_size_z_mm = target->max_z_mm - target->min_z_mm;
         debug.target_depth_std_mm = target->depth_std_mm;
         debug.summary = std::format(
-            "ROI {} pts, clusters={}, target score={:.2f} depth={:.0f}mm center={:.1f}px size=({:.0f},{:.0f},{:.0f}) std={:.0f}",
-            roi_points,
-            clusters.size(),
-            target->score,
-            debug.target_depth_mm,
-            target->center_dist_px,
-            debug.target_size_x_mm,
-            debug.target_size_y_mm,
-            debug.target_size_z_mm,
-            debug.target_depth_std_mm);
+            "ROI {} pts, clusters={}, target score={:.2f} depth={:.0f}mm "
+            "center={:.1f}px size=({:.0f},{:.0f},{:.0f}) std={:.0f}",
+            roi_points, clusters.size(), target->score, debug.target_depth_mm,
+            target->center_dist_px, debug.target_size_x_mm, debug.target_size_y_mm,
+            debug.target_size_z_mm, debug.target_depth_std_mm);
     } else {
-        debug.summary = std::format("ROI {} pts, clusters={}, no target cluster", roi_points, clusters.size());
+        debug.summary =
+            std::format("ROI {} pts, clusters={}, no target cluster", roi_points, clusters.size());
     }
     std::scoped_lock lock(debug_mutex_);
     last_debug_ = std::move(debug);

@@ -4,8 +4,8 @@
 
 #include <opencv2/core.hpp>
 
-#include "guidance/depth_estimator.hpp"
 #include "config.hpp"
+#include "guidance/depth_estimator.hpp"
 #include "types.hpp"
 
 namespace {
@@ -15,11 +15,13 @@ using namespace rmcs_laser_guidance;
 auto make_test_config(float target_width_mm = 150.0F) -> GuidanceConfig {
     GuidanceConfig cfg;
     cfg.enabled = true;
-    cfg.target_geometry = {{ .class_id = 0, .width_mm = target_width_mm, .height_mm = target_width_mm }};
+    cfg.target_geometry = {
+        {.class_id = 0, .width_mm = target_width_mm, .height_mm = target_width_mm}};
     return cfg;
 }
 
-auto make_k_matrix(double fx = 2000.0, double fy = 2000.0, double cx = 960.0, double cy = 540.0) -> cv::Mat {
+auto make_k_matrix(double fx = 2000.0, double fy = 2000.0, double cx = 960.0, double cy = 540.0)
+    -> cv::Mat {
     cv::Mat K = cv::Mat::eye(3, 3, CV_64F);
     K.at<double>(0, 0) = fx;
     K.at<double>(1, 1) = fy;

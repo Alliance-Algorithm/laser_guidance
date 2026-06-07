@@ -1,12 +1,12 @@
-#include <filesystem>
 #include <cstdio>
+#include <filesystem>
 #include <print>
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "example_support.hpp"
 #include "config.hpp"
+#include "example_support.hpp"
 #include "pipeline.hpp"
 
 namespace {
@@ -35,9 +35,7 @@ int main(int argc, char** argv) {
         const auto observation = pipeline.process(frame);
 
         std::println(
-            "detected={} center=({}, {})",
-            observation.detected ? 1 : 0,
-            observation.center.x,
+            "detected={} center=({}, {})", observation.detected ? 1 : 0, observation.center.x,
             observation.center.y);
 
         if (config.debug.show_window) {

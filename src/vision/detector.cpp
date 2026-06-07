@@ -31,9 +31,7 @@ auto contour_center(const std::vector<cv::Point>& contour) -> cv::Point2f {
 
 } // namespace
 
-Detector::Detector(const Config& config) {
-    (void)config;
-}
+Detector::Detector(const Config& config) { (void)config; }
 
 auto Detector::detect(const Frame& frame) const -> TargetObservation {
     if (frame.image.empty())
@@ -60,8 +58,8 @@ auto Detector::detect(const Frame& frame) const -> TargetObservation {
     if (contours.empty())
         return {};
 
-    const auto largest = std::max_element(
-        contours.begin(), contours.end(), [](const auto& lhs, const auto& rhs) {
+    const auto largest =
+        std::max_element(contours.begin(), contours.end(), [](const auto& lhs, const auto& rhs) {
             return cv::contourArea(lhs) < cv::contourArea(rhs);
         });
 

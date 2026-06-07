@@ -1,13 +1,13 @@
-#include <filesystem>
 #include <cstdio>
+#include <filesystem>
 #include <print>
 
 #include <opencv2/highgui.hpp>
 
-#include "example_support.hpp"
 #include "config.hpp"
-#include "pipeline.hpp"
 #include "core/replay.hpp"
+#include "example_support.hpp"
+#include "pipeline.hpp"
 #include "streaming/rtp_streamer.hpp"
 
 namespace {
@@ -26,7 +26,7 @@ auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
 
 } // namespace
 
-    int main(int argc, char** argv) {
+int main(int argc, char** argv) {
     try {
         const auto replay_dir = resolve_replay_dir(argc, argv);
         const auto config_path = resolve_config_path(argc, argv);
@@ -42,9 +42,7 @@ auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
             const auto observation = pipeline.process(frame);
 
             std::println(
-                "frame={} detected={} brightness={}",
-                frame_info.index,
-                observation.detected,
+                "frame={} detected={} brightness={}", frame_info.index, observation.detected,
                 observation.brightness);
 
             cv::Mat display = frame.image.clone();

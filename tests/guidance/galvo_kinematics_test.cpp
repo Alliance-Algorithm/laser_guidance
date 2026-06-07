@@ -2,8 +2,8 @@
 #include <cstdlib>
 #include <print>
 
-#include "guidance/galvo_kinematics.hpp"
 #include "config.hpp"
+#include "guidance/galvo_kinematics.hpp"
 
 namespace {
 
@@ -12,9 +12,16 @@ using namespace rmcs_laser_guidance;
 constexpr float kRadToDeg = 180.0F / 3.14159265358979323846F;
 constexpr float kEps = 0.1F;
 
-#define CHECK(cond) do { if (!(cond)) { std::println("  FAIL: " #cond); std::abort(); } } while(0)
+#define CHECK(cond)                         \
+    do {                                    \
+        if (!(cond)) {                      \
+            std::println("  FAIL: " #cond); \
+            std::abort();                   \
+        }                                   \
+    } while (0)
 
-auto make_test_config(float tx = 0.0F, float ty = 0.0F, float tz = 0.0F, float d = 15.0F) -> GuidanceConfig {
+auto make_test_config(float tx = 0.0F, float ty = 0.0F, float tz = 0.0F, float d = 15.0F)
+    -> GuidanceConfig {
     GuidanceConfig cfg;
     cfg.enabled = true;
     cfg.t_x_mm = tx;
@@ -38,7 +45,8 @@ void test_center_point() {
 void test_positive_x() {
     auto cfg = make_test_config();
     GalvoKinematics kin(cfg);
-    float z = 10000.0F; float x = 500.0F;
+    float z = 10000.0F;
+    float x = 500.0F;
     auto angles = kin.compute({x, 0.0F, z});
     CHECK(angles.valid);
     CHECK(angles.theta_x_optical_deg > 0.0F);
@@ -49,7 +57,8 @@ void test_positive_x() {
 void test_positive_y() {
     auto cfg = make_test_config();
     GalvoKinematics kin(cfg);
-    float z = 10000.0F; float y = 500.0F;
+    float z = 10000.0F;
+    float y = 500.0F;
     auto angles = kin.compute({0.0F, y, z});
     CHECK(angles.valid);
     CHECK(std::abs(angles.theta_x_optical_deg) < kEps);
@@ -88,8 +97,9 @@ void test_mirror_separation_effect() {
     auto a_with = kin_with.compute({0.0F, 200.0F, 1000.0F});
     CHECK(a_no.valid && a_with.valid);
     CHECK(a_with.theta_y_optical_deg < a_no.theta_y_optical_deg);
-    std::println("  mirror_separation_effect: d=0→{}deg d=100→{}deg",
-                a_no.theta_y_optical_deg, a_with.theta_y_optical_deg);
+    std::println(
+        "  mirror_separation_effect: d=0→{}deg d=100→{}deg", a_no.theta_y_optical_deg,
+        a_with.theta_y_optical_deg);
 }
 
 } // namespace

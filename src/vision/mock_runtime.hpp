@@ -20,18 +20,18 @@
 namespace rmcs_laser_guidance {
 
 struct MockRuntimeConfig {
-    std::chrono::milliseconds capture_period { 1 };
-    std::chrono::milliseconds worker_start_delay { 0 };
-    std::chrono::milliseconds inference_latency { 5 };
-    StaleFramePolicy stale_policy { };
+    std::chrono::milliseconds capture_period{1};
+    std::chrono::milliseconds worker_start_delay{0};
+    std::chrono::milliseconds inference_latency{5};
+    StaleFramePolicy stale_policy{};
     std::size_t max_capture_frames = 0;
-    std::chrono::milliseconds synthetic_capture_age { 0 };
-    std::vector<bool> purple_sequence { true, true, true, false, false, false, false, false };
+    std::chrono::milliseconds synthetic_capture_age{0};
+    std::vector<bool> purple_sequence{true, true, true, false, false, false, false, false};
 };
 
 struct MockRuntimeObservation {
     std::uint64_t sequence = 0;
-    RuntimeMetricLogSample metrics { };
+    RuntimeMetricLogSample metrics{};
     HitState hit_state = HitState::None;
     bool purple = false;
 };
@@ -62,28 +62,26 @@ public:
     MockLatestFrameRuntime(MockLatestFrameRuntime&&) = delete;
     auto operator=(MockLatestFrameRuntime&&) -> MockLatestFrameRuntime& = delete;
 
-    ~MockLatestFrameRuntime() {
-        stop();
-    }
+    ~MockLatestFrameRuntime() { stop(); }
 
     auto start() -> void {
         if (started_.exchange(true))
             throw std::runtime_error("MockLatestFrameRuntime already started");
 
-        capture_thread_ = std::jthread([this](const std::stop_token& stop_token) {
-            capture_loop(stop_token);
-        });
-        worker_thread_ = std::jthread([this](const std::stop_token& stop_token) {
-            worker_loop(stop_token);
-        });
+        capture_thread_ =
+            std::jthread([this](const std::stop_token& stop_token) { capture_loop(stop_token); });
+        worker_thread_ =
+            std::jthread([this](const std::stop_token& stop_token) { worker_loop(stop_token); });
     }
 
     auto stop() -> void {
         if (!started_.exchange(false))
             return;
 
-        if (capture_thread_.joinable()) capture_thread_.request_stop();
-        if (worker_thread_.joinable()) worker_thread_.request_stop();
+        if (capture_thread_.joinable())
+            capture_thread_.request_stop();
+        if (worker_thread_.joinable())
+            worker_thread_.request_stop();
 
         capture_queue_.shutdown();
         debug_recording_queue_.shutdown();
@@ -110,7 +108,7 @@ private:
     auto capture_loop(const std::stop_token& stop_token) -> void {
         while (!stop_token.stop_requested()) {
             const std::uint64_t next_sequence = next_capture_sequence_.fetch_add(1) + 1;
-            Frame frame {
+            Frame frame{
                 .image = {},
                 .timestamp = Clock::now() - config_.synthetic_capture_age,
             };
@@ -149,7 +147,7 @@ private:
             const auto worker_start_time = Clock::now();
             record_worker_pop();
 
-            const RuntimeMetricSample worker_start_metrics {
+            const RuntimeMetricSample worker_start_metrics{
                 .observation_age_ms = age_ms(frame.timestamp, worker_start_time),
                 .input_age_at_worker_start_ms = age_ms(frame.timestamp, worker_start_time),
                 .input_age_at_infer_start_ms = age_ms(frame.timestamp, worker_start_time),
@@ -162,8 +160,9 @@ private:
 
             std::this_thread::sleep_for(config_.worker_start_delay);
             const auto infer_start_time = Clock::now();
-            const RuntimeMetricLogSample before_inference = config_.stale_policy.make_before_inference_sample(
-                frame.timestamp, worker_start_time, infer_start_time);
+            const RuntimeMetricLogSample before_inference =
+                config_.stale_policy.make_before_inference_sample(
+                    frame.timestamp, worker_start_time, infer_start_time);
             if (before_inference.stale_reason != StaleReason::none) {
                 record_stale_before();
                 continue;
@@ -171,8 +170,9 @@ private:
 
             std::this_thread::sleep_for(config_.inference_latency);
             const auto publish_time = Clock::now();
-            const RuntimeMetricLogSample after_publish = config_.stale_policy.make_after_publish_sample(
-                frame.timestamp, worker_start_time, infer_start_time, publish_time);
+            const RuntimeMetricLogSample after_publish =
+                config_.stale_policy.make_after_publish_sample(
+                    frame.timestamp, worker_start_time, infer_start_time, publish_time);
             if (after_publish.stale_reason != StaleReason::none) {
                 record_stale_after();
                 continue;
@@ -217,7 +217,7 @@ private:
         const bool purple = next_purple_value();
         const HitState hit_state = hit_state_machine_.update(purple);
 
-        const MockRuntimeObservation observation {
+        const MockRuntimeObservation observation{
             .sequence = next_observation_sequence_.fetch_add(1) + 1,
             .metrics = metrics,
             .hit_state = hit_state,
@@ -250,7 +250,7 @@ private:
     std::atomic<std::uint64_t> next_detection_sequence_ = 0;
     std::atomic<std::uint64_t> next_observation_sequence_ = 0;
     mutable std::mutex mutex_;
-    MockRuntimeSnapshot snapshot_ { };
+    MockRuntimeSnapshot snapshot_{};
     std::vector<MockRuntimeObservation> observations_;
 };
 

@@ -67,8 +67,8 @@ auto ReplayRecorder::flush_manifest() const -> void {
 }
 
 auto timestamp_to_nanoseconds(const Clock::time_point& timestamp) -> std::int64_t {
-    const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        timestamp.time_since_epoch());
+    const auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch());
     return duration.count();
 }
 
@@ -97,11 +97,12 @@ auto load_replay_dataset(const std::filesystem::path& root) -> ReplayDataset {
         if (fields.size() != 3)
             throw std::runtime_error("invalid replay manifest row");
 
-        dataset.frames.push_back(ReplayFrameInfo{
-            .index = static_cast<std::size_t>(std::stoull(fields[0])),
-            .timestamp_ns = std::stoll(fields[1]),
-            .relative_image_path = fields[2],
-        });
+        dataset.frames.push_back(
+            ReplayFrameInfo{
+                .index = static_cast<std::size_t>(std::stoull(fields[0])),
+                .timestamp_ns = std::stoll(fields[1]),
+                .relative_image_path = fields[2],
+            });
     }
 
     return dataset;
