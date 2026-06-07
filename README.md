@@ -143,9 +143,7 @@ echo "quit"            > /tmp/laser_cmd   # 优雅退出
 laser_guidance/
 ├── include/               # 公开 API
 │   ├── config.hpp         # YAML 配置加载
-│   ├── types.hpp          # Frame, TargetObservation
-│   ├── pipeline.hpp       # 统一视觉入口
-│   └── laser_guidance.hpp
+│   └── types.hpp          # Frame, TargetObservation
 ├── src/
 │   ├── core/              # 核心模块
 │   ├── vision/            # 检测/推理模块

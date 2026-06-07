@@ -7,12 +7,12 @@
 - 视觉引导云台
 - 使激光实时命中移动无人机搭载的特征靶
 
-当前阶段仍然只是视觉最小骨架，已经落地的能力有：
+当前阶段已经落地的能力有：
 
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
-- `Config` / `Frame` / `TargetObservation` / `Pipeline`
-- 内部 `Detector` / `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `Replay` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker` / `HitProgress` / `Ft4222Spi` / `GuidancePipeline` / `VoltageMapper` / `GalvoDriver` / `CameraProjection` / `DepthEstimator`
+- `Config` / `Frame` / `TargetObservation`
+- `ModelInfer` / `ModelRuntime` / `ModelAdapter` / `TensorRTEngine` / `TrainingData` / `DebugRenderer` / `V4l2Capture` / `RtpStreamer` / `UdpSender` / `EkfTracker` / `HitProgress` / `FreshnessQueue` / `RuntimeMetrics` / `Ft4222Spi` / `GuidancePipeline` / `VoltageMapper` / `GalvoDriver` / `CameraProjection` / `DepthEstimator` / `Replay` (load only)
 - 自动测试与工具运行入口
 - 比赛模式统一守护进程 `tool_competition`（预览+引导+录制融合）
 - ONNX + TensorRT 双推理后端，运行时热切换
@@ -31,9 +31,9 @@
 - `include/`
   - 扁平 public API，仅放稳定对外头文件。
 - `src/core/`
-  - 核心模块：`Config`、`Pipeline`、`FrameFormat`、`DebugRenderer`、`Replay`。
+  - 核心模块：`Config`、`FrameFormat`、`DebugRenderer`、`Replay`。
 - `src/vision/`
-  - 视觉/推理模块：`Detector`、`ModelInfer`、`ModelRuntime`、`ModelAdapter`、`TensorRTEngine`、`TrainingData`。
+  - 视觉/推理模块：`ModelInfer`、`ModelRuntime`、`ModelAdapter`、`TensorRTEngine`、`TrainingData`。
 - `src/capture/`
   - 视频采集模块：`V4l2Capture`。
 - `src/streaming/`
@@ -42,8 +42,10 @@
   - 跟踪/状态模块：`EkfTracker`、`HitState`、`HitProgress`、`FreshnessQueue`、`RuntimeMetrics`。
 - `src/io/`
   - 硬件 I/O 模块：`Ft4222Spi`、LibFT4222 头文件。
+- `src/guidance/`
+  - 引导管线：`GuidancePipeline`、`VoltageMapper`、`GalvoDriver`、`CameraProjection`、`DepthEstimator`。
 - `tools/`
-  - 可执行工具入口（原 `examples/`）。
+  - 可执行工具入口。
 - `tests/`
   - 自动化验证，按模块分子目录（`core/`、`vision/`、`tracking/`），文件名统一为 `*_test.cpp`。
 - `test_data/`
@@ -59,15 +61,12 @@ public：
 
 - `include/config.hpp`
 - `include/types.hpp`
-- `include/pipeline.hpp`
-- `include/laser_guidance.hpp`
 
 internal：
 
 - `src/core/frame_format.hpp`
 - `src/core/debug_renderer.hpp`
 - `src/core/replay.hpp`
-- `src/vision/detector.hpp`
 - `src/vision/model_runtime.hpp`
 - `src/vision/model_adapter.hpp`
 - `src/vision/model_infer.hpp`
@@ -84,10 +83,10 @@ internal：
 
 设计边界：
 
-- `Pipeline` 是唯一对外视觉入口。
-- `Pipeline` 通过 `Details` 收束内部依赖，并在构造时选择视觉后端。
 - `Frame` / `TargetObservation` 仍然公开 `OpenCV` 类型。
 - `tools/` 与白盒 tests 可以直接使用 `src/` 下的内部模块头，但这些头不算 public API。
+- 比赛入口 `tool_competition` 直接使用 `ModelInfer` + `DebugRenderer`，不再经过中间抽象层。
+- 帧传递使用 `LatestValue<T>` freshness 队列，推理线程消费时检查 `StaleFramePolicy` 过期判定。
 
 ## 精要框架流图
 
@@ -97,8 +96,9 @@ config/direct_voltage_run.yaml (比赛) / config/default.yaml
 -> load_config()
 -> Config
 
-V4l2Capture / synthetic frame / replay frame
+V4l2Capture
 -> Frame {image, timestamp}
+-> LatestValue 帧队列 (丢弃积压旧帧)
 -> ModelInfer (ONNX or TensorRT, dual-backend hot-switch)
 -> ModelRuntime + ModelAdapter (ONNX) / TensorRTEngine
 -> TargetObservation + candidates
@@ -117,7 +117,8 @@ tool_competition
 -> V4l2Capture.open()
 -> ModelInfer (ONNX + TensorRT dual load)
 -> Ft4222Spi.open() -> GuidancePipeline
--> read_frame() -> async infer -> EKF/raw -> guidance -> overlay
+-> read_frame() -> LatestValue push -> async infer -> StaleFramePolicy freshness check
+-> EKF/raw -> guidance -> overlay
 -> RtpStreamer.push() + UdpSender + VideoShm + Recording
 -> FIFO control: stream/record/enemy/backend/ekf/quit
 ```
@@ -132,21 +133,20 @@ tool_competition
 tool_preview
 -> V4l2Capture.open()
 -> read_frame()
--> Pipeline.process()
--> overlay + preview
+-> ModelInfer process + EKF
+-> overlay + preview + RTP + SHM
 
-tool_capture
+tool_guidance
 -> V4l2Capture.open()
--> read_frame()
--> ReplayRecorder.record_frame()
--> manifest.csv + png frames
+-> ModelInfer + Ft4222Spi + GuidancePipeline
+-> calib mode / tracking mode
+-> WASD micro-adjust + recording
 
 tool_record
 -> V4l2Capture.open()
 -> read_frame()
 -> VideoSessionRecorder.record_frame()
 -> raw.mp4 + session.yaml + notes.txt
--> direct upload to external platform or optional export_training_frames
 
 tool_transcode
 -> load session.yaml
@@ -156,13 +156,15 @@ tool_transcode
 tool_export
 -> load session.yaml
 -> open raw.mp4
--> export images/train|val|test + export manifest (optional fallback)
+-> export images/train|val|test + export manifest
 
-tool_replay
--> load_replay_dataset()
--> load frame png
--> Pipeline.process()
--> stdout + optional preview
+tool_model_infer
+-> load replay dataset
+-> ModelInfer on single frame
+-> print metadata + candidates
+
+tool_calibrate / tool_calib_solve / tool_dac8568_smoke / tool_galvo_smoke
+-> hardware bring-up / calibration tools
 
 *_test.cpp
 -> load config / synthesize frame / load sample data
@@ -173,11 +175,12 @@ tool_replay
 ### 当前构建关系
 ```text
 rmcs_laser_guidance_core
--> config / detector / model_runtime / model_adapter / tensorrt_engine / training_data
-   / renderer / replay / v4l2 / rtp_streamer / udp_sender / video_shm
+-> config / debug_renderer / replay / frame_format
+   / model_runtime / model_adapter / model_infer / tensorrt_engine / training_data
+   / v4l2 / rtp_streamer / udp_sender / video_shm
    / ekf_tracker / hit_state / hit_progress / freshness_queue / runtime_metrics
    / ft4222_spi / guidance_pipeline / voltage_mapper / galvo_driver / galvo_kinematics
-   / camera_projection / depth_estimator / pipeline
+   / camera_projection / depth_estimator / lidar_depth_estimator / ws30_receiver
 
 tool_*
 -> rmcs_laser_guidance_core
@@ -190,9 +193,10 @@ tool_*
 
 ### 当前独立运行链路
 ```text
-V4l2Source / VideoSource / ReplaySource
+V4l2Source
 -> Frame
--> Detector
+-> LatestValue<T> freshness queue
+-> ModelInfer (async)
 -> TargetObservation
 -> EkfTracker (optional)
 -> GuidancePipeline / VoltageMapper

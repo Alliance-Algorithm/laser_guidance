@@ -112,13 +112,11 @@ or
 
 - `Frame` 是图像和时间戳的统一载体
 - `TargetObservation` 是最小视觉结果
-- `Detector` 负责最小亮点检测
-- `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime` 与 `ModelAdapter`
+- `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime`（ONNX）或 `TensorRTEngine`，以及 `ModelAdapter`（输出映射）
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
 - `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
 - `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（已接入异步推理线程）
 - `DebugRenderer` 负责调试 overlay：含候选框、类别、置信度、准星；无 candidates 时回退为 contour + center
-- `Pipeline` 组合"已选视觉后端"与 `DebugRenderer`
 - `RtpStreamer` 负责将 overlay 后的画面通过 RTP 推流输出（ffmpeg 子进程），供 VLC 等外部播放器接收
 - `VideoShmProducer` 负责通过 POSIX 共享内存（`/laser_frame`）输出 BGR 原始帧，双缓冲 + 原子序号，供 UI 零拷贝读取
 - `UdpSender` 负责通过 UDP 发送 TargetObservation 和 EKF 状态（检测结果、跟踪位置、速度等）
@@ -133,7 +131,7 @@ or
 当前还承载视觉后端选择配置：
 
 - `inference.backend`
-  - 当前支持 `bright_spot` 与 `model`
+  - 当前支持 `model` 与 `tensorrt`；`bright_spot` 枚举值保留作为"禁用推理"标志
 - `inference.model_path`
   - 指向 `.onnx` 模型文件；只有启用 ONNX Runtime 构建时才会实际加载
 
@@ -159,26 +157,7 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
 - `V4L2/UVC`
 - 视频文件
 
-都先变成 `Frame` 再进入 pipeline。
-
-### Pipeline
-
-当前是最小视觉主入口，职责只有：
-
-- 接受 `Frame`
-- 返回 `TargetObservation`
-- 在构造时选择视觉后端
-- 转调 `Detector` 或 `ModelInfer`
-- 转调 `DebugRenderer`
-
-当前 `model` 路径的约束是：
-
-- 未启用 ONNX Runtime 时，明确报错
-- 未启用 TensorRT 时，TensorRT engine 路径不会被选中
-- `model_path` 为空或文件不存在时，明确报错
-- 模型加载成功后会执行预处理、推理和契约识别
-- 当前支持 YOLO26 端到端 ONNX 输出（`[1,300,6]`）；契约不匹配时明确报错并保留输入输出元数据
-- 输出契约未适配时，明确报错并保留输入输出元数据
+都先变成 `Frame` 再进入推理链路。
 
 ### Freshness Runtime Primitives
 
@@ -196,15 +175,13 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
   - 负责 Purple HIT 状态判定
   - 通过连续帧迟滞确认/释放，避免 Purple 检测抖动导致状态频繁翻转
 - `MockRuntime`
-  - 用于无硬件、无模型或纯软件测试场景
-  - 提供与真实 runtime 对齐的最小接口，便于验证 freshness 逻辑与状态机行为
+  - 纯测试框架，用于无硬件、无模型时验证 freshness 逻辑与 HitStateMachine
+  - 当前仅测试使用，比赛链路未接入
 
 ### Replay
 
-- `ReplayRecorder`
-  - 把 `Frame` 录成 `PNG + manifest.csv`
 - `load_replay_dataset`
-  - 从样本或录帧目录回放 `Frame`
+  - 从样本目录加载离线帧数据集用于测试和模型验证
 
 ### EkfTracker
 
@@ -298,23 +275,15 @@ YOLO26 端到端推理输出 `[1, 300, 6]`，每行为 `[x1, y1, x2, y2, confide
 ### Examples
 
 - `tool_preview`
-  - 真机入口
-- `tool_capture`
-  - 录帧入口
+  - 本地预览 + 推流入口
 - `tool_record`
   - 原始视频会话录制入口
 - `tool_transcode`
   - 已录视频原地转码入口
 - `tool_export`
   - 离线抽帧导出入口
-- `tool_smoke`
-  - 纯软件入口
-- `tool_replay`
-  - 回放入口
-- `tool_detector_benchmark`
-  - 离线 benchmark
 - `tool_model_infer`
-  - 打印 ONNX 模型路径、输入输出元数据和当前失败原因
+  - 打印 ONNX 模型元数据与推理结果
 
 这些 `tool_*` 入口只负责运行流程，不负责视觉算法本身。
 
