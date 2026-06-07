@@ -3,11 +3,11 @@
 ## 项目定位
 `rmcs_laser_guidance` 的目标是：
 
-- 为二维云台搭载激光笔
+- 为二维云台搭载激光
 - 视觉引导云台
 - 使激光实时命中移动无人机搭载的特征靶
 
-当前阶段仍然只是视觉最小骨架，已经落地的能力只有：
+当前阶段仍然只是视觉最小骨架，已经落地的能力有：
 
 - `V4L2/UVC` 取图
 - 原始视频会话录制与可选离线抽帧导出
@@ -16,16 +16,6 @@
 - 自动测试与工具运行入口
 - 比赛模式统一守护进程 `tool_competition`（预览+引导+录制融合）
 - ONNX + TensorRT 双推理后端，运行时热切换
-
-当前明确**不是**闭环控制系统，不包含：
-
-- `tracker`
-- `solver`
-- `/tf`
-- `/gimbal/*`
-- `fire_control`
-- `pluginlib`
-- `rmcs_executor`
 
 ## 目录职责
 - `package.xml`
@@ -97,7 +87,7 @@ internal：
 - `Pipeline` 是唯一对外视觉入口。
 - `Pipeline` 通过 `Details` 收束内部依赖，并在构造时选择视觉后端。
 - `Frame` / `TargetObservation` 仍然公开 `OpenCV` 类型。
-- examples 与白盒 tests 可以使用 `src/internal/`，但这些头不算 public API。
+- `tools/` 与白盒 tests 可以直接使用 `src/` 下的内部模块头，但这些头不算 public API。
 
 ## 精要框架流图
 
@@ -139,36 +129,36 @@ tool_competition
 -> async infer -> EKF/raw -> guidance -> RTP + UDP + SHM + Recording
 -> FIFO /tmp/laser_cmd: stream/record/enemy/backend/ekf/quit
 
-example_v4l2_preview
+tool_preview
 -> V4l2Capture.open()
 -> read_frame()
 -> Pipeline.process()
 -> overlay + preview
 
-example_v4l2_capture
+tool_capture
 -> V4l2Capture.open()
 -> read_frame()
 -> ReplayRecorder.record_frame()
 -> manifest.csv + png frames
 
-example_v4l2_record_session
+tool_record
 -> V4l2Capture.open()
 -> read_frame()
 -> VideoSessionRecorder.record_frame()
 -> raw.mp4 + session.yaml + notes.txt
 -> direct upload to external platform or optional export_training_frames
 
-example_transcode_recorded_session
+tool_transcode
 -> load session.yaml
 -> locate raw.mp4
 -> ffmpeg transcode to H.264/avc1 in place
 
-example_export_training_frames
+tool_export
 -> load session.yaml
 -> open raw.mp4
 -> export images/train|val|test + export manifest (optional fallback)
 
-example_replay_preview
+tool_replay
 -> load_replay_dataset()
 -> load frame png
 -> Pipeline.process()
@@ -198,41 +188,23 @@ tool_*
 -> OpenCV
 ```
 
-### 目标演进链路
+### 当前独立运行链路
 ```text
 V4l2Source / VideoSource / ReplaySource
 -> Frame
 -> Detector
 -> TargetObservation
--> Tracker
--> TargetState
--> Solver / GuidanceLogic
--> GuidanceResult
--> LaserGuidanceBridge
--> /gimbal/laser_guidance/*
--> gimbal controller
+-> EkfTracker (optional)
+-> GuidancePipeline / VoltageMapper
+-> FT4222H -> DAC8568 -> galvo
+-> RTP / UDP / SHM / Recording
 ```
 
-## 未来接入约束
-推荐命名空间：
+## 方向约束
 
-```text
-/gimbal/laser_guidance/*
-```
+当前仓库按 standalone 视觉引导工具维护，不再为 RMCS / ROS 控制链预留 bridge 设计。
 
-不要直接复用：
-
-```text
-/gimbal/auto_aim/*
-```
-
-未来 bridge 的职责只应包括：
-
-- 参数读取
-- 输入采集
-- 结果发布
-
-bridge 不应承载算法实现本身。
+如果后续新增能力，应优先延续现有独立入口与配置驱动模式，而不是先抽象外部总线接口。
 
 ## 当前边界
 当前阶段的完成标准是：

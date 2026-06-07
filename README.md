@@ -18,9 +18,8 @@
 
 当前阶段**不包含**：
 
-- 控制链路闭环（比赛模式已闭环）
-- `/gimbal/*` 接口
-- `tracker` / `solver` / `planner`
+- ROS 控制总线 / `/gimbal/*` 接口
+- 通用 `solver` / `planner`
 - `fire_control`
 
 ## Build
@@ -200,10 +199,12 @@ while (true) {
 }
 ```
 
-FT4222H 振镜控制：
+FT4222H / DAC8568 最小写入示例：
 
 ```cpp
 #include "io/ft4222_spi.hpp"
+
+#include <array>
 
 auto spi = Ft4222Spi::open(Ft4222Config{
     .sys_clock = Ft4222SysClock::k60MHz,
@@ -212,8 +213,8 @@ auto spi = Ft4222Spi::open(Ft4222Config{
 });
 
 if (spi) {
-    uint8_t dac_cmd[2] = {0x30, 0xFF};   // 12-bit DAC value
-    spi->write(dac_cmd, 2);
+    std::array<uint8_t, 4> enable_ref{0x08, 0x00, 0x00, 0x01};
+    spi->write(enable_ref.data(), static_cast<uint16_t>(enable_ref.size()));
 }
 ```
 
@@ -227,7 +228,7 @@ if (spi) {
 - `models/` 放置 `.onnx`、`.engine`、电压映射模型文件（`vision_voltage_poly_v*.yaml`、`vision_voltage_lut*.yaml`）
 - `test_data/calib/` 放置标定 CSV（voltage_records, geometry_calib_records 等）
 - `Pipeline` 通过 `inference.backend` 在 `bright_spot` / `model`(ONNX) / `tensorrt`(GPU) 间切换
-- TensorRT 需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON` 且预先生成 `.engine` 文件
+- TensorRT 需 `-DWITH_TENSORRT=ON` 且预先生成 `.engine` 文件
 - 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入
 - EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态，支持 lookahead 超前预测
@@ -242,6 +243,91 @@ if (spi) {
 - RTP 推流：`make stream` 后台 daemon + ffplay 窗口，关闭即停。`streaming` 配置段控制，默认端口 5004
 - `.script/` 提供便捷脚本：`set-config`、`scan-camera`、`preview`、`stream`、`stop`
 
+## Docker
+
+### 快速开始
+
+```bash
+# 1. 拉取镜像
+docker pull yukikaze2233/laser-guidance:latest     # 统一镜像（4.6 GB，ONNX + TensorRT）
+
+# 2. 启动比赛模式
+docker compose up -d
+
+# 3. 运行时控制（通过 FIFO）
+echo "stream on"  > /tmp/laser_cmd        # 开启推流
+echo "record on"  > /tmp/laser_cmd        # 开启录制
+echo "enemy red"  > /tmp/laser_cmd        # 敌方颜色
+echo "backend tensorrt" > /tmp/laser_cmd  # 切换推理后端
+echo "quit"       > /tmp/laser_cmd        # 优雅退出
+
+# 4. 停止
+docker compose down
+```
+
+### 镜像说明
+
+| 镜像 | 大小 | 内含 |
+|---|---|---|
+| `yukikaze2233/laser-guidance:latest` | 4.6 GB | ONNX Runtime 1.26.0 + TensorRT 10.13 / CUDA 13.0 / cuDNN 9.12 + OpenCV + ffmpeg + FT4222 |
+
+> 一个镜像同时支持 ONNX Runtime 和 TensorRT 双后端，通过 `config/direct_voltage_run.yaml` 中的 `inference.backend` 或 FIFO `backend` 命令运行时切换。无需 GPU 环境也能正常运行 ONNX 模式。
+
+### 构建（可选，已提供预构建镜像）
+
+```bash
+# 需要 NGC 访问权限（docker login nvcr.io）以提取 TensorRT/CUDA 库
+docker build -t yukikaze2233/laser-guidance:latest . --target runtime
+
+# 开发镜像（含 cmake / gdb）
+docker build -t yukikaze2233/laser-guidance:latest . --target develop
+```
+
+### Compose Profiles
+
+```bash
+# 比赛模式（默认，headless，自动重启，GPU enabled）
+docker compose up -d
+
+# 比赛模式 + 宿主 ffplay 推流预览
+docker compose --profile stream up
+
+# 交互式开发环境（含 GUI 穿透 + OpenCode 复用）
+docker compose run --rm dev
+
+# 指定摄像头设备
+LASER_CAMERA_DEVICE=/dev/video0 docker compose up -d
+```
+
+### 容器运行时绑定
+
+| 资源 | 为什么 |
+|---|---|
+| `/dev:/dev` | 摄像头 V4L2、FT4222 USB 设备、GPU 设备 |
+| `--privileged` | FT4222 D2XX 用户态驱动（libusb）需要 USB 控制权 |
+| `--network=host` | RTP/UDP 推流使用宿主机网络栈 |
+| `--ipc=host` | `/laser_frame` POSIX 共享内存 |
+| `/tmp:/tmp` | FIFO `/tmp/laser_cmd`、SDP `/tmp/laser_guidance.sdp` |
+| `--gpus all` | NVIDIA Container Toolkit GPU 透传 |
+| X11/Wayland | 仅 `dev` profile，支持 `cv::imshow` |
+| OpenCode 配置 | 仅 `dev` profile，复用宿主机 opencode 状态 |
+
+### dev profile 与宿主机 OpenCode 复用
+
+`dev` profile 会自动挂载宿主机的 OpenCode 配置目录，与 RMCS / librmcs 方式一致：
+
+- `${HOME}/.config/opencode` → `/root/.config/opencode`
+- `${HOME}/.local/share/opencode` → `/root/.local/share/opencode`
+- `${HOME}/.agents/skills` → `/root/.agents/skills`（只读）
+
+容器内直接使用宿主机已有的 OpenCode 配置与 skills，无需重新初始化。
+
+### 推送到 Docker Hub
+
+```bash
+docker push yukikaze2233/laser-guidance:latest
+```
+
 ## Docs
 
 - `plan.md`
@@ -249,4 +335,3 @@ if (spi) {
 - `docs/hardware_ft4222_dac8568.md`
 - `docs/dataset_collection.md`
 - `docs/development.md`
-- `docs/future_rmcs_integration.md`

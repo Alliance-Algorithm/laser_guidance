@@ -99,7 +99,7 @@ V4l2Capture
 -> raw.mp4 + session.yaml + notes.txt
 -> Ultralytics Platform (recommended)
 or
--> example_transcode_recorded_session
+-> tool_transcode
 -> ffmpeg in-place transcode to H.264/avc1
 -> Ultralytics Platform
 or
@@ -158,7 +158,6 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
 
 - `V4L2/UVC`
 - 视频文件
-- RMCS bridge
 
 都先变成 `Frame` 再进入 pipeline。
 
@@ -276,9 +275,9 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
   - 把 live 相机流录成 `raw.mp4`（默认 `H.264/avc1`），并在 flush 时写 `session.yaml` 和 `notes.txt`
 - `transcode_video_to_h264_in_place`
   - 用 `ffmpeg` 把已有 `raw.mp4` 原地转成 `H.264/avc1`
-- `example_v4l2_record_session`
+- `tool_record`
   - 把 live 相机录成原始视频会话，并同时写 `session.yaml`
-- `example_transcode_recorded_session`
+- `tool_transcode`
   - 对单个已录会话做原地 H.264 转码
 - `export_training_frames`
   - 把单个视频会话离线抽成待标注图片；当前作为备用链路保留
@@ -298,26 +297,26 @@ YOLO26 端到端推理输出 `[1, 300, 6]`，每行为 `[x1, y1, x2, y2, confide
 
 ### Examples
 
-- `example_v4l2_preview`
+- `tool_preview`
   - 真机入口
-- `example_v4l2_capture`
+- `tool_capture`
   - 录帧入口
-- `example_v4l2_record_session`
+- `tool_record`
   - 原始视频会话录制入口
-- `example_transcode_recorded_session`
+- `tool_transcode`
   - 已录视频原地转码入口
-- `example_export_training_frames`
+- `tool_export`
   - 离线抽帧导出入口
-- `example_offline_smoke`
+- `tool_smoke`
   - 纯软件入口
-- `example_replay_preview`
+- `tool_replay`
   - 回放入口
-- `example_detector_benchmark`
+- `tool_detector_benchmark`
   - 离线 benchmark
-- `example_model_infer`
+- `tool_model_infer`
   - 打印 ONNX 模型路径、输入输出元数据和当前失败原因
 
-Examples 只负责运行流程，不负责视觉算法本身。
+这些 `tool_*` 入口只负责运行流程，不负责视觉算法本身。
 
 当前推荐的数据集生成工作流详见：
 
@@ -350,7 +349,7 @@ Examples 只负责运行流程，不负责视觉算法本身。
 - 导出帧时间戳
 - 导出帧 blur score
 
-这意味着当前仓库的“外部协议”还没有形成。真正的 RMCS 内部总线接口要到第二阶段才会定义。
+这意味着当前仓库的“外部协议”仍然很薄：当前主要面对本地配置、UDP 调试输出、RTP/SHM 视频输出和硬件 I/O，而不是更大的机器人中间件总线。
 
 ## 当前非目标
 
@@ -358,7 +357,7 @@ Examples 只负责运行流程，不负责视觉算法本身。
 
 - `/tf`
 - `HardSyncSnapshot`
-- `rmcs_executor::Component`
+- ROS executor / plugin 运行时
 - `pluginlib`
 - 规划器
 - 控制指令
