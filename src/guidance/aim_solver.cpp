@@ -156,7 +156,7 @@ auto AimSolver::solve_geometry(AimInput& input) -> AimOutput {
         return AimOutput{.message = "geometry guidance not initialized"};
     }
 
-    if (input.track.selected_detection != nullptr) {
+    if (input.track.selected_detection.has_value()) {
         if (const auto depth = estimate_depth(*input.track.selected_detection, &input.lidar_frame)) {
             input.last_valid_depth_mm = *depth;
         }
@@ -191,7 +191,7 @@ auto AimSolver::solve_direct_voltage(AimInput& input) -> AimOutput {
     if (!voltage_mapper_) {
         return AimOutput{.message = "direct voltage mapper not initialized"};
     }
-    if (input.track.selected_detection == nullptr) {
+    if (!input.track.selected_detection.has_value()) {
         return AimOutput{.message = "no candidate for direct voltage"};
     }
     const auto& detection = *input.track.selected_detection;

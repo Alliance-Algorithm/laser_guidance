@@ -49,7 +49,8 @@
 - `src/guidance/`
   - 引导管线：`AimSolver`、`GalvoExecutor`、`ScanController`、`GuidancePipeline`、`VoltageMapper`、`GalvoDriver`、`CameraProjection`、`DepthEstimator`。
 - `src/runtime/`
-  - 统一运行时：`RuntimeBase`、`InferenceFacade`、`CompetitionRuntime`、`PreviewRuntime`、`GuidanceToolRuntime`。
+  - runtime facade：`RuntimeBase`、`InferenceFacade`、`CompetitionRuntime`、`PreviewRuntime`。
+  - 兼容 runtime：`GuidanceToolRuntime`。
 - `src/bridges/`
   - 控制/输出 bridge：`FifoControlServer`、`UdpTelemetryPublisher`、`ShmFramePublisher`、`RtpFramePublisher`。
 - `tools/`
@@ -97,11 +98,13 @@ internal：
 - `Frame` / `TargetObservation` 仍然公开 `OpenCV` 类型。
 - `tools/` 与白盒 tests 可以直接使用 `src/` 下的内部模块头，但这些头不算 public API。
 - `tool_competition` / `tool_preview` 不再自己拼装 capture/infer/guidance 主循环，统一委托给 runtime facade。
+- `tool_guidance` 入口已压薄，但内部仍由 `GuidanceToolRuntime` 承接兼容主循环。
 - 帧传递使用 `LatestValue<T>` freshness 队列，推理线程消费时检查 `StaleFramePolicy` 过期判定。
 - FIFO 字符串协议只存在于 bridge 层；runtime 内部只处理 `RuntimeCommand`。
 - 新增运行时控制项时，先改 typed command/snapshot，再决定是否映射为 FIFO。
 - 新增协议输出时，先建 bridge，不在 runtime 主循环中直接拼协议细节。
 - 新增引导策略时，优先扩 `AimSolver` / `GalvoExecutor` / `ScanController`，不要继续扩张 `GuidancePipeline`。
+- `RuntimeSnapshot` / `TargetTrack` 必须保持值语义安全，不允许 public snapshot 暴露依赖临时 batch 生命周期的裸指针。
 
 ## 精要框架流图
 

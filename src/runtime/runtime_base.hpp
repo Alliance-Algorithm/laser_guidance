@@ -97,6 +97,12 @@ protected:
     virtual auto after_frame_processed(cv::Mat& frame, const RuntimeSnapshot& snapshot) -> void = 0;
 
 private:
+    struct GuidanceStepResult {
+        AimOutput aim_output{};
+        float last_valid_depth_mm = 0.0F;
+        bool ekf_was_lost = false;
+    };
+
     auto initialize_guidance() -> void;
     auto make_snapshot_locked(
         const DetectionBatch& batch, const std::optional<TargetTrack>& track, const AimOutput& aim,
@@ -106,6 +112,20 @@ private:
     auto read_results() const -> RuntimeResults;
     auto select_track(const DetectionBatch& detection, const std::optional<EkfState>& ekf_state) const
         -> TargetTrack;
+    auto draw_results_overlay(
+        cv::Mat& display, const DetectionBatch& detection, const std::optional<EkfState>& ekf_state) const
+        -> void;
+    auto queue_frame_for_inference(Frame& frame) -> bool;
+    auto process_guidance_step(
+        const DetectionBatch& detection, const TargetTrack& track, float last_valid_depth_mm,
+        bool ekf_was_lost) -> GuidanceStepResult;
+    auto update_hit_state(const DetectionBatch& detection) -> void;
+    auto draw_runtime_overlay(cv::Mat& display, const TargetTrack& track, const AimOutput& aim_output)
+        -> void;
+    auto apply_output_requests() -> void;
+    auto publish_snapshot(
+        cv::Mat& display, const DetectionBatch& detection, const TargetTrack& track,
+        const AimOutput& aim_output) -> void;
     auto run_inference_worker() -> void;
     auto run() -> void;
 

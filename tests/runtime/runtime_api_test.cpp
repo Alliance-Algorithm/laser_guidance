@@ -64,7 +64,11 @@ int main() {
             require(track.ekf_enabled, "track ekf flag mismatch");
             require(track.initialized, "track initialized mismatch");
             require(!track.lost, "track lost mismatch");
-            require(track.selected_detection != nullptr, "track selected detection missing");
+            require(track.selected_detection.has_value(), "track selected detection missing");
+            require_near(
+                track.selected_detection->center.x, 100.0F, 1e-3F, "track selected detection center.x");
+            require_near(
+                track.selected_detection->center.y, 120.0F, 1e-3F, "track selected detection center.y");
             require_near(track.aim_center.x, 101.2F, 1e-3F, "track aim_center.x");
             require_near(track.aim_center.y, 121.9F, 1e-3F, "track aim_center.y");
             require(track.ekf_position.has_value(), "track ekf position missing");
@@ -78,9 +82,34 @@ int main() {
             const auto track = select_target_track(batch, std::nullopt, false, 0.0F);
             require(!track.detected, "raw track should stay undetected");
             require(!track.ekf_enabled, "raw track ekf flag mismatch");
-            require(track.selected_detection == nullptr, "raw track should not select detection");
+            require(!track.selected_detection.has_value(), "raw track should not select detection");
             require_near(track.aim_center.x, -1.0F, 1e-3F, "raw track aim_center.x");
             require_near(track.aim_center.y, -1.0F, 1e-3F, "raw track aim_center.y");
+        }
+
+        {
+            DetectionBatch batch;
+            batch.detected = true;
+            batch.selected_center = {12.0F, 34.0F};
+            batch.detections.push_back(Detection{
+                .score = 0.7F,
+                .class_id = 2,
+                .bbox = {1.0F, 2.0F, 3.0F, 4.0F},
+                .center = {12.0F, 34.0F},
+            });
+
+            RuntimeSnapshot snapshot;
+            snapshot.track = select_target_track(batch, std::nullopt, false, 0.0F);
+
+            batch.detections.front().center = {99.0F, 88.0F};
+            require(snapshot.track.has_value(), "snapshot track should exist");
+            require(snapshot.track->selected_detection.has_value(), "snapshot detection should be owned");
+            require_near(
+                snapshot.track->selected_detection->center.x, 12.0F, 1e-3F,
+                "snapshot detection center.x should remain stable");
+            require_near(
+                snapshot.track->selected_detection->center.y, 34.0F, 1e-3F,
+                "snapshot detection center.y should remain stable");
         }
 
         {

@@ -1,12 +1,18 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace rmcs_laser_guidance::tests {
 
@@ -46,6 +52,33 @@ inline auto make_temp_dir(std::string_view stem) -> std::filesystem::path {
     const auto path = std::filesystem::temp_directory_path() / (std::string(stem) + "_" + unique);
     std::filesystem::create_directories(path);
     return path;
+}
+
+inline auto find_free_udp_port() -> std::uint16_t {
+    const int sock = ::socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        throw std::runtime_error("failed to create UDP socket");
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(0);
+    if (::bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+        ::close(sock);
+        throw std::runtime_error("failed to bind UDP socket");
+    }
+
+    sockaddr_in bound{};
+    socklen_t len = sizeof(bound);
+    if (::getsockname(sock, reinterpret_cast<sockaddr*>(&bound), &len) != 0) {
+        ::close(sock);
+        throw std::runtime_error("failed to read UDP socket name");
+    }
+
+    const auto port = ntohs(bound.sin_port);
+    ::close(sock);
+    return port;
 }
 
 inline auto write_text_file(const std::filesystem::path& path, std::string_view content) -> void {

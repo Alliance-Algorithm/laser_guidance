@@ -74,7 +74,7 @@ struct TargetTrack {
     cv::Point2f raw_center{-1.0F, -1.0F};
     cv::Point2f aim_center{-1.0F, -1.0F};
     cv::Point2f velocity{0.0F, 0.0F};
-    const Detection* selected_detection = nullptr;
+    std::optional<Detection> selected_detection{};
     std::optional<cv::Point2f> ekf_position{};
     std::optional<cv::Point2f> ekf_acceleration{};
 };

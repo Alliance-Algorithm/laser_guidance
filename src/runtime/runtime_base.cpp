@@ -196,6 +196,16 @@ auto RuntimeBase::join() -> void {
 }
 
 auto RuntimeBase::submit_command(const RuntimeCommand& command) -> std::expected<void, std::string> {
+    if (command.type == RuntimeCommandType::set_backend) {
+        if (!inference_.has_backend(command.backend)) {
+            return std::unexpected("requested backend is not available");
+        }
+        if (!inference_.set_active_backend(command.backend)) {
+            return std::unexpected("failed to switch active backend");
+        }
+    }
+
+    bool shutdown_queue = false;
     std::scoped_lock lock(state_.mutex);
     switch (command.type) {
     case RuntimeCommandType::set_streaming:
@@ -208,22 +218,19 @@ auto RuntimeBase::submit_command(const RuntimeCommand& command) -> std::expected
         state_.enemy_color = command.enemy_color;
         break;
     case RuntimeCommandType::set_backend:
-        if (!inference_.has_backend(command.backend)) {
-            return std::unexpected("requested backend is not available");
-        }
-        if (!inference_.set_active_backend(command.backend)) {
-            return std::unexpected("failed to switch active backend");
-        }
         break;
     case RuntimeCommandType::set_ekf:
         state_.ekf_enabled = command.enabled;
         break;
     case RuntimeCommandType::shutdown:
         state_.stop_requested = true;
-        frame_queue_.shutdown();
+        shutdown_queue = true;
         break;
     }
     update_status_locked();
+    if (shutdown_queue) {
+        frame_queue_.shutdown();
+    }
     return {};
 }
 
@@ -299,6 +306,160 @@ auto RuntimeBase::select_track(
     }();
     return select_target_track(
         detection, ekf_state, ekf_enabled, static_cast<float>(config_.ekf.lookahead_ms));
+}
+
+auto RuntimeBase::draw_results_overlay(
+    cv::Mat& display, const DetectionBatch& detection, const std::optional<EkfState>& ekf_state) const
+    -> void {
+    if (detection.detected || !detection.detections.empty()) {
+        draw_candidates(display, to_model_candidates(detection));
+    }
+    if (ekf_state.has_value()) {
+        draw_ekf_state(display, *ekf_state);
+    }
+}
+
+auto RuntimeBase::queue_frame_for_inference(Frame& frame) -> bool {
+    if (!inference_.enabled()) {
+        return true;
+    }
+    try {
+        frame_queue_.push(QueuedFrame{
+            .image = std::move(frame.image),
+            .capture_time = frame.timestamp,
+        });
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+auto RuntimeBase::process_guidance_step(
+    const DetectionBatch& detection, const TargetTrack& track, const float last_valid_depth_mm,
+    const bool ekf_was_lost) -> GuidanceStepResult {
+    GuidanceStepResult result{
+        .last_valid_depth_mm = last_valid_depth_mm,
+        .ekf_was_lost = ekf_was_lost,
+    };
+
+    // State transition rules:
+    //   ekf=OFF + detected              -> solve -> update depth
+    //   ekf=OFF + undetected + depth    -> recenter + clear depth + stop scan
+    //   ekf=OFF + undetected + no depth -> idle
+    //   ekf=ON  + initialized + !lost   -> solve -> update depth
+    //   ekf=ON  + lost(first frame)     -> recenter + clear depth + stop scan
+    //   ekf=ON  + lost(steady)          -> idle
+    //
+    // Guidance-unready frames intentionally keep ekf_was_lost synchronized to track.lost,
+    // matching the pre-refactor main-loop behavior.
+    if (!(solver_ && executor_ && solver_->is_initialized() && executor_->is_initialized())) {
+        return GuidanceStepResult{
+            .aim_output = std::move(result.aim_output),
+            .last_valid_depth_mm = result.last_valid_depth_mm,
+            .ekf_was_lost = track.lost,
+        };
+    }
+
+    AimInput aim_input{
+        .ekf_enabled = track.ekf_enabled,
+        .track = track,
+        .lidar_frame = detection.lidar_frame,
+        .last_valid_depth_mm = result.last_valid_depth_mm,
+    };
+
+    if (!track.ekf_enabled) {
+        if (track.detected) {
+            result.aim_output = solver_->solve(aim_input);
+            result.last_valid_depth_mm = aim_input.last_valid_depth_mm;
+        } else if (result.last_valid_depth_mm > 0.0F) {
+            result.aim_output.recentered = true;
+            result.aim_output.message = executor_->set_center();
+            result.last_valid_depth_mm = 0.0F;
+            if (scanner_) {
+                scanner_->deactivate();
+            }
+        }
+    } else if (track.initialized && !track.lost) {
+        result.aim_output = solver_->solve(aim_input);
+        result.last_valid_depth_mm = aim_input.last_valid_depth_mm;
+    } else if (track.lost && !result.ekf_was_lost) {
+        result.aim_output.recentered = true;
+        result.aim_output.message = executor_->set_center();
+        result.last_valid_depth_mm = 0.0F;
+        if (scanner_) {
+            scanner_->deactivate();
+        }
+    }
+
+    if (result.aim_output.command_issued) {
+        if (scanner_ && scanner_->enabled()) {
+            if (result.aim_output.output_angles.has_value()) {
+                scanner_->update_angles_center(*result.aim_output.output_angles);
+            } else if (result.aim_output.output_voltages.has_value()) {
+                scanner_->update_voltage_center(*result.aim_output.output_voltages);
+            }
+        } else {
+            const auto apply_result = executor_->apply(result.aim_output);
+            if (!apply_result.empty()) {
+                result.aim_output.message = apply_result;
+            }
+        }
+    }
+
+    result.aim_output.output_angles = executor_->latest_output_angles();
+    result.aim_output.output_voltages = executor_->latest_output_voltages();
+    result.ekf_was_lost = track.lost;
+    return result;
+}
+
+auto RuntimeBase::update_hit_state(const DetectionBatch& detection) -> void {
+    const auto top_detection = detection.detections.empty() ? nullptr : &detection.detections.front();
+    const bool is_purple = detection.detected && top_detection != nullptr && top_detection->class_id == 0
+                        && top_detection->score >= 0.25F;
+    const float frame_dt_s = negotiated_format_->framerate > 0.0
+                               ? 1.0F / static_cast<float>(negotiated_format_->framerate)
+                               : 1.0F / 60.0F;
+    hit_progress_.update(is_purple, frame_dt_s);
+}
+
+auto RuntimeBase::draw_runtime_overlay(
+    cv::Mat& display, const TargetTrack& track, const AimOutput& aim_output) -> void {
+    const bool guidance_ok =
+        solver_ && executor_ && solver_->is_initialized() && executor_->is_initialized();
+    const bool ekf_ok = track.ekf_enabled ? (track.initialized && !track.lost) : track.detected;
+    draw_guidance_status(
+        display, guidance_ok, ekf_ok, aim_output.depth_valid,
+        track.ekf_enabled ? aim_output.message : std::string("EKF OFF (raw)"));
+    draw_hit_progress(display, hit_progress_);
+    {
+        std::scoped_lock lock(state_.mutex);
+        draw_status_bar(
+            display, output_controller_.streaming_active(), output_controller_.recording_active(),
+            to_enemy_class_id(state_.enemy_color),
+            inference_.active_backend() == RuntimeBackend::tensorrt);
+    }
+}
+
+auto RuntimeBase::apply_output_requests() -> void {
+    std::scoped_lock lock(state_.mutex);
+    output_controller_.apply_requests(
+        state_.streaming_requested, state_.recording_requested, record_options_, negotiated_format_);
+}
+
+auto RuntimeBase::publish_snapshot(
+    cv::Mat& display, const DetectionBatch& detection, const TargetTrack& track,
+    const AimOutput& aim_output) -> void {
+    output_controller_.record_frame(display);
+
+    RuntimeSnapshot snapshot;
+    {
+        std::scoped_lock lock(state_.mutex);
+        snapshot = make_snapshot_locked(
+            detection, track, aim_output, hit_progress_, frame_queue_.overwrite_count(),
+            output_controller_.recording_root());
+    }
+    telemetry_.publish(snapshot);
+    after_frame_processed(display, snapshot);
 }
 
 auto RuntimeBase::run_inference_worker() -> void {
@@ -395,119 +556,22 @@ auto RuntimeBase::run() -> void {
         const auto results = read_results();
         auto detection = results.detection;
         auto ekf_state = results.ekf_state;
-        if (detection.detected || !detection.detections.empty()) {
-            draw_candidates(display, to_model_candidates(detection));
-        }
-        if (ekf_state.has_value()) {
-            draw_ekf_state(display, *ekf_state);
-        }
+        draw_results_overlay(display, detection, ekf_state);
 
-        if (inference_.enabled()) {
-            try {
-                frame_queue_.push(QueuedFrame{
-                    .image = std::move(frame->image),
-                    .capture_time = frame->timestamp,
-                });
-            } catch (const std::exception&) {
-                break;
-            }
+        if (!queue_frame_for_inference(*frame)) {
+            break;
         }
 
         TargetTrack track = select_track(detection, ekf_state);
+        const auto guidance = process_guidance_step(detection, track, last_valid_depth_mm, ekf_was_lost);
+        auto aim_output = guidance.aim_output;
+        last_valid_depth_mm = guidance.last_valid_depth_mm;
+        ekf_was_lost = guidance.ekf_was_lost;
 
-        AimInput aim_input{
-            .ekf_enabled = track.ekf_enabled,
-            .track = track,
-            .lidar_frame = detection.lidar_frame,
-            .last_valid_depth_mm = last_valid_depth_mm,
-        };
-        AimOutput aim_output;
-
-        if (solver_ && executor_ && solver_->is_initialized() && executor_->is_initialized()) {
-            if (!track.ekf_enabled) {
-                if (track.detected) {
-                    aim_output = solver_->solve(aim_input);
-                    last_valid_depth_mm = aim_input.last_valid_depth_mm;
-                } else if (last_valid_depth_mm > 0.0F) {
-                    aim_output.recentered = true;
-                    aim_output.message = executor_->set_center();
-                    last_valid_depth_mm = 0.0F;
-                    if (scanner_) {
-                        scanner_->deactivate();
-                    }
-                }
-            } else if (track.initialized && !track.lost) {
-                aim_output = solver_->solve(aim_input);
-                last_valid_depth_mm = aim_input.last_valid_depth_mm;
-            } else if (track.lost && !ekf_was_lost) {
-                aim_output.recentered = true;
-                aim_output.message = executor_->set_center();
-                last_valid_depth_mm = 0.0F;
-                if (scanner_) {
-                    scanner_->deactivate();
-                }
-            }
-
-            if (aim_output.command_issued) {
-                if (scanner_ && scanner_->enabled()) {
-                    if (aim_output.output_angles.has_value()) {
-                        scanner_->update_angles_center(*aim_output.output_angles);
-                    } else if (aim_output.output_voltages.has_value()) {
-                        scanner_->update_voltage_center(*aim_output.output_voltages);
-                    }
-                } else {
-                    const auto apply_result = executor_->apply(aim_output);
-                    if (!apply_result.empty()) {
-                        aim_output.message = apply_result;
-                    }
-                }
-            }
-            aim_output.output_angles = executor_->latest_output_angles();
-            aim_output.output_voltages = executor_->latest_output_voltages();
-        }
-
-        ekf_was_lost = track.lost;
-
-        const auto top_detection = detection.detections.empty() ? nullptr : &detection.detections.front();
-        const bool is_purple = detection.detected && top_detection != nullptr && top_detection->class_id == 0
-                            && top_detection->score >= 0.25F;
-        const float frame_dt_s = negotiated_format_->framerate > 0.0
-                                   ? 1.0F / static_cast<float>(negotiated_format_->framerate)
-                                   : 1.0F / 60.0F;
-        hit_progress_.update(is_purple, frame_dt_s);
-
-        const bool guidance_ok =
-            solver_ && executor_ && solver_->is_initialized() && executor_->is_initialized();
-        const bool ekf_ok = track.ekf_enabled ? (track.initialized && !track.lost) : track.detected;
-        draw_guidance_status(
-            display, guidance_ok, ekf_ok, aim_output.depth_valid,
-            track.ekf_enabled ? aim_output.message : std::string("EKF OFF (raw)"));
-        draw_hit_progress(display, hit_progress_);
-        {
-            std::scoped_lock lock(state_.mutex);
-            draw_status_bar(
-                display, output_controller_.streaming_active(), output_controller_.recording_active(),
-                to_enemy_class_id(state_.enemy_color),
-                inference_.active_backend() == RuntimeBackend::tensorrt);
-        }
-
-        {
-            std::scoped_lock lock(state_.mutex);
-            output_controller_.apply_requests(
-                state_.streaming_requested, state_.recording_requested, record_options_, negotiated_format_);
-        }
-
-        output_controller_.record_frame(display);
-
-        RuntimeSnapshot snapshot;
-        {
-            std::scoped_lock lock(state_.mutex);
-            snapshot = make_snapshot_locked(
-                detection, track, aim_output, hit_progress_, frame_queue_.overwrite_count(),
-                output_controller_.recording_root());
-        }
-        telemetry_.publish(snapshot);
-        after_frame_processed(display, snapshot);
+        update_hit_state(detection);
+        draw_runtime_overlay(display, track, aim_output);
+        apply_output_requests();
+        publish_snapshot(display, detection, track, aim_output);
 
         output = display;
 

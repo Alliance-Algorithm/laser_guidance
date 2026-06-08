@@ -132,7 +132,9 @@ auto select_target_track(
     track.ekf_enabled = ekf_enabled;
     track.raw_center = batch.selected_center;
     track.aim_center = batch.selected_center;
-    track.selected_detection = batch.detections.empty() ? nullptr : &batch.detections.front();
+    if (!batch.detections.empty()) {
+        track.selected_detection = batch.detections.front();
+    }
     if (ekf_state.has_value()) {
         track.initialized = ekf_state->initialized;
         track.lost = ekf_state->lost;

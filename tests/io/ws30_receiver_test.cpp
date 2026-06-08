@@ -17,10 +17,6 @@ namespace {
 using namespace rmcs_laser_guidance;
 using namespace rmcs_laser_guidance::tests;
 
-constexpr int kPointsPort = 21101;
-constexpr int kImuPort = 21102;
-constexpr int kScanPort = 21103;
-
 #pragma pack(push)
 #pragma pack(1)
 struct VendorPointsPacket {
@@ -38,12 +34,13 @@ struct VendorPointsPacket {
 
 class FakeWs30Server {
 public:
-    FakeWs30Server()
-        : sock_(socket(AF_INET, SOCK_DGRAM, 0)) {
+    explicit FakeWs30Server(const std::uint16_t points_port)
+        : points_port_(points_port)
+        , sock_(socket(AF_INET, SOCK_DGRAM, 0)) {
         require(sock_ >= 0, "failed to create fake WS30 socket");
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(kPointsPort);
+        addr.sin_port = htons(points_port_);
         inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
         require(
             bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0,
@@ -55,7 +52,7 @@ public:
         stop_ = true;
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(kPointsPort);
+        addr.sin_port = htons(points_port_);
         inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
         char wake = 0;
         sendto(sock_, &wake, sizeof(wake), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
@@ -99,20 +96,24 @@ private:
         }
     }
 
+    std::uint16_t points_port_ = 0;
     int sock_ = -1;
     bool stop_ = false;
     std::thread worker_;
 };
 
 void test_reassembles_complete_frame() {
-    FakeWs30Server server;
+    const auto points_port = find_free_udp_port();
+    const auto imu_port = static_cast<std::uint16_t>(points_port + 1);
+    const auto scan_port = static_cast<std::uint16_t>(points_port + 2);
+    FakeWs30Server server(points_port);
 
     Ws30Config cfg;
     cfg.enabled = true;
     cfg.host = "127.0.0.1";
-    cfg.points_port = kPointsPort;
-    cfg.imu_port = kImuPort;
-    cfg.scan_port = kScanPort;
+    cfg.points_port = static_cast<int>(points_port);
+    cfg.imu_port = static_cast<int>(imu_port);
+    cfg.scan_port = static_cast<int>(scan_port);
     cfg.handshake_interval_ms = 20;
     cfg.receive_imu = false;
 

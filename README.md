@@ -24,7 +24,7 @@
 
 ## Runtime 架构
 
-当前运行时已经从“每个 `tool_*.cpp` 自己拼主循环”收敛为“稳定模块 + 统一 runtime + bridge”：
+当前运行时已经从“每个 `tool_*.cpp` 自己拼主循环”收敛为“稳定模块 + runtime facade + bridge”；其中统一 runtime 当前覆盖 `tool_competition` / `tool_preview`，`tool_guidance` 仍走兼容 runtime：
 
 - `CompetitionRuntime`
   - 比赛模式运行时，统一管理 capture / infer / EKF / guidance / RTP / SHM / UDP / recording
@@ -39,7 +39,7 @@
 - `UdpTelemetryPublisher` / `ShmFramePublisher` / `RtpFramePublisher`
   - 只做 bridge 和数据搬运，不承载算法判断
 - `GuidanceToolRuntime`
-  - internal `tool_guidance` 运行时，统一管理异步推理、校准按键、CSV 记录与 purple hit 边沿记录
+  - internal `tool_guidance` 兼容 runtime，独立管理异步推理、校准按键、CSV 记录与 purple hit 边沿记录
 
 `tools/competition.cpp` 和 `tools/preview.cpp` 现在只负责：
 
@@ -52,7 +52,7 @@
 
 - `tool_*` 不承载业务编排
   - 新功能优先进 runtime / guidance / bridge，而不是继续堆回工具入口
-- runtime 负责生命周期
+- runtime facade 负责生命周期
   - capture、infer、EKF、guidance、stream、record、shutdown 都由 runtime 统一管理
 - bridge 负责协议，不负责判断
   - FIFO、UDP、RTP、SHM 只做协议适配和搬运，不做算法决策
@@ -60,6 +60,8 @@
   - 运行时控制先定义 `RuntimeCommand`，再决定是否暴露为 FIFO / CLI / 其他输入面
 - 输出快照统一
   - 状态观测优先走 `RuntimeSnapshot`，避免每个入口各自拼状态结构
+- `RuntimeSnapshot` / `TargetTrack` 必须保持值语义安全
+  - public snapshot 不允许暴露依赖临时 batch 生命周期的裸指针
 - 兼容路径逐步收缩
   - `GuidancePipeline`、`TargetObservation`、`rmcs_laser_guidance_core` 当前保留兼容，但新代码默认接 runtime facade 和分层 target
 
@@ -75,7 +77,7 @@
   - 解算放 `AimSolver`
   - 硬件执行放 `GalvoExecutor`
   - 扫描/搜索放 `ScanController`
-- `tool_guidance` 入口只保留参数解析与生命周期调用
+- `tool_guidance` 入口只保留参数解析与生命周期调用；其内部仍是独立兼容 runtime
 - 只有兼容旧实现细节时，才继续触碰 `GuidancePipeline`
 
 ## Build
@@ -290,7 +292,8 @@ if (spi) {
 - `test_data/calib/` 放置标定 CSV（voltage_records, geometry_calib_records 等）
 - 运行时 facade 通过 `CompetitionRuntime` / `PreviewRuntime` 暴露统一生命周期和控制接口
 - `RuntimeCommand` 负责运行时热切换：推流、录制、敌方颜色、ONNX/TensorRT、EKF 开关、优雅退出
-- `tool_competition`、`tool_preview`、`tool_guidance` 不再承载主业务循环，只做 runtime 启动入口
+- `tool_competition`、`tool_preview` 不再承载主业务循环，只做 runtime 启动入口
+- `tool_guidance` 入口已压薄，但内部仍保留兼容 runtime 主循环
 - TensorRT 需 `-DWITH_TENSORRT=ON` 且预先生成 `.engine` 文件
 - 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入

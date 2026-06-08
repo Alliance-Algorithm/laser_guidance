@@ -29,7 +29,7 @@
 
 ## Runtime 分层
 
-当前运行架构不再由 `tool_competition` / `tool_preview` 各自拼装主循环，而是拆成：
+当前运行架构不再由 `tool_competition` / `tool_preview` 各自拼装主循环，而是拆成 runtime facade + bridge；`tool_guidance` 仍保留独立兼容 runtime：
 
 - runtime
   - `CompetitionRuntime`
@@ -52,6 +52,7 @@
 - `tool_*.cpp` 只做入口，不承载主业务循环
 - runtime 只处理 typed command，不解析 FIFO 字符串
 - bridge 只做协议转换和数据搬运，不承载算法判断
+- `RuntimeSnapshot` 必须可安全复制、缓存和延后消费
 
 ## 设计原则
 
@@ -65,6 +66,8 @@
 - 兼容保留，但不继续扩张
 - `GuidancePipeline`、`TargetObservation`、`rmcs_laser_guidance_core` 是迁移缓冲层
   - 新逻辑默认接 `DetectionBatch` / `TargetTrack` / `AimOutput`
+- `TargetTrack` 是 public value type
+  - 不允许再暴露依赖临时检测 batch 生命周期的裸指针字段
 - bridge 不反向侵入 runtime
   - runtime 不依赖字符串协议和外部 UI 细节
   - bridge 也不把算法策略回写进 runtime
@@ -98,6 +101,15 @@ CompetitionRuntime / PreviewRuntime
 -> draw_candidates() + draw_ekf_state()
 -> ShmFramePublisher / RtpFramePublisher / UdpTelemetryPublisher
 -> cv::imshow()                           ← 可选本地预览
+```
+
+`tool_guidance` 当前仍是独立兼容路径：
+
+```text
+tool_guidance
+-> GuidanceToolRuntime
+-> async infer + EKF + GuidancePipeline(compat core)
+-> calib / tracking / CSV / purple hit edge record
 ```
 
 ## 引导数据流 (统一 runtime 路径)

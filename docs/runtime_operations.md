@@ -93,6 +93,7 @@ trtexec \
   - WASD 校准步进
   - geometry/direct-voltage CSV 记录
   - purple confirmed hit 边沿记录
+- 统一 runtime 当前只覆盖 `CompetitionRuntime` / `PreviewRuntime`；`GuidanceToolRuntime` 仍是兼容独立路径。
 - UDP telemetry 继续输出兼容 `TargetObservation` 语义，但数据来源统一走 `RuntimeSnapshot`.
 
 ## Verification Focus
@@ -100,4 +101,6 @@ trtexec \
 - backend 切换是否只在可用 backend 间发生
 - stop 后 `active_backend_name` / `backend_uses_tensorrt` 是否正确清空
 - FIFO 多行、半行、非法命令后恢复是否正常
+- `RuntimeSnapshot` / `TargetTrack` 是否保持值语义安全
 - `tool_guidance` 校准记录和 purple hit 边沿记录是否稳定
+- `ws30_receiver_test` 是否避免固定端口导致的环境敏感失败
