@@ -35,11 +35,11 @@
 
 当你要扩展功能时，优先级建议是：
 
-1. 扩展 `TargetObservation`
-2. 优先扩展现有 public API 或 `tool_*` 入口，再决定内部是否要继续拆模块
-3. 扩展 `tests/` 自动验证
-4. 扩展 `tools/` 人工验证路径
-5. 最后才考虑新增更细的目录
+1. 先判断需求属于 `runtime`、`guidance`、`vision`、`tracking` 还是 `bridge`
+2. 优先扩展 typed `RuntimeCommand` / `RuntimeSnapshot` / internal helper，而不是继续扩 `TargetObservation` 或 `tool_*`
+3. 扩展 `tests/` 自动验证，尽量覆盖真实 helper/real implementation，而不是复制逻辑进测试
+4. 扩展 `tools/` 人工验证路径，但保持入口薄，不新增长期存在的工具私有主循环
+5. 最后才考虑新增更细的目录或兼容层
 
 这样可以避免一开始就把结构拆复杂。
 
@@ -48,7 +48,7 @@
 每次项目结构发生变化时，至少同步更新：
 
 - `README.md`
-- `AGENTS.md`
+- `docs/AGENTS.md`
 - `docs/architecture.md`
 
 如果运行方式、入口脚本或数据流发生变化，还必须同步补：

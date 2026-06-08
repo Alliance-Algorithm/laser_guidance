@@ -5,6 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
 option(WITH_ONNXRUNTIME "Enable ONNX Runtime model backend." OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to ONNX Runtime installation")
@@ -19,6 +20,23 @@ find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc v
 find_package(yaml-cpp REQUIRED)
 
 file(GLOB_RECURSE ALL_SOURCES src/*.cpp)
+file(GLOB_RECURSE SUPPORT_SOURCES
+  src/core/*.cpp
+  src/runtime/support.cpp
+  src/runtime/runtime_command.cpp)
+file(GLOB_RECURSE VISION_SOURCES src/vision/*.cpp)
+file(GLOB_RECURSE TRACKING_SOURCES src/tracking/*.cpp)
+file(GLOB_RECURSE GUIDANCE_SOURCES src/guidance/*.cpp)
+file(GLOB_RECURSE BRIDGE_SOURCES src/streaming/*.cpp src/bridges/*.cpp)
+set(RUNTIME_SOURCES
+  src/runtime/runtime.cpp
+  src/runtime/runtime_base.cpp
+  src/runtime/guidance_tool_runtime.cpp
+  src/runtime/runtime_support.cpp
+  src/runtime/inference_facade.cpp
+  src/capture/v4l2_capture.cpp
+  src/io/ft4222_spi.cpp
+  src/io/ws30_receiver.cpp)
 
 # ---- ONNX Runtime (optional) --------------------------------------------------
 if(WITH_ONNXRUNTIME)
@@ -70,14 +88,22 @@ endif()
 
 # ---- FT4222H (optional) --------------------------------------------------------
 if(WITH_FT4222)
-  find_library(FT4222_LIBRARY ft4222
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222/lib /usr/local/lib /usr/lib NO_DEFAULT_PATH)
-  if(NOT FT4222_LIBRARY)
-    find_library(FT4222_LIBRARY ft4222)
+  set(FT4222_HINT "${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222/lib/libft4222.so.1.4.4.232")
+  set(FT4222_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222/lib")
+  if(EXISTS "${FT4222_HINT}")
+    set(FT4222_LIBRARY "${FT4222_HINT}")
+  else()
+    find_library(FT4222_LIBRARY ft4222
+      PATHS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/ft4222/lib /usr/local/lib /usr/lib NO_DEFAULT_PATH)
+    if(NOT FT4222_LIBRARY)
+      find_library(FT4222_LIBRARY ft4222)
+    endif()
   endif()
   if(NOT FT4222_LIBRARY)
     message(FATAL_ERROR "WITH_FT4222=ON requires libft4222.so in project root or /usr/local/lib")
   endif()
+  add_library(ft4222::ft4222 SHARED IMPORTED)
+  set_target_properties(ft4222::ft4222 PROPERTIES IMPORTED_LOCATION "${FT4222_LIBRARY}")
   add_compile_definitions(WITH_FT4222=1)
   message(STATUS "FT4222H enabled (${FT4222_LIBRARY})")
 endif()
@@ -85,7 +111,7 @@ endif()
 # ---- common settings -----------------------------------------------------------
 set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread)
 if(WITH_FT4222)
-  list(APPEND COMMON_LIBS ${FT4222_LIBRARY})
+  list(APPEND COMMON_LIBS ft4222::ft4222)
 endif()
 
 set(COMMON_INCLUDES
@@ -100,17 +126,78 @@ set(DEFAULT_PATH_DEFS
   RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/videos")
 
 # ---- shared library (compile once, link everywhere) ----------------------------
-add_library(rmcs_laser_guidance_core ${ALL_SOURCES})
-target_include_directories(rmcs_laser_guidance_core PUBLIC ${COMMON_INCLUDES})
-target_compile_definitions(rmcs_laser_guidance_core PRIVATE ${DEFAULT_PATH_DEFS})
-target_link_libraries(rmcs_laser_guidance_core PUBLIC ${COMMON_LIBS})
+add_library(laser_guidance_support ${SUPPORT_SOURCES})
+target_include_directories(laser_guidance_support PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_support PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_support PUBLIC yaml-cpp::yaml-cpp ${OpenCV_LIBS})
+
+add_library(laser_guidance_tracking ${TRACKING_SOURCES})
+target_include_directories(laser_guidance_tracking PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_tracking PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_tracking PUBLIC ${COMMON_LIBS})
+
+target_link_libraries(laser_guidance_support PUBLIC laser_guidance_tracking)
+
+add_library(laser_guidance_vision ${VISION_SOURCES})
+target_include_directories(laser_guidance_vision PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_vision PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_vision PUBLIC laser_guidance_support ${COMMON_LIBS})
 if(WITH_ONNXRUNTIME)
-  target_link_libraries(rmcs_laser_guidance_core PUBLIC onnxruntime::onnxruntime)
+  target_link_libraries(laser_guidance_vision PUBLIC onnxruntime::onnxruntime)
 endif()
 if(WITH_TENSORRT)
-  target_link_libraries(rmcs_laser_guidance_core PUBLIC
+  target_link_libraries(laser_guidance_vision PUBLIC
     TensorRT::nvinfer TensorRT::nvonnxparser TensorRT::nvinfer_plugin
     ${CUDA_LIBRARY} ${CUDA_RT_LIBRARY})
+endif()
+
+add_library(laser_guidance_guidance ${GUIDANCE_SOURCES})
+target_include_directories(laser_guidance_guidance PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_guidance PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_guidance PUBLIC laser_guidance_support ${COMMON_LIBS})
+if(WITH_FT4222)
+  target_link_libraries(laser_guidance_guidance PUBLIC ft4222::ft4222)
+endif()
+
+add_library(laser_guidance_bridges ${BRIDGE_SOURCES})
+target_include_directories(laser_guidance_bridges PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_bridges PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_bridges PUBLIC
+  laser_guidance_support laser_guidance_tracking ${COMMON_LIBS})
+
+add_library(laser_guidance_runtime ${RUNTIME_SOURCES})
+target_include_directories(laser_guidance_runtime PUBLIC ${COMMON_INCLUDES})
+target_compile_definitions(laser_guidance_runtime PRIVATE ${DEFAULT_PATH_DEFS})
+target_link_libraries(laser_guidance_runtime PUBLIC
+  laser_guidance_support
+  laser_guidance_vision
+  laser_guidance_tracking
+  laser_guidance_guidance
+  laser_guidance_bridges
+  ${COMMON_LIBS})
+
+add_library(rmcs_laser_guidance_core INTERFACE)
+target_include_directories(rmcs_laser_guidance_core INTERFACE ${COMMON_INCLUDES})
+target_link_libraries(rmcs_laser_guidance_core INTERFACE
+  laser_guidance_support
+  laser_guidance_vision
+  laser_guidance_tracking
+  laser_guidance_guidance
+  laser_guidance_bridges
+  laser_guidance_runtime)
+
+if(WITH_FT4222)
+  foreach(_target
+      laser_guidance_guidance
+      laser_guidance_runtime)
+    set_property(TARGET ${_target} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
+  endforeach()
+
+  add_custom_target(ft4222_runtime_link ALL
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+      "${FT4222_LIBRARY}"
+      "${CMAKE_BINARY_DIR}/libft4222.so"
+    VERBATIM)
 endif()
 
 # ---- tools ---------------------------------------------------------------------
@@ -123,6 +210,10 @@ foreach(_src ${TOOL_SOURCES})
   target_include_directories(tool_${_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
   target_compile_definitions(tool_${_name} PRIVATE ${DEFAULT_PATH_DEFS})
   target_link_libraries(tool_${_name} PRIVATE rmcs_laser_guidance_core)
+  if(WITH_FT4222)
+    set_property(TARGET tool_${_name} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
+    add_dependencies(tool_${_name} ft4222_runtime_link)
+  endif()
 endforeach()
 
 # ---- tests ---------------------------------------------------------------------
@@ -133,6 +224,20 @@ foreach(_src ${TEST_SOURCES})
   target_include_directories(${_name} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tools ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_compile_definitions(${_name} PRIVATE ${DEFAULT_PATH_DEFS})
-  target_link_libraries(${_name} PRIVATE rmcs_laser_guidance_core)
+  if(_src MATCHES "tests/runtime/")
+    target_link_libraries(${_name} PRIVATE
+      laser_guidance_support
+      laser_guidance_vision
+      laser_guidance_tracking
+      laser_guidance_guidance
+      laser_guidance_bridges
+      laser_guidance_runtime)
+  else()
+    target_link_libraries(${_name} PRIVATE rmcs_laser_guidance_core)
+  endif()
+  if(WITH_FT4222)
+    set_property(TARGET ${_name} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
+    add_dependencies(${_name} ft4222_runtime_link)
+  endif()
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()

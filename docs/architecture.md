@@ -27,48 +27,103 @@
 | 视频 | BGR 原始帧 | 共享内存 | `/laser_frame` (shm_open) |
 | 视频 | H.264 编码流 | RTP | `127.0.0.1:5004` (可选) |
 
+## Runtime 分层
+
+当前运行架构不再由 `tool_competition` / `tool_preview` 各自拼装主循环，而是拆成：
+
+- runtime
+  - `CompetitionRuntime`
+  - `PreviewRuntime`
+  - `RuntimeCommand`
+  - `RuntimeSnapshot`
+- bridges
+  - `FifoControlServer`
+  - `UdpTelemetryPublisher`
+  - `ShmFramePublisher`
+  - `RtpFramePublisher`
+- guidance
+  - `AimSolver`
+  - `GalvoExecutor`
+  - `ScanController`
+  - `GuidancePipeline` 仅保留给 `GuidanceToolRuntime` 的兼容内核
+
+职责边界：
+
+- `tool_*.cpp` 只做入口，不承载主业务循环
+- runtime 只处理 typed command，不解析 FIFO 字符串
+- bridge 只做协议转换和数据搬运，不承载算法判断
+
+## 设计原则
+
+- 先稳定运行时边界，再扩能力
+  - 新需求优先判断它属于 runtime、guidance、vision、tracking 还是 bridge
+- 先类型化，再协议化
+  - 先定义内部 command/snapshot/data model，再决定是否暴露 FIFO/UDP/CLI
+- 入口薄，模块厚
+  - `tool_*` 只负责启动、参数、退出
+  - 主业务循环必须沉到库层
+- 兼容保留，但不继续扩张
+- `GuidancePipeline`、`TargetObservation`、`rmcs_laser_guidance_core` 是迁移缓冲层
+  - 新逻辑默认接 `DetectionBatch` / `TargetTrack` / `AimOutput`
+- bridge 不反向侵入 runtime
+  - runtime 不依赖字符串协议和外部 UI 细节
+  - bridge 也不把算法策略回写进 runtime
+
+## 后续演进约束
+
+- 如果要加新控制项：
+  - 先改 `RuntimeCommand`
+  - 再改 runtime 状态机
+  - 最后再决定 FIFO/CLI 是否暴露
+- 如果要加新调试或遥测：
+  - 先改 `RuntimeSnapshot`
+  - 再由 bridge 或 UI 消费
+- 如果要加新引导策略：
+  - 解算逻辑进入 `AimSolver`
+  - 硬件下发进入 `GalvoExecutor`
+  - 搜索/扫描进入 `ScanController`
+- 不允许再新增“工具私有主循环”作为长期形态
+
 ## 当前数据流
 
 ```text
-V4l2Capture
--> read_frame()
+CompetitionRuntime / PreviewRuntime
+-> V4l2Capture
 -> Frame
+-> LatestValue<Frame> / LatestValue<QueuedFrame>
 -> ModelInfer (异步推理线程)
--> EkfTracker (CA-EKF 平滑/预测)
--> draw_candidates() + draw_ekf_state()   ← 框/标签/准星 + EKF 绿点/速度箭头
--> VideoShmProducer.push_frame()          ← 共享内存 BGR 帧 (零拷贝)
--> RtpStreamer.push()                     ← 可选 RTP 推流 (ffmpeg)
--> UdpSender.send()                       ← UDP 观测 + EKF 状态
--> cv::imshow()                           ← 可选本地预览 (关窗即停)
+-> DetectionBatch
+-> TargetTrack (raw / EKF-guided)
+-> AimSolver -> AimOutput
+-> draw_candidates() + draw_ekf_state()
+-> ShmFramePublisher / RtpFramePublisher / UdpTelemetryPublisher
+-> cv::imshow()                           ← 可选本地预览
 ```
 
-## 引导数据流 (tool_guidance)
+## 引导数据流 (统一 runtime 路径)
 
 ```text
 ModelInfer
--> TargetObservation (center + bbox + class_id)
--> EkfTracker (CA-EKF, 像素空间平滑/预测)
--> EKF position (aim_center)
-        ↓
-DepthEstimator (bbox 尺度 → 深度 Z)
-        ↓ Z + aim_center
-CameraProjection (像素 + Z → 相机 3D 点 P_c)
-        ↓ P_c
-GalvoKinematics (外参平移 → 振镜系 P_g → 角度 θx,θy)
-        ↓ θx,θy
-GalvoDriver (角度→电压→DAC码值→SPI写入)
-        ↓ SPI
-FT4222H → DAC8568 → 振镜驱动 → 反射镜
+-> DetectionBatch
+-> TargetTrack
+-> AimSolver
+  -> DepthEstimator / LidarDepthEstimator
+  -> CameraProjection
+  -> GalvoKinematics / VoltageMapper
+  -> AimOutput
+-> GalvoExecutor
+-> ScanController (rectangle scan only)
+-> FT4222H → DAC8568 → 振镜驱动 → 反射镜
 ```
 
 ### Direct Voltage 数据流 (command_model: direct_voltage)
 
 ```text
-ModelInfer + EkfTracker
+ModelInfer + TargetTrack
 -> (center + bbox/area)
 -> VoltageMapper (LUT 或 poly3 三阶多项式)
 -> 直接预测电压 (Vx, Vy)
--> GalvoDriver::set_voltages()
+-> GalvoExecutor
 -> DAC/SPI 写入
 ```
 
@@ -111,15 +166,19 @@ or
 其中：
 
 - `Frame` 是图像和时间戳的统一载体
-- `TargetObservation` 是最小视觉结果
+- `DetectionBatch` 是模型侧最小输出
+- `TargetTrack` 是 runtime 侧跟踪视图
+- `AimOutput` 是 guidance 侧执行视图
+- `TargetObservation` 保留为兼容输出与 UDP 观测格式
 - `ModelInfer` 负责模型推理接缝，并组合 `ModelRuntime`（ONNX）或 `TensorRTEngine`，以及 `ModelAdapter`（输出映射）
 - `ModelRuntime` 负责 ONNX Runtime session（可选）或 TensorRT engine（可选）；输入输出元数据读取和实际推理执行
 - `ModelAdapter` 负责把 YOLO26 端到端输出 `[1,300,6]` 映射为内部 `ModelCandidate`；3 class（purple=0, red=1, blue=2），无需 NMS
 - `EkfTracker` 负责对检测中心做常加速度 EKF 平滑/预测，丢帧时保持状态估计（已接入异步推理线程）
 - `DebugRenderer` 负责调试 overlay：含候选框、类别、置信度、准星；无 candidates 时回退为 contour + center
-- `RtpStreamer` 负责将 overlay 后的画面通过 RTP 推流输出（ffmpeg 子进程），供 VLC 等外部播放器接收
-- `VideoShmProducer` 负责通过 POSIX 共享内存（`/laser_frame`）输出 BGR 原始帧，双缓冲 + 原子序号，供 UI 零拷贝读取
-- `UdpSender` 负责通过 UDP 发送 TargetObservation 和 EKF 状态（检测结果、跟踪位置、速度等）
+- `RtpFramePublisher` / `RtpStreamer` 负责将 overlay 后的画面通过 RTP 推流输出
+- `ShmFramePublisher` / `VideoShmProducer` 负责通过 POSIX 共享内存输出 BGR 原始帧
+- `UdpTelemetryPublisher` / `UdpSender` 负责通过 UDP 发送兼容观测格式
+- `FifoControlServer` 负责 `/tmp/laser_cmd` -> `RuntimeCommand` 映射
 - `V4l2Capture` 负责从 `/dev/videoN` 读取 UVC 图像
 
 ## 模块职责
@@ -187,12 +246,24 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
 
 - `EkfTracker`
   - 常加速度模型 EKF，6 维状态 `[x, y, vx, vy, ax, ay]`
-  - 观测为 `TargetObservation.center` 位置
+  - 观测为检测中心位置
   - 支持 predict-only（丢帧时状态传播）和 update（检测帧校正）
   - `max_missed_frames` 判定目标丢失后自动重置
-  - 已接入 `tool_guidance`：瞄准用 EKF 预测中心，测距用当前 bbox 尺度
+  - 已接入 `GuidanceToolRuntime` 和统一 runtime 推理线程
 
 ### Guidance（引导管线）
+
+- `AimSolver`
+  - 负责 depth / projection / kinematics / voltage mapping 解算
+  - 不直接写硬件
+
+- `GalvoExecutor`
+  - 负责把 `AimOutput` 下发到 `GalvoDriver`
+  - 负责回中、校准角度/电压命令
+
+- `ScanController`
+  - 独立管理 rectangle scan 线程
+  - 主循环只更新扫描中心，不直接占有驱动输出
 
 - `DepthEstimator`
   - 单目测距：`Z = fx × W_physical / pixel_size`
@@ -213,17 +284,55 @@ RTP 推流基于系统 ffmpeg，不依赖 ROS，纯 C++ standalone 构建即可�
   - 封装 DAC 内部参考使能、回中、角度下发
 
 - `GuidancePipeline`
-  - 编排 depth → projection → kinematics → driver
+  - 兼容入口，当前主要由 `GuidanceToolRuntime` 内部复用
   - 提供 `process_ekf_guided(ekf_center, candidate, io_depth)` 接口
   - EKF 中心瞄准 + bbox 测距，丢帧时深度保持
   - 标定模式：`calib_mode=true` 时锁死振镜角度，通过 `estimate_depth` + `project_to_camera` 输出靶 3D 坐标
   - 扫描模式：`scan_mode=rectangle` 时启动独立线程持续 raster 扫描，主线程仅更新中心
 
+### Runtime / Bridge
+
+- `CompetitionRuntime`
+  - 比赛守护进程统一入口
+  - 负责 capture / infer / EKF / guidance / RTP / SHM / UDP / recording 生命周期
+
+- `PreviewRuntime`
+  - 复用同一套异步推理和输出管线，但不要求 guidance 就绪
+
+- `RuntimeCommand`
+  - 固定控制集合：`set_streaming` / `set_recording` / `set_enemy_color`
+  - `set_backend` / `set_ekf` / `shutdown`
+
+- `RuntimeSnapshot`
+  - 汇总状态、检测、track、aim、recording root、active backend
+  - backend 字段直接从 `InferenceFacade` 的当前 active runner 推导，不在 runtime 内维护第二份 backend 状态
+
+- `FifoControlServer`
+  - 兼容旧字符串协议：
+    - `stream on/off`
+    - `record on/off`
+    - `enemy red/blue/auto`
+    - `backend onnx/tensorrt`
+    - `ekf on/off`
+    - `quit`
+  - 但它只负责转换，不进入算法主循环
+
+### 为什么保留兼容层
+
+- `GuidancePipeline`
+  - `GuidanceToolRuntime` 仍用它承接现有校准、CSV 记录和 purple hit 边沿逻辑，短期保留可降低迁移风险
+- `TargetObservation`
+  - UDP 和旧测试仍围绕它工作，短期保留可避免一次性改穿所有输出面
+- `rmcs_laser_guidance_core`
+  - 现有工具和测试还在链接这个聚合 target，保留它可以让分层演进与迁移解耦
+
+兼容层的含义是“暂时保留”，不是“继续扩展”。新能力优先接入分层 target 和 facade。
+
 ### Calibration Tools
 
 - `tool_guidance` 标定模式
   - 配置 `calib_mode: true` + `config/calib_guidance.yaml`
-  - WASD 实时微调振镜角度（步长 0.1°）
+  - `GuidanceToolRuntime` 负责 WASD 实时微调、步长缩放和 CSV 落盘
   - geometry 模式：空格键记录当前 `(θx, θy, P_c)` 到 `geometry_calib_records.csv`
   - direct_voltage 模式：空格键记录当前 `(center, bbox, Vx, Vy)` 到 `voltage_records.csv`
 
