@@ -20,7 +20,7 @@
 
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
-#include "tool_support.hpp"
+#include "laser_guidance/support.hpp"
 
 namespace {
 
@@ -313,7 +313,7 @@ auto load_calibration_yaml(const std::filesystem::path& path)
 auto resolve_args(
     int argc, char** argv, std::filesystem::path& config_path, std::filesystem::path& output_path)
     -> void {
-    config_path = rmcs_laser_guidance::examples::default_config_path();
+    config_path = rmcs_laser_guidance::default_config_path();
     output_path = "config/camera_calib.yaml";
 
     if (argc > 1)
@@ -472,7 +472,7 @@ enum class KeyAction {
 auto handle_key(
     int key, CalibSession& session, const ChessboardDetection& detection, cv::Size image_size,
     const std::filesystem::path& output_path) -> KeyAction {
-    using rmcs_laser_guidance::examples::should_exit_from_key;
+    using rmcs_laser_guidance::should_exit_from_key;
 
     switch (key) {
     case 'c':

@@ -5,7 +5,7 @@
 
 #include "config.hpp"
 #include "core/replay.hpp"
-#include "tool_support.hpp"
+#include "laser_guidance/support.hpp"
 #include "vision/model_infer.hpp"
 
 namespace {
@@ -13,13 +13,13 @@ namespace {
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1)
         return argv[1];
-    return rmcs_laser_guidance::examples::default_config_path();
+    return rmcs_laser_guidance::default_config_path();
 }
 
 auto resolve_replay_dir(int argc, char** argv) -> std::filesystem::path {
     if (argc > 2)
         return argv[2];
-    return rmcs_laser_guidance::examples::default_sample_replay_path();
+    return rmcs_laser_guidance::default_sample_replay_path();
 }
 
 auto resolve_model_path(const rmcs_laser_guidance::InferenceConfig& config, int argc, char** argv)
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 
         std::println(
             "backend={} model_path={} runtime_enabled={} success={} contract_supported={}",
-            rmcs_laser_guidance::examples::inference_backend_name(config.inference.backend),
+            rmcs_laser_guidance::inference_backend_name(config.inference.backend),
             config.inference.model_path.empty() ? "<unset>" : config.inference.model_path.string(),
             result.enabled, result.success, result.contract_supported);
         print_value_infos("inputs", result.inputs);

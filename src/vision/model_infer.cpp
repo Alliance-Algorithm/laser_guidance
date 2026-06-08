@@ -248,4 +248,8 @@ auto ModelInfer::infer(const Frame& frame) const -> ModelInferResult {
     return details_->infer_onnx(frame, std::move(result));
 }
 
+auto ModelInfer::is_ready() const -> bool { return details_->startup_ready; }
+
+auto ModelInfer::startup_message() const -> const std::string& { return details_->message; }
+
 } // namespace rmcs_laser_guidance

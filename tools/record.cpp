@@ -8,7 +8,7 @@
 
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
-#include "tool_support.hpp"
+#include "laser_guidance/support.hpp"
 #include "vision/training_data.hpp"
 
 namespace {
@@ -18,7 +18,7 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1)
         return argv[1];
-    return rmcs_laser_guidance::examples::default_config_path();
+    return rmcs_laser_guidance::default_config_path();
 }
 
 auto resolve_output_root(int argc, char** argv) -> std::filesystem::path {
@@ -63,7 +63,7 @@ auto print_mode(
     std::println(
         "requested device={} mode={}x{}@{} format={}", requested.device_path.string(),
         requested.width, requested.height, requested.framerate,
-        rmcs_laser_guidance::examples::pixel_format_name(requested.pixel_format));
+        rmcs_laser_guidance::pixel_format_name(requested.pixel_format));
     std::println(
         "actual    device={} mode={}x{}@{} format={}", actual.device_path.string(), actual.width,
         actual.height, actual.framerate, actual.fourcc);
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     try {
         const auto config_path = resolve_config_path(argc, argv);
         auto record_options =
-            rmcs_laser_guidance::examples::load_record_session_options(config_path);
+            rmcs_laser_guidance::load_record_session_options(config_path);
         if (argc > 2)
             record_options.output_root = resolve_output_root(argc, argv);
         if (argc > 3)
@@ -116,10 +116,10 @@ int main(int argc, char** argv) {
 
         const auto config = rmcs_laser_guidance::load_config(config_path);
         const auto record_v4l2_config =
-            rmcs_laser_guidance::examples::record_session_v4l2_config(config.v4l2);
+            rmcs_laser_guidance::record_session_v4l2_config(config.v4l2);
         std::println(
             "record_session override: forcing v4l2.pixel_format={} for capture",
-            rmcs_laser_guidance::examples::pixel_format_name(record_v4l2_config.pixel_format));
+            rmcs_laser_guidance::pixel_format_name(record_v4l2_config.pixel_format));
 
         rmcs_laser_guidance::V4l2Capture capture(record_v4l2_config);
         const auto open_result = capture.open();
@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
 
             if (config.debug.show_window) {
                 cv::imshow("rmcs_laser_guidance_record_session", frame->image);
-                if (rmcs_laser_guidance::examples::should_exit_from_key(cv::waitKey(1)))
+                if (rmcs_laser_guidance::should_exit_from_key(cv::waitKey(1)))
                     break;
             }
         }

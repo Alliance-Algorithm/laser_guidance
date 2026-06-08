@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <print>
 
-#include "tool_support.hpp"
+#include "laser_guidance/support.hpp"
 #include "vision/training_data.hpp"
 
 namespace {
@@ -10,7 +10,7 @@ namespace {
 auto resolve_session_root(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1)
         return argv[1];
-    return rmcs_laser_guidance::examples::default_video_session_root();
+    return rmcs_laser_guidance::default_video_session_root();
 }
 
 auto resolve_dataset_root(int argc, char** argv) -> std::filesystem::path {

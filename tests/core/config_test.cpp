@@ -1,7 +1,7 @@
 #include <print>
 
 #include "config.hpp"
-#include "tool_support.hpp"
+#include "laser_guidance/support.hpp"
 #include "test_utils.hpp"
 
 int main() {
@@ -67,7 +67,7 @@ int main() {
                 == (default_config_path().parent_path().parent_path() / "videos"),
             "default video session root mismatch");
         const auto default_record_options =
-            rmcs_laser_guidance::examples::load_record_session_options(default_config_path());
+            rmcs_laser_guidance::load_record_session_options(default_config_path());
         require(
             default_record_options.output_root == default_video_session_root(),
             "default record output root mismatch");
@@ -86,7 +86,7 @@ int main() {
         require(
             default_record_options.target_color == "red", "default record target color mismatch");
         const auto forced_record_v4l2_config =
-            rmcs_laser_guidance::examples::record_session_v4l2_config({
+            rmcs_laser_guidance::record_session_v4l2_config({
                 .device_path = "/dev/video7",
                 .width = 1280,
                 .height = 720,
@@ -125,7 +125,7 @@ int main() {
         require(capture_profile.debug.show_window, "capture profile show_window mismatch");
         require(capture_profile.debug.draw_overlay, "capture profile draw_overlay mismatch");
         const auto capture_record_options =
-            rmcs_laser_guidance::examples::load_record_session_options(capture_profile_path);
+            rmcs_laser_guidance::load_record_session_options(capture_profile_path);
         require(
             capture_record_options.output_root == std::filesystem::path("./videos"),
             "capture record output root mismatch");

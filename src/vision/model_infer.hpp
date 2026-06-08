@@ -25,6 +25,8 @@ public:
     auto operator=(ModelInfer&&) noexcept -> ModelInfer&;
 
     auto infer(const Frame& frame) const -> ModelInferResult;
+    [[nodiscard]] auto is_ready() const -> bool;
+    [[nodiscard]] auto startup_message() const -> const std::string&;
 
 private:
     struct Details;
