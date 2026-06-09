@@ -156,6 +156,8 @@ auto RuntimeBase::start() -> std::expected<void, std::string> {
     negotiated_format_ = *open_result;
 
     if (auto result = inference_.start(); !result) {
+        capture_.close();
+        negotiated_format_.reset();
         state_.last_error = result.error();
         update_status_locked();
         return result;
@@ -206,28 +208,30 @@ auto RuntimeBase::submit_command(const RuntimeCommand& command) -> std::expected
     }
 
     bool shutdown_queue = false;
-    std::scoped_lock lock(state_.mutex);
-    switch (command.type) {
-    case RuntimeCommandType::set_streaming:
-        state_.streaming_requested = command.enabled;
-        break;
-    case RuntimeCommandType::set_recording:
-        state_.recording_requested = command.enabled;
-        break;
-    case RuntimeCommandType::set_enemy_color:
-        state_.enemy_color = command.enemy_color;
-        break;
-    case RuntimeCommandType::set_backend:
-        break;
-    case RuntimeCommandType::set_ekf:
-        state_.ekf_enabled = command.enabled;
-        break;
-    case RuntimeCommandType::shutdown:
-        state_.stop_requested = true;
-        shutdown_queue = true;
-        break;
+    {
+        std::scoped_lock lock(state_.mutex);
+        switch (command.type) {
+        case RuntimeCommandType::set_streaming:
+            state_.streaming_requested = command.enabled;
+            break;
+        case RuntimeCommandType::set_recording:
+            state_.recording_requested = command.enabled;
+            break;
+        case RuntimeCommandType::set_enemy_color:
+            state_.enemy_color = command.enemy_color;
+            break;
+        case RuntimeCommandType::set_backend:
+            break;
+        case RuntimeCommandType::set_ekf:
+            state_.ekf_enabled = command.enabled;
+            break;
+        case RuntimeCommandType::shutdown:
+            state_.stop_requested = true;
+            shutdown_queue = true;
+            break;
+        }
+        update_status_locked();
     }
-    update_status_locked();
     if (shutdown_queue) {
         frame_queue_.shutdown();
     }

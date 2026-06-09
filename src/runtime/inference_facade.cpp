@@ -83,7 +83,7 @@ auto InferenceFacade::start() -> std::expected<void, std::string> {
                 if (!set_active_backend_locked(preferred)
                     && !set_active_backend_locked(RuntimeBackend::onnx)
                     && !set_active_backend_locked(RuntimeBackend::tensorrt)) {
-                    active_infer_.store(nullptr);
+                    has_active_backend_ = false;
                     if (!onnx_error.empty()) {
                         error = std::move(onnx_error);
                     } else if (!trt_error.empty()) {
@@ -108,11 +108,11 @@ auto InferenceFacade::start() -> std::expected<void, std::string> {
 }
 
 auto InferenceFacade::stop() -> void {
-    active_infer_.store(nullptr);
     if (loader_.joinable()) {
         loader_.join();
     }
     std::scoped_lock lock(runners_mutex_);
+    has_active_backend_ = false;
     infer_onnx_.reset();
     infer_trt_.reset();
 }
@@ -121,7 +121,8 @@ auto InferenceFacade::infer(const Frame& frame) const -> std::optional<ModelInfe
     if (config_.inference.backend == InferenceBackendKind::bright_spot) {
         return std::nullopt;
     }
-    auto* active = active_infer_.load();
+    std::scoped_lock lock(runners_mutex_);
+    const auto* active = active_runner_locked();
     if (active == nullptr) {
         return std::nullopt;
     }
@@ -135,17 +136,10 @@ auto InferenceFacade::set_active_backend(const RuntimeBackend backend) -> bool {
 
 auto InferenceFacade::active_backend() const -> std::optional<RuntimeBackend> {
     std::scoped_lock lock(runners_mutex_);
-    auto* active = active_infer_.load();
-    if (active == nullptr) {
+    if (!has_active_backend_) {
         return std::nullopt;
     }
-    if (active == infer_trt_.get()) {
-        return RuntimeBackend::tensorrt;
-    }
-    if (active == infer_onnx_.get()) {
-        return RuntimeBackend::onnx;
-    }
-    return std::nullopt;
+    return active_backend_;
 }
 
 auto InferenceFacade::active_backend_name() const -> std::string {
@@ -174,8 +168,16 @@ auto InferenceFacade::set_active_backend_locked(const RuntimeBackend backend) ->
     if (preferred == nullptr) {
         return false;
     }
-    active_infer_.store(preferred);
+    active_backend_ = backend;
+    has_active_backend_ = true;
     return true;
+}
+
+auto InferenceFacade::active_runner_locked() const -> const IInferRunner* {
+    if (!has_active_backend_) {
+        return nullptr;
+    }
+    return active_backend_ == RuntimeBackend::tensorrt ? infer_trt_.get() : infer_onnx_.get();
 }
 
 } // namespace rmcs_laser_guidance::runtime_internal

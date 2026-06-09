@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -48,13 +47,15 @@ public:
 private:
     auto make_runner(const InferenceConfig& config) const -> std::unique_ptr<IInferRunner>;
     auto set_active_backend_locked(RuntimeBackend backend) -> bool;
+    auto active_runner_locked() const -> const IInferRunner*;
 
     Config config_;
     InferRunnerFactory runner_factory_{};
     mutable std::mutex runners_mutex_;
     std::unique_ptr<IInferRunner> infer_onnx_;
     std::unique_ptr<IInferRunner> infer_trt_;
-    std::atomic<IInferRunner*> active_infer_{nullptr};
+    RuntimeBackend active_backend_ = RuntimeBackend::onnx;
+    bool has_active_backend_ = false;
     std::thread loader_;
 };
 

@@ -1,6 +1,9 @@
+#include <atomic>
+#include <chrono>
 #include <print>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <opencv2/core/mat.hpp>
@@ -13,6 +16,9 @@ namespace {
 struct FakeSpec {
     bool ready = true;
     std::string message{};
+    std::chrono::milliseconds infer_delay{0};
+    std::atomic<int>* in_flight = nullptr;
+    std::atomic<int>* max_in_flight = nullptr;
 };
 
 class FakeRunner final : public rmcs_laser_guidance::runtime_internal::IInferRunner {
@@ -24,6 +30,19 @@ public:
     [[nodiscard]] auto startup_message() const -> const std::string& override { return spec_.message; }
 
     auto infer(const rmcs_laser_guidance::Frame&) const -> rmcs_laser_guidance::ModelInferResult override {
+        if (spec_.in_flight != nullptr) {
+            const int current = spec_.in_flight->fetch_add(1) + 1;
+            if (spec_.max_in_flight != nullptr) {
+                int observed = spec_.max_in_flight->load();
+                while (current > observed
+                       && !spec_.max_in_flight->compare_exchange_weak(observed, current)) {
+                }
+            }
+            if (spec_.infer_delay.count() > 0) {
+                std::this_thread::sleep_for(spec_.infer_delay);
+            }
+            spec_.in_flight->fetch_sub(1);
+        }
         return rmcs_laser_guidance::ModelInferResult{
             .enabled = true,
             .success = true,
@@ -118,6 +137,37 @@ int main() {
             facade.stop();
             require(!facade.infer(frame).has_value(), "stopped facade should not infer");
             require(!facade.active_backend().has_value(), "stopped facade should clear active backend");
+        }
+
+        {
+            std::atomic<int> in_flight{0};
+            std::atomic<int> max_in_flight{0};
+            InferenceFacade facade(
+                make_config(InferenceBackendKind::model),
+                make_factory(
+                    FakeSpec{
+                        .ready = true,
+                        .infer_delay = std::chrono::milliseconds(10),
+                        .in_flight = &in_flight,
+                        .max_in_flight = &max_in_flight,
+                    },
+                    FakeSpec{.ready = false}));
+            const auto start_result = facade.start();
+            require(start_result.has_value(), "facade should start for concurrent stop test");
+
+            const Frame frame{.image = cv::Mat(4, 4, CV_8UC3), .timestamp = rmcs_laser_guidance::Clock::now()};
+            std::thread worker([&] {
+                for (int i = 0; i < 8; ++i) {
+                    (void)facade.infer(frame);
+                }
+            });
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            facade.stop();
+            worker.join();
+
+            require(in_flight.load() == 0, "concurrent stop should drain active inference calls");
+            require(max_in_flight.load() > 0, "concurrent stop test should exercise infer path");
+            require(!facade.active_backend().has_value(), "stopped facade should clear backend after concurrency");
         }
 
         return 0;
