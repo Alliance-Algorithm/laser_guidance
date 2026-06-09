@@ -23,28 +23,28 @@ public:
     /// @param dt_s    帧间隔 (秒)
     void update(bool is_hit, float dt_s);
 
-    [[nodiscard]] float  progress()        const noexcept { return p_; }
-    [[nodiscard]] float  progress_ratio()  const noexcept;
-    [[nodiscard]] bool   is_hitting()      const noexcept { return t_ > 0.0F; }
-    [[nodiscard]] bool   is_locked()       const noexcept { return locked_; }
-    [[nodiscard]] float  lock_remaining_s() const noexcept { return lock_timer_; }
-    [[nodiscard]] int    lock_count()      const noexcept { return lock_count_; }
-    [[nodiscard]] int    stage()           const noexcept { return stage_; }
-    [[nodiscard]] float  p0()              const noexcept { return p0_; }
-    [[nodiscard]] bool   is_exhausted()    const noexcept { return exhausted_; }
+    [[nodiscard]] float progress() const noexcept { return p_; }
+    [[nodiscard]] float progress_ratio() const noexcept;
+    [[nodiscard]] bool is_hitting() const noexcept { return t_ > 0.0F; }
+    [[nodiscard]] bool is_locked() const noexcept { return locked_; }
+    [[nodiscard]] float lock_remaining_s() const noexcept { return lock_timer_; }
+    [[nodiscard]] int lock_count() const noexcept { return lock_count_; }
+    [[nodiscard]] int stage() const noexcept { return stage_; }
+    [[nodiscard]] float p0() const noexcept { return p0_; }
+    [[nodiscard]] bool is_exhausted() const noexcept { return exhausted_; }
 
 private:
     void trigger_lock();
     void advance_stage();
 
-    float p_     = 0.0F;
-    float t_     = 0.0F;
-    int   n_     = 0;
-    float p0_    = 50.0F;
-    int   stage_      = 0;
-    int   lock_count_ = 0;
-    bool  locked_     = false;
-    bool  exhausted_  = false;
+    float p_ = 0.0F;
+    float t_ = 0.0F;
+    int n_ = 0;
+    float p0_ = 50.0F;
+    int stage_ = 0;
+    int lock_count_ = 0;
+    bool locked_ = false;
+    bool exhausted_ = false;
     float lock_timer_ = 0.0F;
 };
 

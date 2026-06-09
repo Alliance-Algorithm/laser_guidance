@@ -19,10 +19,8 @@ public:
 
     auto enable_reference() -> std::expected<void, std::string>;
     auto set_center() -> std::expected<void, std::string>;
-    auto set_angles(float optical_x_deg, float optical_y_deg)
-        -> std::expected<void, std::string>;
-    auto set_voltages(float x_voltage, float y_voltage)
-        -> std::expected<void, std::string>;
+    auto set_angles(float optical_x_deg, float optical_y_deg) -> std::expected<void, std::string>;
+    auto set_voltages(float x_voltage, float y_voltage) -> std::expected<void, std::string>;
 
     [[nodiscard]] auto negotiated_clock_hz() const noexcept -> uint32_t;
     [[nodiscard]] auto optical_to_voltage(float angle_deg) const -> float;

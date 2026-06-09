@@ -5,26 +5,17 @@
 #include <vector>
 
 #include "config.hpp"
+#include "types.hpp"
 #include "vision/model_adapter.hpp"
 #include "vision/model_runtime.hpp"
-#include "types.hpp"
 
 namespace rmcs_laser_guidance {
 
-struct ModelInferResult {
-    bool enabled = false;
-    bool success = false;
-    bool contract_supported = false;
-    TargetObservation observation { };
-    std::vector<ModelCandidate> candidates { };
-    std::vector<ModelValueInfo> inputs { };
-    std::vector<ModelValueInfo> outputs { };
-    std::string message { };
-};
+struct ModelInferResult;
 
 class ModelInfer {
 public:
-    explicit ModelInfer(InferenceConfig config = { });
+    explicit ModelInfer(InferenceConfig config = {});
     ~ModelInfer();
 
     ModelInfer(const ModelInfer&) = delete;
@@ -34,10 +25,23 @@ public:
     auto operator=(ModelInfer&&) noexcept -> ModelInfer&;
 
     auto infer(const Frame& frame) const -> ModelInferResult;
+    [[nodiscard]] auto is_ready() const -> bool;
+    [[nodiscard]] auto startup_message() const -> const std::string&;
 
 private:
     struct Details;
     std::unique_ptr<Details> details_;
+};
+
+struct ModelInferResult {
+    bool enabled = false;
+    bool success = false;
+    bool contract_supported = false;
+    TargetObservation observation{};
+    std::vector<ModelCandidate> candidates{};
+    std::vector<ModelValueInfo> inputs{};
+    std::vector<ModelValueInfo> outputs{};
+    std::string message{};
 };
 
 } // namespace rmcs_laser_guidance

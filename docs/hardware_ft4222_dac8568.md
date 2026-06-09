@@ -434,6 +434,47 @@ V = D / 65535 * 20 - 10
 - `libft4222.so` 是否存在且能被程序加载
 - 是否有权限问题
 
+### USB 能看到设备但程序仍报 "No FTDI devices found"
+
+最可能的原因：`ftdi_sio` 内核模块抢占了 FT4222H 设备。
+
+FT4222H 使用 FTDI 的 D2XX 用户态驱动（libft4222 通过 libusb 直接访问 USB），而 Linux 内核的 `ftdi_sio` 驱动会在设备插入时自动绑定，导致用户态库无法 `claim_interface`。
+
+确认是否被抢占：
+
+```bash
+lsusb -t | grep -A2 0403   # 查看驱动绑定
+lsmod | grep ftdi_sio        # 查看内核模块是否加载
+```
+
+**解决方案（二选一）：**
+
+方式一：临时卸载内核模块
+
+```bash
+sudo rmmod ftdi_sio
+```
+
+方式二：永久解绑该设备（推荐，不影响其他 FTDI 设备）
+
+创建 udev 规则 `/etc/udev/rules.d/99-ft4222-unbind.rules`：
+
+```text
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="601c", \
+  RUN+="/bin/sh -c 'echo $kernel > /sys/bus/usb/drivers/ftdi_sio/unbind'"
+```
+
+然后：
+
+```bash
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+重新插拔 FT4222H 后即可被用户态程序正常打开。
+
+> **容器场景**：Docker 容器以 `--privileged` 运行时，`rmmod` 和 udev 操作均可从容器内执行；建议在宿主机的 udev 规则中处理，容器内只需声明 `privileged: true`。
+
 ### SPI 有波形，但 DAC 没输出
 
 优先查：

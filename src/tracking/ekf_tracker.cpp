@@ -6,12 +6,10 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-    constexpr int kStateDim = 6;
-    constexpr int kMeasDim  = 2;
+constexpr int kStateDim = 6;
+constexpr int kMeasDim = 2;
 
-    auto squared(const double value) -> double {
-        return value * value;
-    }
+auto squared(const double value) -> double { return value * value; }
 
 } // namespace
 
@@ -87,7 +85,7 @@ struct EkfTracker::Details {
     cv::Mat p;
     cv::Mat h;
     cv::Mat r;
-    Clock::time_point last_timestamp { };
+    Clock::time_point last_timestamp{};
     bool initialized = false;
     bool lost = false;
     int missed_frames = 0;
@@ -95,7 +93,7 @@ struct EkfTracker::Details {
 };
 
 EkfTracker::EkfTracker(EkfConfig config)
-    : details_(std::make_unique<Details>(std::move(config))) { }
+    : details_(std::make_unique<Details>(std::move(config))) {}
 
 EkfTracker::~EkfTracker() = default;
 
@@ -110,7 +108,7 @@ auto EkfTracker::predict(const Clock::time_point timestamp) -> void {
         return;
     }
 
-    if (details_->last_timestamp == Clock::time_point { }) {
+    if (details_->last_timestamp == Clock::time_point{}) {
         details_->last_timestamp = timestamp;
         details_->last_dt_seconds = 0.0;
         return;
@@ -119,7 +117,8 @@ auto EkfTracker::predict(const Clock::time_point timestamp) -> void {
     const double dt = std::chrono::duration<double>(timestamp - details_->last_timestamp).count();
     details_->last_timestamp = timestamp;
     details_->last_dt_seconds = dt > 0.0 ? dt : 0.0;
-    if (dt <= 0.0) return;
+    if (dt <= 0.0)
+        return;
 
     const cv::Mat f = details_->build_f(dt);
     const cv::Mat q = details_->build_q(dt);
@@ -161,7 +160,8 @@ auto EkfTracker::update(const cv::Point2f& measurement) -> void {
     details_->lost = false;
 }
 
-auto EkfTracker::process(const cv::Point2f& measurement, const Clock::time_point timestamp) -> void {
+auto EkfTracker::process(const cv::Point2f& measurement, const Clock::time_point timestamp)
+    -> void {
     predict(timestamp);
     update(measurement);
 }
@@ -172,7 +172,8 @@ auto EkfTracker::state() const -> EkfState {
     state.lost = details_->lost;
     state.missed_frames = details_->missed_frames;
     state.dt_seconds = details_->last_dt_seconds;
-    if (!details_->initialized) return state;
+    if (!details_->initialized)
+        return state;
 
     state.position.x = static_cast<float>(details_->x.at<double>(0, 0));
     state.position.y = static_cast<float>(details_->x.at<double>(1, 0));
@@ -183,22 +184,18 @@ auto EkfTracker::state() const -> EkfState {
     return state;
 }
 
-auto EkfTracker::is_initialized() const -> bool {
-    return details_->initialized;
-}
+auto EkfTracker::is_initialized() const -> bool { return details_->initialized; }
 
-auto EkfTracker::is_lost() const -> bool {
-    return details_->lost;
-}
+auto EkfTracker::is_lost() const -> bool { return details_->lost; }
 
 auto EkfTracker::reset() -> void {
     details_->x = cv::Mat::zeros(kStateDim, 1, CV_64F);
     details_->reset_covariance();
-    details_->last_timestamp = Clock::time_point { };
+    details_->last_timestamp = Clock::time_point{};
     details_->initialized = false;
     details_->lost = false;
     details_->missed_frames = 0;
     details_->last_dt_seconds = 0.0;
 }
 
-}
+} // namespace rmcs_laser_guidance

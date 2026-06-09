@@ -5,7 +5,7 @@
 - `V4L2/UVC` 采集卡取图
 - 原始视频会话录制与可选离线抽帧导出
 - YAML 配置加载
-- `Pipeline` 统一视觉入口与可切换后端骨架
+- `CompetitionRuntime` / `PreviewRuntime` 统一运行时入口
 - 调试 overlay 与回放样本
 - 自动测试与工具入口
 - ONNX / TensorRT GPU 推理，双后端运行时热切换
@@ -18,10 +18,67 @@
 
 当前阶段**不包含**：
 
-- 控制链路闭环（比赛模式已闭环）
-- `/gimbal/*` 接口
-- `tracker` / `solver` / `planner`
+- ROS 控制总线 / `/gimbal/*` 接口
+- 通用 `solver` / `planner`
 - `fire_control`
+
+## Runtime 架构
+
+当前运行时已经从“每个 `tool_*.cpp` 自己拼主循环”收敛为“稳定模块 + runtime facade + bridge”；其中统一 runtime 当前覆盖 `tool_competition` / `tool_preview`，`tool_guidance` 仍走兼容 runtime：
+
+- `CompetitionRuntime`
+  - 比赛模式运行时，统一管理 capture / infer / EKF / guidance / RTP / SHM / UDP / recording
+- `PreviewRuntime`
+  - 预览模式运行时，复用同一套生命周期和异步推理骨架
+- `RuntimeCommand`
+  - 类型化控制面：`set_streaming` / `set_recording` / `set_enemy_color` / `set_backend` / `set_ekf` / `shutdown`
+- `RuntimeSnapshot`
+  - 统一导出当前运行状态、检测结果、track、aim 输出和 recording 路径
+- `FifoControlServer`
+  - 只负责 `string -> RuntimeCommand` 协议转换，FIFO 不再是核心接口
+- `UdpTelemetryPublisher` / `ShmFramePublisher` / `RtpFramePublisher`
+  - 只做 bridge 和数据搬运，不承载算法判断
+- `GuidanceToolRuntime`
+  - internal `tool_guidance` 兼容 runtime，独立管理异步推理、校准按键、CSV 记录与 purple hit 边沿记录
+
+`tools/competition.cpp` 和 `tools/preview.cpp` 现在只负责：
+
+- 解析配置路径
+- 创建 runtime
+- 绑定 FIFO bridge
+- 等待退出
+
+### 架构原则
+
+- `tool_*` 不承载业务编排
+  - 新功能优先进 runtime / guidance / bridge，而不是继续堆回工具入口
+- runtime facade 负责生命周期
+  - capture、infer、EKF、guidance、stream、record、shutdown 都由 runtime 统一管理
+- bridge 负责协议，不负责判断
+  - FIFO、UDP、RTP、SHM 只做协议适配和搬运，不做算法决策
+- typed command 优先
+  - 运行时控制先定义 `RuntimeCommand`，再决定是否暴露为 FIFO / CLI / 其他输入面
+- 输出快照统一
+  - 状态观测优先走 `RuntimeSnapshot`，避免每个入口各自拼状态结构
+- `RuntimeSnapshot` / `TargetTrack` 必须保持值语义安全
+  - public snapshot 不允许暴露依赖临时 batch 生命周期的裸指针
+- 兼容路径逐步收缩
+  - `GuidancePipeline`、`TargetObservation`、`rmcs_laser_guidance_core` 当前保留兼容，但新代码默认接 runtime facade 和分层 target
+
+### 后续迁移规则
+
+- 新增比赛/预览控制项时：
+  - 先加 `RuntimeCommand` 和 `RuntimeSnapshot`
+  - 再决定是否映射到 FIFO 文本协议
+- 新增输出通道时：
+  - 先建 bridge，再由 runtime 挂接
+  - 不在算法主循环里直接写协议代码
+- 新增 guidance 策略时：
+  - 解算放 `AimSolver`
+  - 硬件执行放 `GalvoExecutor`
+  - 扫描/搜索放 `ScanController`
+- `tool_guidance` 入口只保留参数解析与生命周期调用；其内部仍是独立兼容 runtime
+- 只有兼容旧实现细节时，才继续触碰 `GuidancePipeline`
 
 ## Build
 
@@ -62,18 +119,14 @@ ctest --test-dir build --output-on-failure
 ./build/tool_competition             # 比赛模式（守护进程，TensorRT+EKF+振镜+推流+录制）
 ./build/tool_preview                 # 本地预览（RTP推流+SHM+FIFO）
 ./build/tool_guidance                # 激光引导（模型+EKF+振镜，支持标定模式）
-./build/tool_capture                 # 录帧 (PNG + manifest)
 ./build/tool_record                  # 原始视频会话录制
-./build/tool_replay                  # 回放预览
 ./build/tool_model_infer             # 模型推理
-./build/tool_detector_benchmark      # 检测 benchmark
 ./build/tool_calibrate               # 相机标定
 ./build/tool_dac8568_smoke           # FT4222 -> DAC8568 硬件冒烟
 ./build/tool_galvo_smoke             # DAC8568 -> 振镜信号冒烟
 ./build/tool_calib_solve             # 外参旋转求解
 ./build/tool_export                  # 离线抽帧导出
 ./build/tool_transcode               # 已录视频转码
-./build/tool_smoke                   # 离线冒烟
 ```
 
 大部分工具接受可选的配置文件路径：
@@ -138,6 +191,8 @@ echo "ekf off"         > /tmp/laser_cmd   # EKF 直驱模式
 echo "quit"            > /tmp/laser_cmd   # 优雅退出
 ```
 
+FIFO 协议仍兼容旧命令词，但运行时内部已经改成 typed command，不再由业务主循环直接解析字符串。
+
 ## 项目结构
 
 ```
@@ -145,18 +200,21 @@ laser_guidance/
 ├── include/               # 公开 API
 │   ├── config.hpp         # YAML 配置加载
 │   ├── types.hpp          # Frame, TargetObservation
-│   ├── pipeline.hpp       # 统一视觉入口
-│   └── laser_guidance.hpp
+│   └── laser_guidance/    # 稳定 facade: support/runtime/bridges
 ├── src/
 │   ├── core/              # 核心模块
 │   ├── vision/            # 检测/推理模块
 │   ├── capture/           # 视频采集 (V4L2)
 │   ├── streaming/         # 网络推流 (RTP/UDP/SHM)
 │   ├── tracking/          # EKF 跟踪
+│   ├── guidance/          # AimSolver / GalvoExecutor / ScanController / GuidancePipeline(兼容)
+│   ├── runtime/           # RuntimeBase / InferenceFacade / GuidanceToolRuntime / runtime facade
+│   ├── bridges/           # FIFO / RTP / SHM / UDP bridge
 │   └── io/                # 硬件 I/O (FT4222H 等)
 ├── tools/                 # 可执行工具
 ├── tests/                 # 自动化测试
 │   ├── core/
+│   ├── runtime/
 │   ├── vision/
 │   └── tracking/
 ├── config/                # YAML 配置文件
@@ -164,46 +222,52 @@ laser_guidance/
 └── test_data/             # 样本回放资源
 ```
 
+## Build Targets
+
+当前 CMake 已拆为分层 target：
+
+- `laser_guidance_support`
+- `laser_guidance_vision`
+- `laser_guidance_tracking`
+- `laser_guidance_guidance`
+- `laser_guidance_bridges`
+- `laser_guidance_runtime`
+
+兼容层 `rmcs_laser_guidance_core` 仍保留，用于平滑迁移现有工具和测试。
+
+建议新增代码直接依赖分层 target，而不是继续把所有依赖都挂在兼容聚合 target 上。
+
 ## C++ API 示例
 
 ```cpp
 #include "config.hpp"
-#include "pipeline.hpp"
-#include "types.hpp"
-
-#include "core/frame_format.hpp"
-#include "capture/v4l2_capture.hpp"
+#include "laser_guidance/runtime.hpp"
 
 using namespace rmcs_laser_guidance;
 
-// 加载配置
 auto config = load_config("config/default.yaml");
+PreviewRuntime runtime(config);
 
-// 打开相机
-V4l2Capture capture(config.v4l2);
-auto negotiated = capture.open();
-if (!negotiated) { /* 处理错误 */ }
-
-// 创建 Pipeline
-Pipeline pipeline(config);
-
-// 主循环
-while (true) {
-    auto frame = capture.read_frame();
-    if (!frame) continue;
-
-    auto obs = pipeline.process(*frame);
-    if (obs && obs->detected) {
-        // 检测到目标
-        printf("target at (%.1f, %.1f)\n", obs->center.x, obs->center.y);
-    }
+if (auto started = runtime.start(); !started) {
+    throw std::runtime_error(started.error());
 }
+
+auto snapshot = runtime.snapshot();
+if (snapshot.detection.detected) {
+    const auto center = snapshot.detection.selected_center;
+    printf("target at (%.1f, %.1f)\n", center.x, center.y);
+}
+
+runtime.stop();
+runtime.join();
 ```
 
-FT4222H 振镜控制：
+FT4222H / DAC8568 最小写入示例：
 
 ```cpp
 #include "io/ft4222_spi.hpp"
+
+#include <array>
 
 auto spi = Ft4222Spi::open(Ft4222Config{
     .sys_clock = Ft4222SysClock::k60MHz,
@@ -212,8 +276,8 @@ auto spi = Ft4222Spi::open(Ft4222Config{
 });
 
 if (spi) {
-    uint8_t dac_cmd[2] = {0x30, 0xFF};   // 12-bit DAC value
-    spi->write(dac_cmd, 2);
+    std::array<uint8_t, 4> enable_ref{0x08, 0x00, 0x00, 0x01};
+    spi->write(enable_ref.data(), static_cast<uint16_t>(enable_ref.size()));
 }
 ```
 
@@ -226,14 +290,18 @@ if (spi) {
 - 原始视频会话目录默认为 `videos/`
 - `models/` 放置 `.onnx`、`.engine`、电压映射模型文件（`vision_voltage_poly_v*.yaml`、`vision_voltage_lut*.yaml`）
 - `test_data/calib/` 放置标定 CSV（voltage_records, geometry_calib_records 等）
-- `Pipeline` 通过 `inference.backend` 在 `bright_spot` / `model`(ONNX) / `tensorrt`(GPU) 间切换
-- TensorRT 需 `-DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON` 且预先生成 `.engine` 文件
+- 运行时 facade 通过 `CompetitionRuntime` / `PreviewRuntime` 暴露统一生命周期和控制接口
+- `RuntimeCommand` 负责运行时热切换：推流、录制、敌方颜色、ONNX/TensorRT、EKF 开关、优雅退出
+- `tool_competition`、`tool_preview` 不再承载主业务循环，只做 runtime 启动入口
+- `tool_guidance` 入口已压薄，但内部仍保留兼容 runtime 主循环
+- TensorRT 需 `-DWITH_TENSORRT=ON` 且预先生成 `.engine` 文件
 - 模型后端支持 YOLO26 端到端推理，输出 `[1,300,6]`（3 class：purple/red/blue）
 - 本仓库不负责本地训练；训练应在外部平台完成，仓库负责数据集生成和模型接入
 - EKF 跟踪器 (`EkfTracker`) 为 standalone 模块，常加速度 6 维状态，支持 lookahead 超前预测
 - Direct voltage 视觉→电压映射：`config/direct_voltage_run.yaml`（比赛配置）、`config/direct_voltage_calib.yaml`（标定采集）。训练脚本 `scripts/train_voltage_poly.py`，模型版本 `models/vision_voltage_poly_v*.yaml`
 - 比赛模式 (`tool_competition`) 融合预览+引导+录制，守护进程启动，支持 RTP 推流（可配码率 `streaming.bitrate`）、视频内录（`record.output_root`）、FIFO 运行时控制
 - 双推理后端：ONNX + TensorRT，启动时同时加载，运行时通过 FIFO 或配置 `inference.backend` 切换
+- guidance 已按职责分出 `AimSolver`、`GalvoExecutor`、`ScanController`；`GuidancePipeline` 仅保留给 `GuidanceToolRuntime` 的兼容内核和旧实现细节
 - 敌方颜色过滤：`inference.enemy_color` (red/blue/auto)，仅处理敌方颜色+紫色候选框
 - EKF 可运行时关闭 (`ekf.enabled: false` 或 `ekf off`)，切换原始检测直驱振镜
 - 被瞄准进度 (`HitProgress`)：规则手册 §5.6.3，3 阶段 P0 阈值，45s 锁定，overlay 进度条
@@ -242,6 +310,91 @@ if (spi) {
 - RTP 推流：`make stream` 后台 daemon + ffplay 窗口，关闭即停。`streaming` 配置段控制，默认端口 5004
 - `.script/` 提供便捷脚本：`set-config`、`scan-camera`、`preview`、`stream`、`stop`
 
+## Docker
+
+### 快速开始
+
+```bash
+# 1. 拉取镜像
+docker pull yukikaze2233/laser-guidance:latest     # 统一镜像（4.6 GB，ONNX + TensorRT）
+
+# 2. 启动比赛模式
+docker compose up -d
+
+# 3. 运行时控制（通过 FIFO）
+echo "stream on"  > /tmp/laser_cmd        # 开启推流
+echo "record on"  > /tmp/laser_cmd        # 开启录制
+echo "enemy red"  > /tmp/laser_cmd        # 敌方颜色
+echo "backend tensorrt" > /tmp/laser_cmd  # 切换推理后端
+echo "quit"       > /tmp/laser_cmd        # 优雅退出
+
+# 4. 停止
+docker compose down
+```
+
+### 镜像说明
+
+| 镜像 | 大小 | 内含 |
+|---|---|---|
+| `yukikaze2233/laser-guidance:latest` | 4.6 GB | ONNX Runtime 1.26.0 + TensorRT 10.13 / CUDA 13.0 / cuDNN 9.12 + OpenCV + ffmpeg + FT4222 |
+
+> 一个镜像同时支持 ONNX Runtime 和 TensorRT 双后端，通过 `config/direct_voltage_run.yaml` 中的 `inference.backend` 或 FIFO `backend` 命令运行时切换。无需 GPU 环境也能正常运行 ONNX 模式。
+
+### 构建（可选，已提供预构建镜像）
+
+```bash
+# 需要 NGC 访问权限（docker login nvcr.io）以提取 TensorRT/CUDA 库
+docker build -t yukikaze2233/laser-guidance:latest . --target runtime
+
+# 开发镜像（含 cmake / gdb）
+docker build -t yukikaze2233/laser-guidance:latest . --target develop
+```
+
+### Compose Profiles
+
+```bash
+# 比赛模式（默认，headless，自动重启，GPU enabled）
+docker compose up -d
+
+# 比赛模式 + 宿主 ffplay 推流预览
+docker compose --profile stream up
+
+# 交互式开发环境（含 GUI 穿透 + OpenCode 复用）
+docker compose run --rm dev
+
+# 指定摄像头设备
+LASER_CAMERA_DEVICE=/dev/video0 docker compose up -d
+```
+
+### 容器运行时绑定
+
+| 资源 | 为什么 |
+|---|---|
+| `/dev:/dev` | 摄像头 V4L2、FT4222 USB 设备、GPU 设备 |
+| `--privileged` | FT4222 D2XX 用户态驱动（libusb）需要 USB 控制权 |
+| `--network=host` | RTP/UDP 推流使用宿主机网络栈 |
+| `--ipc=host` | `/laser_frame` POSIX 共享内存 |
+| `/tmp:/tmp` | FIFO `/tmp/laser_cmd`、SDP `/tmp/laser_guidance.sdp` |
+| `--gpus all` | NVIDIA Container Toolkit GPU 透传 |
+| X11/Wayland | 仅 `dev` profile，支持 `cv::imshow` |
+| OpenCode 配置 | 仅 `dev` profile，复用宿主机 opencode 状态 |
+
+### dev profile 与宿主机 OpenCode 复用
+
+`dev` profile 会自动挂载宿主机的 OpenCode 配置目录，与 RMCS / librmcs 方式一致：
+
+- `${HOME}/.config/opencode` → `/root/.config/opencode`
+- `${HOME}/.local/share/opencode` → `/root/.local/share/opencode`
+- `${HOME}/.agents/skills` → `/root/.agents/skills`（只读）
+
+容器内直接使用宿主机已有的 OpenCode 配置与 skills，无需重新初始化。
+
+### 推送到 Docker Hub
+
+```bash
+docker push yukikaze2233/laser-guidance:latest
+```
+
 ## Docs
 
 - `plan.md`
@@ -249,4 +402,3 @@ if (spi) {
 - `docs/hardware_ft4222_dac8568.md`
 - `docs/dataset_collection.md`
 - `docs/development.md`
-- `docs/future_rmcs_integration.md`

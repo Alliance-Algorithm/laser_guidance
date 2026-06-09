@@ -21,35 +21,34 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-    auto load_yaml_calibration(const std::filesystem::path& path)
-        -> std::pair<cv::Mat, cv::Mat> {
-        const auto yaml = YAML::LoadFile(path.string());
-        const auto calib = yaml["calibration"];
-        if (!calib)
-            throw std::runtime_error("YAML missing 'calibration' key");
+auto load_yaml_calibration(const std::filesystem::path& path) -> std::pair<cv::Mat, cv::Mat> {
+    const auto yaml = YAML::LoadFile(path.string());
+    const auto calib = yaml["calibration"];
+    if (!calib)
+        throw std::runtime_error("YAML missing 'calibration' key");
 
-        cv::Mat camera = cv::Mat::eye(3, 3, CV_64F);
-        const auto mat_node = calib["camera_matrix"];
-        if (!mat_node || mat_node.size() != 3)
-            throw std::runtime_error("missing camera_matrix");
-        for (int i = 0; i < 3; ++i) {
-            if (mat_node[i].size() != 3)
-                throw std::runtime_error("camera_matrix row must have 3 columns");
-            for (int j = 0; j < 3; ++j)
-                camera.at<double>(i, j) = mat_node[i][j].as<double>();
-        }
-
-        const auto dc_node = calib["dist_coeffs"];
-        cv::Mat dist;
-        if (dc_node) {
-            const int n = static_cast<int>(dc_node.size());
-            dist = cv::Mat::zeros(1, n, CV_64F);
-            for (int i = 0; i < n; ++i)
-                dist.at<double>(i) = dc_node[i].as<double>();
-        }
-
-        return { camera, dist };
+    cv::Mat camera = cv::Mat::eye(3, 3, CV_64F);
+    const auto mat_node = calib["camera_matrix"];
+    if (!mat_node || mat_node.size() != 3)
+        throw std::runtime_error("missing camera_matrix");
+    for (int i = 0; i < 3; ++i) {
+        if (mat_node[i].size() != 3)
+            throw std::runtime_error("camera_matrix row must have 3 columns");
+        for (int j = 0; j < 3; ++j)
+            camera.at<double>(i, j) = mat_node[i][j].as<double>();
     }
+
+    const auto dc_node = calib["dist_coeffs"];
+    cv::Mat dist;
+    if (dc_node) {
+        const int n = static_cast<int>(dc_node.size());
+        dist = cv::Mat::zeros(1, n, CV_64F);
+        for (int i = 0; i < n; ++i)
+            dist.at<double>(i) = dc_node[i].as<double>();
+    }
+
+    return {camera, dist};
+}
 
 } // namespace
 
@@ -58,7 +57,8 @@ GuidancePipeline::GuidancePipeline(const Config& config, Ft4222Spi& spi)
     , config_(config.guidance)
     , image_width_(static_cast<float>(config.v4l2.width))
     , image_height_(static_cast<float>(config.v4l2.height)) {
-    if (!config_.enabled) return;
+    if (!config_.enabled)
+        return;
 
     const auto init_err = initialize_driver();
     if (!init_err.empty()) {
@@ -97,31 +97,28 @@ GuidancePipeline::GuidancePipeline(const Config& config, Ft4222Spi& spi)
         if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
             std::println("guidance: CALIB MODE — direct voltage command active");
         } else {
-            std::println("guidance: CALIB MODE — galvo locked at θ=({:.2f}°,{:.2f}°)",
-                         config_.calib_angle_x_deg, config_.calib_angle_y_deg);
+            std::println(
+                "guidance: CALIB MODE — galvo locked at θ=({:.2f}°,{:.2f}°)",
+                config_.calib_angle_x_deg, config_.calib_angle_y_deg);
         }
     }
 }
 
-GuidancePipeline::~GuidancePipeline() {
-    stop_scan_thread();
-}
+GuidancePipeline::~GuidancePipeline() { stop_scan_thread(); }
 
-auto GuidancePipeline::load_calibration(const std::filesystem::path& path)
-    -> std::string {
+auto GuidancePipeline::load_calibration(const std::filesystem::path& path) -> std::string {
     try {
         auto [camera, dist] = load_yaml_calibration(path);
 
-        projection_ = std::make_unique<CameraProjection>(
-            camera.clone(), dist.clone());
-        depth_estimator_ = std::make_unique<DepthEstimator>(
-            config_, camera.clone());
+        projection_ = std::make_unique<CameraProjection>(camera.clone(), dist.clone());
+        depth_estimator_ = std::make_unique<DepthEstimator>(config_, camera.clone());
         lidar_depth_estimator_ = std::make_unique<LidarDepthEstimator>(config_);
         kinematics_ = std::make_unique<GalvoKinematics>(config_);
-        std::println("guidance: initialized, K=[{}x{}] mirror_d={:.1f}mm t=[{:.1f},{:.1f},{:.1f}]mm",
-                     camera.cols, camera.rows,
-                     config_.mirror_separation_mm,
-                     config_.t_x_mm, config_.t_y_mm, config_.t_z_mm);
+        std::println(
+            "guidance: initialized, K=[{}x{}] mirror_d={:.1f}mm "
+            "t=[{:.1f},{:.1f},{:.1f}]mm",
+            camera.cols, camera.rows, config_.mirror_separation_mm, config_.t_x_mm, config_.t_y_mm,
+            config_.t_z_mm);
         return {};
     } catch (const std::exception& e) {
         return std::string("calibration load failed: ") + e.what();
@@ -142,14 +139,18 @@ auto GuidancePipeline::initialize_driver() -> std::string {
 }
 
 auto GuidancePipeline::process(const TargetObservation& observation) -> std::string {
-    if (!initialized_) return "guidance not initialized";
-    if (config_.calib_mode) return "";
-    if (!observation.detected) return "";
-    if (observation.candidates.empty()) return "no candidates";
+    if (!initialized_)
+        return "guidance not initialized";
+    if (config_.calib_mode)
+        return "";
+    if (!observation.detected)
+        return "";
+    if (observation.candidates.empty())
+        return "no candidates";
 
     if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
-        return process_direct_voltage_guided(observation.candidates.front().center,
-                                             &observation.candidates.front());
+        return process_direct_voltage_guided(
+            observation.candidates.front().center, &observation.candidates.front());
     }
 
     const auto& top = observation.candidates.front();
@@ -161,11 +162,13 @@ auto GuidancePipeline::process(const TargetObservation& observation) -> std::str
     if (!depth && depth_estimator_) {
         depth = depth_estimator_->estimate(top);
     }
-    if (!depth) return "depth estimate failed";
+    if (!depth)
+        return "depth estimate failed";
 
     const auto P_c = projection_->project(top.center, *depth);
     auto angles = kinematics_->compute(P_c);
-    if (!angles.valid) return "kinematics failed";
+    if (!angles.valid)
+        return "kinematics failed";
     const float tx = angles.theta_x_optical_deg + config_.angle_offset_x_deg;
     const float ty = angles.theta_y_optical_deg + config_.angle_offset_y_deg;
     if (config_.scan_mode == ScanMode::rectangle) {
@@ -174,24 +177,22 @@ auto GuidancePipeline::process(const TargetObservation& observation) -> std::str
     return write_single(tx, ty, *depth, top.center);
 }
 
-auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
-                                          const ModelCandidate* candidate,
-                                          const LidarFrame* lidar_frame,
-                                          float& io_depth_mm) -> std::string {
-    if (!initialized_) return "guidance not initialized";
-    if (config_.calib_mode) return "";
+auto GuidancePipeline::process_ekf_guided(
+    const cv::Point2f& ekf_center, const ModelCandidate* candidate, const LidarFrame* lidar_frame,
+    float& io_depth_mm) -> std::string {
+    if (!initialized_)
+        return "guidance not initialized";
+    if (config_.calib_mode)
+        return "";
 
     if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
         return process_direct_voltage_guided(ekf_center, candidate);
     }
 
-    if (candidate != nullptr
-        && candidate->bbox.width > 0.0F
-        && candidate->bbox.height > 0.0F) {
+    if (candidate != nullptr && candidate->bbox.width > 0.0F && candidate->bbox.height > 0.0F) {
         std::optional<float> depth;
         if (config_.depth_source == GuidanceDepthSourceKind::lidar_target_cluster
-            && lidar_depth_estimator_
-            && lidar_frame != nullptr) {
+            && lidar_depth_estimator_ && lidar_frame != nullptr) {
             depth = lidar_depth_estimator_->estimate(*candidate, *lidar_frame);
         }
         if (!depth && depth_estimator_) {
@@ -202,11 +203,13 @@ auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
         }
     }
 
-    if (io_depth_mm <= 0.0F) return "no valid depth";
+    if (io_depth_mm <= 0.0F)
+        return "no valid depth";
 
     const auto P_c = projection_->project(ekf_center, io_depth_mm);
     auto angles = kinematics_->compute(P_c);
-    if (!angles.valid) return "kinematics failed";
+    if (!angles.valid)
+        return "kinematics failed";
 
     const float tx = angles.theta_x_optical_deg + config_.angle_offset_x_deg;
     const float ty = angles.theta_y_optical_deg + config_.angle_offset_y_deg;
@@ -218,10 +221,12 @@ auto GuidancePipeline::process_ekf_guided(const cv::Point2f& ekf_center,
     return write_single(tx, ty, io_depth_mm, ekf_center);
 }
 
-auto GuidancePipeline::process_direct_voltage_guided(const cv::Point2f& ekf_center,
-                                                     const ModelCandidate* candidate) -> std::string {
-    if (!voltage_mapper_) return "direct voltage mapper not initialized";
-    if (candidate == nullptr) return "no candidate for direct voltage";
+auto GuidancePipeline::process_direct_voltage_guided(
+    const cv::Point2f& ekf_center, const ModelCandidate* candidate) -> std::string {
+    if (!voltage_mapper_)
+        return "direct voltage mapper not initialized";
+    if (candidate == nullptr)
+        return "no candidate for direct voltage";
     if (candidate->bbox.width <= 0.0F || candidate->bbox.height <= 0.0F)
         return "invalid bbox for direct voltage";
 
@@ -237,14 +242,16 @@ auto GuidancePipeline::process_direct_voltage_guided(const cv::Point2f& ekf_cent
     features.image_height = std::max(1.0F, image_height_);
 
     const auto command = voltage_mapper_->predict(features);
-    if (!command || !command->valid) return "direct voltage predict failed";
-    return write_voltage_single(command->vx + config_.voltage_offset_vx,
-                                command->vy + config_.voltage_offset_vy,
-                                {features.center_x, features.center_y});
+    if (!command || !command->valid)
+        return "direct voltage predict failed";
+    return write_voltage_single(
+        command->vx + config_.voltage_offset_vx, command->vy + config_.voltage_offset_vy,
+        {features.center_x, features.center_y});
 }
 
 auto GuidancePipeline::set_center() -> std::string {
-    if (!initialized_) return "guidance not initialized";
+    if (!initialized_)
+        return "guidance not initialized";
     std::println("guidance: centering galvo");
     {
         std::scoped_lock scan_lock(scan_mutex_);
@@ -258,13 +265,13 @@ auto GuidancePipeline::set_center() -> std::string {
     return "";
 }
 
-auto GuidancePipeline::write_single(float theta_x, float theta_y,
-                                     float depth_mm, const cv::Point2f& center)
-    -> std::string {
+auto GuidancePipeline::write_single(
+    float theta_x, float theta_y, float depth_mm, const cv::Point2f& center) -> std::string {
     static int log_counter = 0;
     if (++log_counter % 30 == 0) {
-        std::println("guidance: depth={:.1f}mm aim=({:.1f},{:.1f}) θ=[{:.2f}°,{:.2f}°]",
-                     depth_mm, center.x, center.y, theta_x, theta_y);
+        std::println(
+            "guidance: depth={:.1f}mm aim=({:.1f},{:.1f}) θ=[{:.2f}°,{:.2f}°]", depth_mm, center.x,
+            center.y, theta_x, theta_y);
     }
     last_output_theta_x_deg_.store(theta_x, std::memory_order_relaxed);
     last_output_theta_y_deg_.store(theta_y, std::memory_order_relaxed);
@@ -279,12 +286,13 @@ auto GuidancePipeline::write_single(float theta_x, float theta_y,
     return "";
 }
 
-auto GuidancePipeline::write_voltage_single(float x_voltage, float y_voltage,
-                                            const cv::Point2f& center) -> std::string {
+auto GuidancePipeline::write_voltage_single(
+    float x_voltage, float y_voltage, const cv::Point2f& center) -> std::string {
     static int log_counter = 0;
     if (++log_counter % 30 == 0) {
-        std::println("guidance: direct_voltage aim=({:.1f},{:.1f}) V=[{:.3f},{:.3f}]",
-                     center.x, center.y, x_voltage, y_voltage);
+        std::println(
+            "guidance: direct_voltage aim=({:.1f},{:.1f}) V=[{:.3f},{:.3f}]", center.x, center.y,
+            x_voltage, y_voltage);
     }
     last_output_vx_.store(x_voltage, std::memory_order_relaxed);
     last_output_vy_.store(y_voltage, std::memory_order_relaxed);
@@ -308,16 +316,14 @@ auto GuidancePipeline::write_voltage_single(float x_voltage, float y_voltage,
     return {};
 }
 
-auto GuidancePipeline::update_scan_center(float theta_x, float theta_y,
-                                          float depth_mm, const cv::Point2f& center)
-    -> std::string {
+auto GuidancePipeline::update_scan_center(
+    float theta_x, float theta_y, float depth_mm, const cv::Point2f& center) -> std::string {
     static int log_counter = 0;
     if (++log_counter % 30 == 0) {
-        std::println("guidance: scan rect {:.1f}°×{:.1f}°({}×{}) depth={:.1f}mm",
-                     config_.scan_width_deg, config_.scan_height_deg,
-                     std::max(2, config_.scan_grid_n),
-                     std::max(2, config_.scan_grid_n),
-                     depth_mm);
+        std::println(
+            "guidance: scan rect {:.1f}°×{:.1f}°({}×{}) depth={:.1f}mm", config_.scan_width_deg,
+            config_.scan_height_deg, std::max(2, config_.scan_grid_n),
+            std::max(2, config_.scan_grid_n), depth_mm);
     }
 
     {
@@ -334,8 +340,7 @@ auto GuidancePipeline::update_scan_center(float theta_x, float theta_y,
     return "";
 }
 
-auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg)
-    -> std::string {
+auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg) -> std::string {
     const float hw = config_.scan_width_deg * 0.5F;
     const float hh = config_.scan_height_deg * 0.5F;
     const int n = std::max(2, config_.scan_grid_n);
@@ -345,14 +350,16 @@ auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg)
     for (int row = 0; row < n; ++row) {
         {
             std::scoped_lock scan_lock(scan_mutex_);
-            if (scan_stop_ || !scan_active_) return "";
+            if (scan_stop_ || !scan_active_)
+                return "";
         }
         const float y = cy_deg - hh + static_cast<float>(row) * sy;
         if (row % 2 == 0) {
             for (int col = 0; col < n; ++col) {
                 {
                     std::scoped_lock scan_lock(scan_mutex_);
-                    if (scan_stop_ || !scan_active_) return "";
+                    if (scan_stop_ || !scan_active_)
+                        return "";
                 }
                 const float x = cx_deg - hw + static_cast<float>(col) * sx;
                 std::scoped_lock driver_lock(driver_mutex_);
@@ -363,7 +370,8 @@ auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg)
             for (int col = n - 1; col >= 0; --col) {
                 {
                     std::scoped_lock scan_lock(scan_mutex_);
-                    if (scan_stop_ || !scan_active_) return "";
+                    if (scan_stop_ || !scan_active_)
+                        return "";
                 }
                 const float x = cx_deg - hw + static_cast<float>(col) * sx;
                 std::scoped_lock driver_lock(driver_mutex_);
@@ -375,8 +383,7 @@ auto GuidancePipeline::scan_rectangle_once(float cx_deg, float cy_deg)
     return "";
 }
 
-auto GuidancePipeline::scan_rectangle_once_voltage(float cx_v, float cy_v)
-    -> std::string {
+auto GuidancePipeline::scan_rectangle_once_voltage(float cx_v, float cy_v) -> std::string {
     const float hw = driver_->optical_to_voltage(config_.scan_width_deg * 0.5F);
     const float hh = driver_->optical_to_voltage(config_.scan_height_deg * 0.5F);
     const int n = std::max(2, config_.scan_grid_n);
@@ -386,14 +393,16 @@ auto GuidancePipeline::scan_rectangle_once_voltage(float cx_v, float cy_v)
     for (int row = 0; row < n; ++row) {
         {
             std::scoped_lock scan_lock(scan_mutex_);
-            if (scan_stop_ || !scan_active_) return "";
+            if (scan_stop_ || !scan_active_)
+                return "";
         }
         const float y = cy_v - hh + static_cast<float>(row) * sy;
         if (row % 2 == 0) {
             for (int col = 0; col < n; ++col) {
                 {
                     std::scoped_lock scan_lock(scan_mutex_);
-                    if (scan_stop_ || !scan_active_) return "";
+                    if (scan_stop_ || !scan_active_)
+                        return "";
                 }
                 const float x = cx_v - hw + static_cast<float>(col) * sx;
                 std::scoped_lock driver_lock(driver_mutex_);
@@ -404,7 +413,8 @@ auto GuidancePipeline::scan_rectangle_once_voltage(float cx_v, float cy_v)
             for (int col = n - 1; col >= 0; --col) {
                 {
                     std::scoped_lock scan_lock(scan_mutex_);
-                    if (scan_stop_ || !scan_active_) return "";
+                    if (scan_stop_ || !scan_active_)
+                        return "";
                 }
                 const float x = cx_v - hw + static_cast<float>(col) * sx;
                 std::scoped_lock driver_lock(driver_mutex_);
@@ -441,7 +451,8 @@ auto GuidancePipeline::scan_loop() -> void {
         {
             std::unique_lock lock(scan_mutex_);
             scan_cv_.wait(lock, [this] { return scan_stop_ || scan_active_; });
-            if (scan_stop_) return;
+            if (scan_stop_)
+                return;
             cx_deg = scan_center_x_deg_;
             cy_deg = scan_center_y_deg_;
             cx_v = scan_center_vx_;
@@ -460,14 +471,16 @@ auto GuidancePipeline::scan_loop() -> void {
 }
 
 auto GuidancePipeline::process_calib() -> std::string {
-    if (!initialized_) return "guidance not initialized";
-    if (!config_.calib_mode) return "";
-    return process_calib_angle(config_.calib_angle_x_deg,
-                               config_.calib_angle_y_deg);
+    if (!initialized_)
+        return "guidance not initialized";
+    if (!config_.calib_mode)
+        return "";
+    return process_calib_angle(config_.calib_angle_x_deg, config_.calib_angle_y_deg);
 }
 
 auto GuidancePipeline::process_calib_angle(float angle_x_deg, float angle_y_deg) -> std::string {
-    if (!initialized_) return "guidance not initialized";
+    if (!initialized_)
+        return "guidance not initialized";
     last_output_theta_x_deg_.store(angle_x_deg, std::memory_order_relaxed);
     last_output_theta_y_deg_.store(angle_y_deg, std::memory_order_relaxed);
     last_output_vx_.store(driver_->optical_to_voltage(angle_x_deg), std::memory_order_relaxed);
@@ -479,7 +492,8 @@ auto GuidancePipeline::process_calib_angle(float angle_x_deg, float angle_y_deg)
 }
 
 auto GuidancePipeline::process_calib_voltage(float x_voltage, float y_voltage) -> std::string {
-    if (!initialized_) return "guidance not initialized";
+    if (!initialized_)
+        return "guidance not initialized";
     last_output_vx_.store(x_voltage, std::memory_order_relaxed);
     last_output_vy_.store(y_voltage, std::memory_order_relaxed);
     has_output_voltages_.store(true, std::memory_order_relaxed);
@@ -490,35 +504,37 @@ auto GuidancePipeline::process_calib_voltage(float x_voltage, float y_voltage) -
 
 auto GuidancePipeline::project_to_camera(const cv::Point2f& pixel, float depth_mm) const
     -> cv::Point3f {
-    if (!projection_) return { -1, -1, -1 };
+    if (!projection_)
+        return {-1, -1, -1};
     return projection_->project(pixel, depth_mm);
 }
 
-auto GuidancePipeline::estimate_depth(const ModelCandidate& candidate,
-                                      const LidarFrame* lidar_frame) const
-    -> std::optional<float> {
+auto GuidancePipeline::estimate_depth(
+    const ModelCandidate& candidate, const LidarFrame* lidar_frame) const -> std::optional<float> {
     if (config_.depth_source == GuidanceDepthSourceKind::lidar_target_cluster
-        && lidar_depth_estimator_
-        && lidar_frame != nullptr) {
+        && lidar_depth_estimator_ && lidar_frame != nullptr) {
         if (const auto depth = lidar_depth_estimator_->estimate(candidate, *lidar_frame)) {
             return depth;
         }
     }
-    if (!depth_estimator_) return std::nullopt;
+    if (!depth_estimator_)
+        return std::nullopt;
     return depth_estimator_->estimate(candidate);
 }
 
 auto GuidancePipeline::latest_output_angles() const -> std::optional<cv::Point2f> {
-    if (!has_output_angles_.load(std::memory_order_relaxed)) return std::nullopt;
-    return cv::Point2f {
+    if (!has_output_angles_.load(std::memory_order_relaxed))
+        return std::nullopt;
+    return cv::Point2f{
         last_output_theta_x_deg_.load(std::memory_order_relaxed),
         last_output_theta_y_deg_.load(std::memory_order_relaxed),
     };
 }
 
 auto GuidancePipeline::latest_output_voltages() const -> std::optional<cv::Point2f> {
-    if (!has_output_voltages_.load(std::memory_order_relaxed)) return std::nullopt;
-    return cv::Point2f {
+    if (!has_output_voltages_.load(std::memory_order_relaxed))
+        return std::nullopt;
+    return cv::Point2f{
         last_output_vx_.load(std::memory_order_relaxed),
         last_output_vy_.load(std::memory_order_relaxed),
     };

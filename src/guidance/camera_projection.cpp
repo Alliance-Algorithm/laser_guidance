@@ -13,9 +13,10 @@ CameraProjection::CameraProjection(cv::Mat camera_matrix, cv::Mat dist_coeffs)
     , dist_coeffs_(std::move(dist_coeffs)) {}
 
 auto CameraProjection::project(const cv::Point2f& pixel, float depth_mm) const -> cv::Point3f {
-    if (depth_mm <= 0.0F) return { -1.0F, -1.0F, -1.0F };
+    if (depth_mm <= 0.0F)
+        return {-1.0F, -1.0F, -1.0F};
 
-    std::vector<cv::Point2f> src{ pixel };
+    std::vector<cv::Point2f> src{pixel};
     std::vector<cv::Point2f> dst;
 
     if (!dist_coeffs_.empty()) {

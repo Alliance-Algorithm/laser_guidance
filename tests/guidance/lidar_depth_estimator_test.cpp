@@ -22,8 +22,8 @@ auto make_config() -> GuidanceConfig {
 
 auto make_candidate() -> ModelCandidate {
     ModelCandidate cand;
-    cand.bbox = cv::Rect2f {95.0F, 45.0F, 20.0F, 20.0F};
-    cand.center = cv::Point2f {105.0F, 55.0F};
+    cand.bbox = cv::Rect2f{95.0F, 45.0F, 20.0F, 20.0F};
+    cand.center = cv::Point2f{105.0F, 55.0F};
     cand.score = 0.9F;
     cand.class_id = 0;
     return cand;
@@ -46,12 +46,9 @@ void test_accepts_cluster_near_bbox_edge() {
 void test_rejects_body_like_thick_cluster() {
     LidarFrame frame;
     frame.points = {
-        {100.0F, 20.0F, 2000.0F, 220.0F, 52, 102},
-        {108.0F, 18.0F, 2010.0F, 215.0F, 54, 104},
-        {96.0F, 16.0F, 2020.0F, 225.0F, 56, 106},
-        {100.0F, 20.0F, 2000.0F, 150.0F, 53, 103},
-        {100.0F, 20.0F, 2400.0F, 150.0F, 53, 103},
-        {100.0F, 20.0F, 2800.0F, 150.0F, 53, 103},
+        {100.0F, 20.0F, 2000.0F, 220.0F, 52, 102}, {108.0F, 18.0F, 2010.0F, 215.0F, 54, 104},
+        {96.0F, 16.0F, 2020.0F, 225.0F, 56, 106},  {100.0F, 20.0F, 2000.0F, 150.0F, 53, 103},
+        {100.0F, 20.0F, 2400.0F, 150.0F, 53, 103}, {100.0F, 20.0F, 2800.0F, 150.0F, 53, 103},
     };
 
     LidarDepthEstimator estimator(make_config());

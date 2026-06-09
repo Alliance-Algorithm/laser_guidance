@@ -23,7 +23,7 @@ public:
         float target_size_y_mm = 0.0F;
         float target_size_z_mm = 0.0F;
         float target_depth_std_mm = 0.0F;
-        std::string summary {};
+        std::string summary{};
     };
 
     explicit LidarDepthEstimator(const GuidanceConfig& config);
@@ -59,12 +59,12 @@ private:
         -> std::vector<std::size_t>;
     auto cluster_points(const LidarFrame& frame, const std::vector<std::size_t>& roi_indices) const
         -> std::vector<ClusterStats>;
-    auto choose_target_cluster(const ModelCandidate& candidate,
-                               const std::vector<ClusterStats>& clusters) const
+    auto choose_target_cluster(
+        const ModelCandidate& candidate, const std::vector<ClusterStats>& clusters) const
         -> std::optional<ClusterStats>;
-    auto update_debug_info(std::size_t roi_points,
-                           const std::vector<ClusterStats>& clusters,
-                           const std::optional<ClusterStats>& target) const -> void;
+    auto update_debug_info(
+        std::size_t roi_points, const std::vector<ClusterStats>& clusters,
+        const std::optional<ClusterStats>& target) const -> void;
 
     GuidanceConfig config_;
     mutable std::mutex debug_mutex_;

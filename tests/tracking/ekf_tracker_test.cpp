@@ -2,8 +2,8 @@
 #include <exception>
 #include <print>
 
-#include "tracking/ekf_tracker.hpp"
 #include "test_utils.hpp"
+#include "tracking/ekf_tracker.hpp"
 
 int main() {
     try {
@@ -40,7 +40,7 @@ int main() {
             config.max_missed_frames = 2;
             EkfTracker tracker(config);
 
-            const Clock::time_point t0 { };
+            const Clock::time_point t0{};
             tracker.update({30.0F, 40.0F});
             tracker.predict(t0 + std::chrono::milliseconds(16));
             auto state = tracker.state();
@@ -49,7 +49,8 @@ int main() {
 
             tracker.predict(t0 + std::chrono::milliseconds(32));
             state = tracker.state();
-            require(state.missed_frames == 1, "second predict should be first missed-frame increment");
+            require(
+                state.missed_frames == 1, "second predict should be first missed-frame increment");
             require(!state.lost, "should not be lost after first missed frame");
 
             tracker.predict(t0 + std::chrono::milliseconds(48));
@@ -70,7 +71,7 @@ int main() {
 
         {
             EkfTracker tracker;
-            const Clock::time_point t0 { };
+            const Clock::time_point t0{};
             tracker.update({0.0F, 0.0F});
 
             tracker.predict(t0 + std::chrono::milliseconds(20));
@@ -83,7 +84,8 @@ int main() {
             const auto state = tracker.state();
             require_near(state.position.x, 6.0F, 1.0F, "position should follow measurements");
             require(state.velocity.x > 0.0F, "tracker should estimate positive x velocity");
-            require_near(state.position.y, 0.0F, 1.0F, "y position should stay near measurement line");
+            require_near(
+                state.position.y, 0.0F, 1.0F, "y position should stay near measurement line");
         }
 
         {

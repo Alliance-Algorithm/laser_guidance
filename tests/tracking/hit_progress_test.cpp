@@ -2,8 +2,8 @@
 #include <exception>
 #include <print>
 
-#include "tracking/hit_progress.hpp"
 #include "test_utils.hpp"
+#include "tracking/hit_progress.hpp"
 
 int main() {
     try {

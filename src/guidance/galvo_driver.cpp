@@ -12,45 +12,44 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-    auto clamp_voltage(double voltage) -> double {
-        return std::clamp(voltage, -10.0, 10.0);
-    }
+auto clamp_voltage(double voltage) -> double { return std::clamp(voltage, -10.0, 10.0); }
 
-    auto voltage_to_code(double voltage) -> std::uint16_t {
-        const double clipped = clamp_voltage(voltage);
-        const double code = ((clipped + 10.0) / 20.0)
-            * static_cast<double>(std::numeric_limits<std::uint16_t>::max());
-        return static_cast<std::uint16_t>(std::lround(code));
-    }
+auto voltage_to_code(double voltage) -> std::uint16_t {
+    const double clipped = clamp_voltage(voltage);
+    const double code =
+        ((clipped + 10.0) / 20.0) * static_cast<double>(std::numeric_limits<std::uint16_t>::max());
+    return static_cast<std::uint16_t>(std::lround(code));
+}
 
-    auto build_payload(std::uint8_t control, std::uint8_t address,
-                       std::uint16_t data, std::uint8_t feature = 0) -> std::uint32_t {
-        return (static_cast<std::uint32_t>(control) << 24)
-             | (static_cast<std::uint32_t>(address) << 20)
-             | (static_cast<std::uint32_t>(data) << 4)
-             | static_cast<std::uint32_t>(feature);
-    }
+auto build_payload(
+    std::uint8_t control, std::uint8_t address, std::uint16_t data, std::uint8_t feature = 0)
+    -> std::uint32_t {
+    return (static_cast<std::uint32_t>(control) << 24) | (static_cast<std::uint32_t>(address) << 20)
+         | (static_cast<std::uint32_t>(data) << 4) | static_cast<std::uint32_t>(feature);
+}
 
-    auto payload_bytes(std::uint32_t payload) -> std::array<std::uint8_t, 4> {
-        return {
-            static_cast<std::uint8_t>((payload >> 24) & 0xFF),
-            static_cast<std::uint8_t>((payload >> 16) & 0xFF),
-            static_cast<std::uint8_t>((payload >> 8) & 0xFF),
-            static_cast<std::uint8_t>(payload & 0xFF),
-        };
-    }
+auto payload_bytes(std::uint32_t payload) -> std::array<std::uint8_t, 4> {
+    return {
+        static_cast<std::uint8_t>((payload >> 24) & 0xFF),
+        static_cast<std::uint8_t>((payload >> 16) & 0xFF),
+        static_cast<std::uint8_t>((payload >> 8) & 0xFF),
+        static_cast<std::uint8_t>(payload & 0xFF),
+    };
+}
 
 } // namespace
 
 GalvoDriver::GalvoDriver(Ft4222Spi& spi, const GuidanceConfig& config)
-    : spi_(spi), config_(config) {}
+    : spi_(spi)
+    , config_(config) {}
 
 auto GalvoDriver::enable_reference() -> std::expected<void, std::string> {
     constexpr std::uint32_t kEnableInternalRef = 0x08000001u;
     const auto bytes = payload_bytes(kEnableInternalRef);
     std::println("galvo: enabling DAC internal reference");
     auto result = spi_.write(bytes.data(), 4);
-    if (result) reference_enabled_ = true;
+    if (result)
+        reference_enabled_ = true;
     return result;
 }
 
@@ -105,20 +104,20 @@ auto GalvoDriver::set_voltages(float x_voltage, float y_voltage)
     const float y_pos_v = (diff ? y_voltage : y_voltage) * config_.voltage_gain_y;
     const float y_neg_v = (diff ? -y_voltage : 0.0F) * config_.voltage_gain_y;
 
-    if (auto r = write_voltage(static_cast<std::uint8_t>(w.x_plus_channel),
-                               x_pos_v, "x_plus"); !r)
+    if (auto r = write_voltage(static_cast<std::uint8_t>(w.x_plus_channel), x_pos_v, "x_plus"); !r)
         return r;
     if (diff) {
-        if (auto r = write_voltage(static_cast<std::uint8_t>(w.x_minus_channel),
-                                   x_neg_v, "x_minus"); !r)
+        if (auto r =
+                write_voltage(static_cast<std::uint8_t>(w.x_minus_channel), x_neg_v, "x_minus");
+            !r)
             return r;
     }
-    if (auto r = write_voltage(static_cast<std::uint8_t>(w.y_plus_channel),
-                               y_pos_v, "y_plus"); !r)
+    if (auto r = write_voltage(static_cast<std::uint8_t>(w.y_plus_channel), y_pos_v, "y_plus"); !r)
         return r;
     if (diff) {
-        if (auto r = write_voltage(static_cast<std::uint8_t>(w.y_minus_channel),
-                                   y_neg_v, "y_minus"); !r)
+        if (auto r =
+                write_voltage(static_cast<std::uint8_t>(w.y_minus_channel), y_neg_v, "y_minus");
+            !r)
             return r;
     }
     return {};

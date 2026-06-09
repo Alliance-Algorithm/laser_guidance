@@ -20,20 +20,6 @@ struct ReplayDataset {
     std::vector<ReplayFrameInfo> frames{};
 };
 
-class ReplayRecorder {
-public:
-    explicit ReplayRecorder(std::filesystem::path root);
-
-    auto record_frame(const Frame& frame) -> ReplayFrameInfo;
-    auto flush_manifest() const -> void;
-
-    [[nodiscard]] auto root() const noexcept -> const std::filesystem::path& { return root_; }
-
-private:
-    std::filesystem::path root_;
-    std::vector<ReplayFrameInfo> frames_;
-};
-
 auto timestamp_to_nanoseconds(const Clock::time_point& timestamp) -> std::int64_t;
 auto timestamp_from_nanoseconds(std::int64_t nanoseconds) -> Clock::time_point;
 

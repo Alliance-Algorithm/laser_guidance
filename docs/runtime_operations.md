@@ -1,12 +1,24 @@
-# Freshness Runtime Operations
+# Runtime Operations
 
-## Modes
+## Runtime Assumptions
 
-### Guidance Mode (competition / real-time)
+- `CompetitionRuntime.start()` / `PreviewRuntime.start()` 仍然是同步 readiness barrier。
+- 推理后端在启动时一次性探测，运行时只切换已可用 backend。
+- `InferenceFacade` 是 active backend 的唯一事实源。
+- shutdown 顺序固定为：
+  - `stop_requested = true`
+  - `frame_queue_.shutdown()`
+  - inference worker 退出并 join
+  - `InferenceFacade::stop()`
+  - guidance recenter / recorder / RTP / SHM / capture 收尾
+  - snapshot/status 收敛为 stopped
+
+## Runtime Config
+
+当前有效 runtime 配置项：
 
 ```yaml
 runtime:
-  mode: guidance
   max_input_age_ms: 25
   max_observation_age_ms: 35
   max_infer_fps: 60
@@ -20,29 +32,15 @@ runtime:
   record_queue_size: 16
 ```
 
-**Rules**:
-- Debug and recording must be lossy. If they fall behind, they drop frames.
-- Debug/recording must never block the Capture→Worker hard path.
-- TensorRT engine is loaded at startup, never built at runtime.
+说明：
 
-### Collection Mode (data gathering / training)
-
-```yaml
-runtime:
-  mode: collection
-  record_enabled: true
-  record_queue_size: 32
-  max_input_age_ms: 100
-```
-
-**Rules**:
-- Recording can be larger and more permissive.
-- Latency is relaxed; freshness is less critical.
-- Original `videos/<session_id>/` sessions remain the source of truth.
+- 当前没有 `runtime.mode` 配置项。
+- TensorRT engine 路径来自 `runtime.engine_path`。
+- recording / streaming 运行时开关通过 `RuntimeCommand` 和 FIFO bridge 动态控制。
 
 ## Build Commands
 
-### Default Build (no TensorRT)
+### Default Build
 
 ```bash
 cmake -S . -B build/default -DCMAKE_BUILD_TYPE=Release
@@ -50,15 +48,32 @@ cmake --build build/default --parallel
 ctest --test-dir build/default --output-on-failure
 ```
 
+### ONNX Runtime Build
+
+```bash
+cmake -S . -B build/onnx -DCMAKE_BUILD_TYPE=Release \
+  -DWITH_ONNXRUNTIME=ON
+cmake --build build/onnx --parallel
+```
+
 ### TensorRT Build
 
 ```bash
 cmake -S . -B build/tensorrt -DCMAKE_BUILD_TYPE=Release \
-  -DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON
+  -DWITH_ONNXRUNTIME=ON \
+  -DWITH_TENSORRT=ON
 cmake --build build/tensorrt --parallel
 ```
 
-### TensorRT Engine Build (offline)
+### FT4222 Toggle
+
+```bash
+cmake -S . -B build/no-ft4222 -DCMAKE_BUILD_TYPE=Release \
+  -DWITH_FT4222=OFF
+cmake --build build/no-ft4222 --parallel
+```
+
+## TensorRT Engine Build
 
 ```bash
 trtexec \
@@ -69,49 +84,23 @@ trtexec \
   --skipInference
 ```
 
-## MP4 Upload Packaging
+## Operational Notes
 
-Copy recorded sessions for labeling upload:
+- Debug 和 recording 都必须是 lossy 的，不能阻塞 capture -> infer 主路径。
+- `tool_competition` / `tool_preview` 只处理 runtime 生命周期和 FIFO bridge。
+- `tool_guidance` 现由 internal `GuidanceToolRuntime` 承接：
+  - 异步推理
+  - WASD 校准步进
+  - geometry/direct-voltage CSV 记录
+  - purple confirmed hit 边沿记录
+- 统一 runtime 当前只覆盖 `CompetitionRuntime` / `PreviewRuntime`；`GuidanceToolRuntime` 仍是兼容独立路径。
+- UDP telemetry 继续输出兼容 `TargetObservation` 语义，但数据来源统一走 `RuntimeSnapshot`.
 
-```bash
-python - <<'PY'
-from pathlib import Path, csv, hashlib
-root = Path('.')
-upload = root / 'videos' / 'label_upload' / 'raw_sessions'
-upload.mkdir(parents=True, exist_ok=True)
-rows = []
-for mp4 in sorted(root.glob('videos/*/raw.mp4')):
-    sid = mp4.parent.name
-    dst = upload / f'{sid}_raw.mp4'
-    dst.write_bytes(mp4.read_bytes())
-    h = hashlib.sha256(dst.read_bytes()).hexdigest()
-    rows.append({'session_id': sid, 'upload_mp4': str(dst), 'file_size': dst.stat().st_size, 'sha256': h})
-with (upload.parent / 'upload_manifest.csv').open('w', newline='') as f:
-    w = csv.DictWriter(f, fieldnames=['session_id','upload_mp4','file_size','sha256'])
-    w.writeheader(); w.writerows(rows)
-print(f'{len(rows)} sessions packaged')
-PY
-```
+## Verification Focus
 
-## Interpreting Latency Logs
-
-Key metrics (JSONL, one line per frame):
-
-| Field | Meaning |
-|-------|---------|
-| `observation_age_ms` | Frame age at publish time. Primary metric. |
-| `inference_ms` | TensorRT H2D+enqueue+D2H time |
-| `queue_overwrite_count` | Times a new frame replaced old before processing |
-| `stale_drop_count` | Frames dropped for exceeding max age |
-| `hit_state` | `none`, `candidate`, or `confirmed` |
-
-**Acceptance**:
-- p95/p99 observation_age_ms must stay bounded.
-- Overwrite/drop counters rising is OK (system degrades by reducing rate, not adding latency).
-- Average FPS is NOT the primary metric.
-
-## Known Limitations
-
-- Unity in Editor mode may distort CPU/GPU behavior; use standalone player for benchmarks.
-- `trtexec` heavy benchmarks must not run while Unity is under high render load.
-- The first TensorRT inference after engine load may have warmup jitter; warmup frames are configured but not validated until a real model is available.
+- backend 切换是否只在可用 backend 间发生
+- stop 后 `active_backend_name` / `backend_uses_tensorrt` 是否正确清空
+- FIFO 多行、半行、非法命令后恢复是否正常
+- `RuntimeSnapshot` / `TargetTrack` 是否保持值语义安全
+- `tool_guidance` 校准记录和 purple hit 边沿记录是否稳定
+- `ws30_receiver_test` 是否避免固定端口导致的环境敏感失败

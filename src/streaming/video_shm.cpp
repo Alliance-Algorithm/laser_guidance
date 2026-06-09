@@ -50,14 +50,15 @@ bool VideoShmProducer::open(int width, int height) {
     header_->frame_seq.store(0, std::memory_order_relaxed);
     header_->write_idx.store(0, std::memory_order_relaxed);
 
-    std::println(stderr, "[shm] created {} ({}x{}, {:.1f} MB)",
-                 kShmName, width, height,
-                 static_cast<double>(map_size_) / (1024.0 * 1024.0));
+    std::println(
+        stderr, "[shm] created {} ({}x{}, {:.1f} MB)", kShmName, width, height,
+        static_cast<double>(map_size_) / (1024.0 * 1024.0));
     return true;
 }
 
 void VideoShmProducer::push_frame(const std::uint8_t* bgr_data, int width, int height) {
-    if (!header_) return;
+    if (!header_)
+        return;
 
     const std::uint32_t idx = header_->write_idx.load(std::memory_order_acquire);
     const std::size_t frame_size =

@@ -10,8 +10,10 @@
   - 说明如何用采集卡录原始视频会话，并直接上传或按需离线抽帧生成待标注数据集。
 - `hardware_ft4222_dac8568.md`
   - 说明 `FT4222 USB-to-SPI` 到 `DAC8568 ±10V` 模块的供电、接线、SPI 时序与最小联调流程。
-- `future_rmcs_integration.md`
-  - 说明后续若接入 RMCS，应如何逐步增加 bridge、姿态和控制接口。
+- `runtime_operations.md` / `runtime-metrics.md`
+  - 说明 freshness runtime 的运行约束、日志指标与运行模式。
+
+当前文档默认面向 standalone 使用，不再描述 RMCS / ROS 控制链接入计划。
 
 推荐阅读顺序：
 
@@ -20,4 +22,3 @@
 3. `hardware_ft4222_dac8568.md`
 4. `dataset_collection.md`
 5. `development.md`
-6. `future_rmcs_integration.md`

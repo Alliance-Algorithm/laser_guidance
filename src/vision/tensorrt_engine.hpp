@@ -8,25 +8,14 @@
 
 namespace rmcs_laser_guidance {
 
-struct TensorRTMeta {
-    std::string engine_path { };
-    std::string device_name { };
-
-    struct TensorInfo {
-        std::string name { };
-        std::vector<std::int64_t> shape { };
-    };
-
-    std::vector<TensorInfo> inputs { };
-    std::vector<TensorInfo> outputs { };
-};
+struct TensorRTMeta;
 
 class TensorRTEngine {
 public:
     TensorRTEngine() = default;
     ~TensorRTEngine();
 
-    TensorRTEngine(const TensorRTEngine&)            = delete;
+    TensorRTEngine(const TensorRTEngine&) = delete;
     auto operator=(const TensorRTEngine&) -> TensorRTEngine& = delete;
     TensorRTEngine(TensorRTEngine&&) noexcept;
     auto operator=(TensorRTEngine&&) noexcept -> TensorRTEngine&;
@@ -38,7 +27,20 @@ public:
 
 private:
     struct Impl;
-    std::unique_ptr<Impl> impl_ { };
+    std::unique_ptr<Impl> impl_{};
+};
+
+struct TensorRTMeta {
+    std::string engine_path{};
+    std::string device_name{};
+
+    struct TensorInfo {
+        std::string name{};
+        std::vector<std::int64_t> shape{};
+    };
+
+    std::vector<TensorInfo> inputs{};
+    std::vector<TensorInfo> outputs{};
 };
 
 } // namespace rmcs_laser_guidance

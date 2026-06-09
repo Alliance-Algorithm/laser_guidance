@@ -2,7 +2,7 @@
 
 > Version: 1.0-draft
 > Status: awaiting-onnx-export
-> Last updated: 2026-05-02
+> Last updated: 2026-06-08
 
 ## Purpose
 
@@ -90,7 +90,7 @@ Before a model is accepted for runtime deployment:
 
 ## Hit Detection (model class + temporal hysteresis)
 
-Purple is a model output class (id=2). HIT state uses temporal hysteresis on consecutive Purple detections:
+Purple is a model output class (id=0). HIT state uses temporal hysteresis on consecutive Purple detections:
 
 - Purple class triggers candidate HIT state.
 - **Hysteresis defaults**:
@@ -133,4 +133,4 @@ Each model artifact should carry:
 - `config/capture_red_20m.yaml` — recommended recording configuration.
 - `README.md` — project build and example documentation.
 - `docs/architecture.md` — current architecture boundaries.
-- `AGENTS.md` — repository constraints and phase scope.
+- `docs/AGENTS.md` — repository constraints and phase scope.

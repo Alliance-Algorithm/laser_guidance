@@ -26,4 +26,4 @@ private:
     std::uint8_t seq_ = 0;
 };
 
-}
+} // namespace rmcs_laser_guidance

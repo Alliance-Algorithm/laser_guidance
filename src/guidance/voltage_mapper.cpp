@@ -26,31 +26,30 @@ auto parse_float_array(const YAML::Node& node, const char* key) -> std::vector<f
 
     std::vector<float> out;
     out.reserve(child.size());
-    for (const auto& item : child) out.push_back(item.as<float>());
+    for (const auto& item : child)
+        out.push_back(item.as<float>());
     if (!std::is_sorted(out.begin(), out.end())) {
         throw std::runtime_error(std::string("voltage LUT axis must be sorted: ") + key);
     }
     return out;
 }
 
-auto parse_exact_float_array(const YAML::Node& node,
-                             const char* key,
-                             std::size_t expected_size) -> std::vector<float> {
+auto parse_exact_float_array(const YAML::Node& node, const char* key, std::size_t expected_size)
+    -> std::vector<float> {
     const auto child = node[key];
     if (!child || !child.IsSequence() || child.size() != expected_size) {
         throw std::runtime_error(std::string("polynomial coefficient count mismatch: ") + key);
     }
     std::vector<float> out;
     out.reserve(expected_size);
-    for (const auto& item : child) out.push_back(item.as<float>());
+    for (const auto& item : child)
+        out.push_back(item.as<float>());
     return out;
 }
 
-auto flatten_volume(const YAML::Node& node,
-                    std::size_t area_n,
-                    std::size_t v_n,
-                    std::size_t u_n,
-                    const char* key) -> std::vector<float> {
+auto flatten_volume(
+    const YAML::Node& node, std::size_t area_n, std::size_t v_n, std::size_t u_n, const char* key)
+    -> std::vector<float> {
     const auto child = node[key];
     if (!child || !child.IsSequence() || child.size() != area_n) {
         throw std::runtime_error(std::string("voltage LUT volume size mismatch: ") + key);
@@ -68,17 +67,20 @@ auto flatten_volume(const YAML::Node& node,
             if (!row.IsSequence() || row.size() != u_n) {
                 throw std::runtime_error(std::string("voltage LUT row width mismatch: ") + key);
             }
-            for (std::size_t u = 0; u < u_n; ++u) values.push_back(row[u].as<float>());
+            for (std::size_t u = 0; u < u_n; ++u)
+                values.push_back(row[u].as<float>());
         }
     }
     return values;
 }
 
 auto axis_sample(const std::vector<float>& axis, float x) -> AxisSample {
-    if (axis.size() == 1) return {};
+    if (axis.size() == 1)
+        return {};
     const float clamped = std::clamp(x, axis.front(), axis.back());
     auto upper = std::lower_bound(axis.begin(), axis.end(), clamped);
-    if (upper == axis.begin()) return {0, 0, 0.0F};
+    if (upper == axis.begin())
+        return {0, 0, 0.0F};
     if (upper == axis.end()) {
         const auto last = axis.size() - 1;
         return {last, last, 0.0F};
@@ -95,9 +97,7 @@ auto axis_sample(const std::vector<float>& axis, float x) -> AxisSample {
     return {lo, hi, t};
 }
 
-auto lerp(float a, float b, float t) -> float {
-    return a + (b - a) * t;
-}
+auto lerp(float a, float b, float t) -> float { return a + (b - a) * t; }
 
 auto cubic_feature_basis(float u_norm, float v_norm, float log_area_norm) -> std::vector<float> {
     const float x = u_norm * 2.0F - 1.0F;
@@ -110,9 +110,9 @@ auto cubic_feature_basis(float u_norm, float v_norm, float log_area_norm) -> std
         for (int i = 0; i <= total; ++i) {
             for (int j = 0; j <= total - i; ++j) {
                 const int k = total - i - j;
-                out.push_back(std::pow(x, static_cast<float>(i))
-                            * std::pow(y, static_cast<float>(j))
-                            * std::pow(z, static_cast<float>(k)));
+                out.push_back(
+                    std::pow(x, static_cast<float>(i)) * std::pow(y, static_cast<float>(j))
+                    * std::pow(z, static_cast<float>(k)));
             }
         }
     }
@@ -121,7 +121,8 @@ auto cubic_feature_basis(float u_norm, float v_norm, float log_area_norm) -> std
 
 auto dot(const std::vector<float>& a, const std::vector<float>& b) -> float {
     float sum = 0.0F;
-    for (std::size_t i = 0; i < a.size(); ++i) sum += a[i] * b[i];
+    for (std::size_t i = 0; i < a.size(); ++i)
+        sum += a[i] * b[i];
     return sum;
 }
 
@@ -158,7 +159,8 @@ auto VoltageMapper::load_lut_model(const std::filesystem::path& path) -> LutMode
     }
 
     const auto type = model["type"] ? model["type"].as<std::string>() : std::string{};
-    if (type != "lut") throw std::runtime_error("voltage LUT model.type must be 'lut'");
+    if (type != "lut")
+        throw std::runtime_error("voltage LUT model.type must be 'lut'");
 
     LutModel lut;
     lut.u_axis = parse_float_array(model, "u_axis");
@@ -176,24 +178,24 @@ auto VoltageMapper::load_lut_model(const std::filesystem::path& path) -> LutMode
 auto VoltageMapper::load_poly3_model(const YAML::Node& model) -> Poly3Model {
     constexpr std::size_t kCoeffCount = 20;
     Poly3Model poly;
-    if (model["log_area_mean"]) poly.log_area_mean = model["log_area_mean"].as<float>();
-    if (model["log_area_std"]) poly.log_area_std = model["log_area_std"].as<float>();
-    if (poly.log_area_std <= 0.0F) poly.log_area_std = 1.0F;
+    if (model["log_area_mean"])
+        poly.log_area_mean = model["log_area_mean"].as<float>();
+    if (model["log_area_std"])
+        poly.log_area_std = model["log_area_std"].as<float>();
+    if (poly.log_area_std <= 0.0F)
+        poly.log_area_std = 1.0F;
     poly.vx_coeffs = parse_exact_float_array(model, "vx_coeffs", kCoeffCount);
     poly.vy_coeffs = parse_exact_float_array(model, "vy_coeffs", kCoeffCount);
     return poly;
 }
 
-auto VoltageMapper::lut_index(std::size_t a_idx,
-                              std::size_t v_idx,
-                              std::size_t u_idx) const -> std::size_t {
+auto VoltageMapper::lut_index(std::size_t a_idx, std::size_t v_idx, std::size_t u_idx) const
+    -> std::size_t {
     return (a_idx * lut_.v_axis.size() + v_idx) * lut_.u_axis.size() + u_idx;
 }
 
-auto VoltageMapper::sample_lut(const std::vector<float>& values,
-                               float u_norm,
-                               float v_norm,
-                               float log_area) const -> float {
+auto VoltageMapper::sample_lut(
+    const std::vector<float>& values, float u_norm, float v_norm, float log_area) const -> float {
     const auto su = axis_sample(lut_.u_axis, u_norm);
     const auto sv = axis_sample(lut_.v_axis, v_norm);
     const auto sa = axis_sample(lut_.log_area_axis, log_area);
@@ -220,9 +222,8 @@ auto VoltageMapper::sample_lut(const std::vector<float>& values,
     return lerp(c0, c1, sa.t);
 }
 
-auto VoltageMapper::sample_poly3(float u_norm,
-                                 float v_norm,
-                                 float log_area) const -> VoltageCommand {
+auto VoltageMapper::sample_poly3(float u_norm, float v_norm, float log_area) const
+    -> VoltageCommand {
     const float log_area_norm = (log_area - poly3_.log_area_mean) / poly3_.log_area_std;
     const auto features = cubic_feature_basis(u_norm, v_norm, log_area_norm);
     VoltageCommand out;
@@ -234,9 +235,12 @@ auto VoltageMapper::sample_poly3(float u_norm,
     return out;
 }
 
-auto VoltageMapper::predict(const VoltageFeatures& features) const -> std::optional<VoltageCommand> {
-    if (features.image_width < kMinDim || features.image_height < kMinDim) return std::nullopt;
-    if (features.bbox_w <= 0.0F || features.bbox_h <= 0.0F) return std::nullopt;
+auto VoltageMapper::predict(const VoltageFeatures& features) const
+    -> std::optional<VoltageCommand> {
+    if (features.image_width < kMinDim || features.image_height < kMinDim)
+        return std::nullopt;
+    if (features.bbox_w <= 0.0F || features.bbox_h <= 0.0F)
+        return std::nullopt;
 
     const float u_norm = std::clamp(features.center_x / features.image_width, 0.0F, 1.0F);
     const float v_norm = std::clamp(features.center_y / features.image_height, 0.0F, 1.0F);

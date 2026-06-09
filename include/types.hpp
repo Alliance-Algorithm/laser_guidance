@@ -20,7 +20,7 @@ struct ModelCandidate {
     float score = 0.0F;
     std::int32_t class_id = -1;
     cv::Rect2f bbox;
-    cv::Point2f center { -1.0F, -1.0F };
+    cv::Point2f center{-1.0F, -1.0F};
 };
 
 struct LidarPoint {

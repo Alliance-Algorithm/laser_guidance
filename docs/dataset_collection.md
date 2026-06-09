@@ -30,8 +30,7 @@ v4l2-ctl --device=/dev/video0 --all
 如果画面链路还没确认，先用预览入口验证：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_preview \
-  /abs/path/to/config/capture_red_20m.yaml
+./build/tool_preview config/capture_red_20m.yaml
 ```
 
 ## 2. 录制原始视频会话
@@ -44,29 +43,28 @@ config/capture_red_20m.yaml
 
 这个配置当前默认面向 UGREEN 采集卡直读节点：
 
-- `v4l2.device_path=/dev/video2`
-- 如果你机器上的 UGREEN 不是这个编号，先改这里再录制
+- `v4l2.device_path=/dev/v4l/by-id/...`
+- 如果你机器上的 UGREEN 稳定路径不同，先改这里再录制
 - 录制参数位于 `record.output_root` / `record.duration_seconds` / `record.*_tag`
 
 它默认：
 
 - `1920x1080`
 - `60 FPS`
-- `yuyv`
+- `mjpeg`
 - 打开窗口显示和 overlay 绘制
 
 录制命令：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_record_session \
-  /abs/path/to/config/capture_red_20m.yaml
+./build/tool_record config/capture_red_20m.yaml
 ```
 
 也可以继续用 CLI 参数覆盖 YAML 里的录制设置：
 
 ```bash
-ros2 run rmcs_laser_guidance example_v4l2_record_session \
-  /abs/path/to/config/capture_red_20m.yaml \
+./build/tool_record \
+  config/capture_red_20m.yaml \
   /abs/path/to/sessions \
   30 \
   indoor_lab \
@@ -76,8 +74,9 @@ ros2 run rmcs_laser_guidance example_v4l2_record_session \
 ```
 
 如果不传第 2 个参数，默认会话根目录是仓库根目录下的 `videos/`。
-`example_v4l2_record_session` 会在运行时强制使用 `yuyv` 取图；如果你要排查配置本身的取图问题，优先用 `preview` 入口单独验证。
-当前推荐录制配置默认不开窗口；运行后终端会持续占用，等时长结束或按 `Ctrl+C` 才会优雅收尾并写完 `raw.mp4` / `session.yaml` / `notes.txt`。
+`tool_record` 会在运行时强制使用 `yuyv` 取图；如果你要排查配置本身的取图问题，优先用 `tool_preview` 单独验证。
+`config/capture_red_20m.yaml` 本身默认打开窗口；如果你想无窗口录制，需要显式调整 `debug.show_window`。
+运行后终端会持续占用，等时长结束或按 `Ctrl+C` 才会优雅收尾并写完 `raw.mp4` / `session.yaml` / `notes.txt`。
 
 参数含义：
 
@@ -132,7 +131,7 @@ ros2 run rmcs_laser_guidance example_v4l2_record_session \
 
 当前推荐工作流是：
 
-1. 用 `example_v4l2_record_session` 录出完整会话
+1. 用 `tool_record` 录出完整会话
 2. 保留 `session.yaml` 和 `notes.txt` 作为场景记录
 3. 直接把 `raw.mp4` 上传到 Ultralytics Platform
 4. 在平台内完成抽帧、标注和训练
@@ -140,8 +139,7 @@ ros2 run rmcs_laser_guidance example_v4l2_record_session \
 如果你手里已有旧的 `mp4v` 会话，可以先原地转码：
 
 ```bash
-ros2 run rmcs_laser_guidance example_transcode_recorded_session \
-  /abs/path/to/videos/<session_id>
+./build/tool_transcode /abs/path/to/videos/<session_id>
 ```
 
 这样做的优点是：
@@ -155,7 +153,7 @@ ros2 run rmcs_laser_guidance example_transcode_recorded_session \
 把单个会话导出为待标注图片：
 
 ```bash
-ros2 run rmcs_laser_guidance example_export_training_frames \
+./build/tool_export \
   /abs/path/to/sessions/<session_id> \
   /abs/path/to/dataset_root \
   train \

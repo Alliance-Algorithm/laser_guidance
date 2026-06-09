@@ -42,38 +42,35 @@ private:
     };
 
     struct LutModel {
-        std::vector<float> u_axis {};
-        std::vector<float> v_axis {};
-        std::vector<float> log_area_axis {};
-        std::vector<float> vx_values {};
-        std::vector<float> vy_values {};
+        std::vector<float> u_axis{};
+        std::vector<float> v_axis{};
+        std::vector<float> log_area_axis{};
+        std::vector<float> vx_values{};
+        std::vector<float> vy_values{};
     };
 
     struct Poly3Model {
         float log_area_mean = 0.0F;
         float log_area_std = 1.0F;
-        std::vector<float> vx_coeffs {};
-        std::vector<float> vy_coeffs {};
+        std::vector<float> vx_coeffs{};
+        std::vector<float> vy_coeffs{};
     };
 
     static auto load_lut_model(const std::filesystem::path& path) -> LutModel;
     static auto load_poly3_model(const YAML::Node& model) -> Poly3Model;
 
-    [[nodiscard]] auto sample_lut(const std::vector<float>& values,
-                                  float u_norm,
-                                  float v_norm,
-                                  float log_area) const -> float;
-    [[nodiscard]] auto sample_poly3(float u_norm,
-                                    float v_norm,
-                                    float log_area) const -> VoltageCommand;
-    [[nodiscard]] auto lut_index(std::size_t a_idx,
-                                 std::size_t v_idx,
-                                 std::size_t u_idx) const -> std::size_t;
+    [[nodiscard]] auto sample_lut(
+        const std::vector<float>& values, float u_norm, float v_norm, float log_area) const
+        -> float;
+    [[nodiscard]] auto sample_poly3(float u_norm, float v_norm, float log_area) const
+        -> VoltageCommand;
+    [[nodiscard]] auto lut_index(std::size_t a_idx, std::size_t v_idx, std::size_t u_idx) const
+        -> std::size_t;
 
     GuidanceConfig config_;
     ModelKind model_kind_ = ModelKind::lut;
-    LutModel lut_ {};
-    Poly3Model poly3_ {};
+    LutModel lut_{};
+    Poly3Model poly3_{};
 };
 
 } // namespace rmcs_laser_guidance

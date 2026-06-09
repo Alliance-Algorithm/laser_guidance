@@ -9,7 +9,8 @@ GalvoKinematics::GalvoKinematics(const GuidanceConfig& config)
 
 auto GalvoKinematics::compute(const cv::Point3f& P_camera_mm) const -> GalvoAngles {
     const float z_c = P_camera_mm.z;
-    if (z_c <= 0.0F) return {};
+    if (z_c <= 0.0F)
+        return {};
 
     const float dx = P_camera_mm.x - config_.t_x_mm;
     const float dy = P_camera_mm.y - config_.t_y_mm;
@@ -20,9 +21,12 @@ auto GalvoKinematics::compute(const cv::Point3f& P_camera_mm) const -> GalvoAngl
     const float ry = config_.r_y_deg * kDegToRad;
     const float rz = config_.r_z_deg * kDegToRad;
 
-    const float cx = std::cos(rx); const float sx = std::sin(rx);
-    const float cy = std::cos(ry); const float sy = std::sin(ry);
-    const float cz = std::cos(rz); const float sz = std::sin(rz);
+    const float cx = std::cos(rx);
+    const float sx = std::sin(rx);
+    const float cy = std::cos(ry);
+    const float sy = std::sin(ry);
+    const float cz = std::cos(rz);
+    const float sz = std::sin(rz);
 
     const float x1 = dx;
     const float y1 = cy * dy + sy * dz;
@@ -36,7 +40,8 @@ auto GalvoKinematics::compute(const cv::Point3f& P_camera_mm) const -> GalvoAngl
     const float y_g = -sz * x2 + cz * y2;
     const float z_g = z2;
 
-    if (z_g <= 0.0F) return {};
+    if (z_g <= 0.0F)
+        return {};
 
     const float d = config_.mirror_separation_mm;
 

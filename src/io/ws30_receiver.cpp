@@ -16,9 +16,7 @@ namespace {
 constexpr std::size_t kPointsPerPacket = 120;
 constexpr std::size_t kPacketsPerFrame = 450;
 
-auto make_timeout() -> timeval {
-    return timeval { .tv_sec = 0, .tv_usec = 200000 };
-}
+auto make_timeout() -> timeval { return timeval{.tv_sec = 0, .tv_usec = 200000}; }
 
 auto convert_coord_mm(std::int16_t raw) -> float {
     return static_cast<float>(raw) / 1000.0F * 2.0F;
@@ -28,7 +26,8 @@ auto convert_coord_mm(std::int16_t raw) -> float {
 
 Ws30Receiver::Ws30Receiver(Ws30Config config)
     : config_(std::move(config)) {
-    if (!config_.enabled) return;
+    if (!config_.enabled)
+        return;
 
     points_sock_ = setup_socket(config_.points_port);
     scan_sock_ = setup_socket(config_.scan_port);
@@ -54,16 +53,22 @@ Ws30Receiver::Ws30Receiver(Ws30Config config)
 
 Ws30Receiver::~Ws30Receiver() {
     stop_ = true;
-    if (point_thread_.joinable()) point_thread_.join();
-    if (imu_thread_.joinable()) imu_thread_.join();
-    if (points_sock_ >= 0) close(points_sock_);
-    if (imu_sock_ >= 0) close(imu_sock_);
-    if (scan_sock_ >= 0) close(scan_sock_);
+    if (point_thread_.joinable())
+        point_thread_.join();
+    if (imu_thread_.joinable())
+        imu_thread_.join();
+    if (points_sock_ >= 0)
+        close(points_sock_);
+    if (imu_sock_ >= 0)
+        close(imu_sock_);
+    if (scan_sock_ >= 0)
+        close(scan_sock_);
 }
 
 auto Ws30Receiver::latest_frame() const -> std::optional<LidarFrame> {
     std::scoped_lock lock(frame_mutex_);
-    if (latest_frame_.points.empty() || latest_frame_.timestamp_ns == 0) return std::nullopt;
+    if (latest_frame_.points.empty() || latest_frame_.timestamp_ns == 0)
+        return std::nullopt;
     return latest_frame_;
 }
 
@@ -116,15 +121,19 @@ auto Ws30Receiver::send_handshake(int sock, int, const char* payload) const -> b
     Packet packet{};
     std::snprintf(packet.data, sizeof(packet.data), "%s", payload);
     const auto remote = make_remote_addr(
-        std::strcmp(payload, "hello,imu") == 0 ? config_.imu_port
-        : (std::strcmp(payload, "hello,points") == 0 ? config_.points_port : config_.scan_port));
-    const auto sent = sendto(sock, &packet, sizeof(packet), MSG_DONTWAIT,
-                             reinterpret_cast<const sockaddr*>(&remote), sizeof(remote));
+        std::strcmp(payload, "hello,imu") == 0
+            ? config_.imu_port
+            : (std::strcmp(payload, "hello,points") == 0 ? config_.points_port
+                                                         : config_.scan_port));
+    const auto sent = sendto(
+        sock, &packet, sizeof(packet), MSG_DONTWAIT, reinterpret_cast<const sockaddr*>(&remote),
+        sizeof(remote));
     return sent == static_cast<ssize_t>(sizeof(packet));
 }
 
 auto Ws30Receiver::point_loop() -> void {
-    auto last_handshake = std::chrono::steady_clock::now() - std::chrono::milliseconds(config_.handshake_interval_ms);
+    auto last_handshake =
+        std::chrono::steady_clock::now() - std::chrono::milliseconds(config_.handshake_interval_ms);
     PointsPacket packet{};
 
     while (!stop_) {
@@ -142,14 +151,17 @@ auto Ws30Receiver::point_loop() -> void {
             }
             continue;
         }
-        if (static_cast<std::size_t>(received) != sizeof(packet)) continue;
-        if (packet.data_type[0] != 0x5A || packet.data_type[1] != 0xA5) continue;
+        if (static_cast<std::size_t>(received) != sizeof(packet))
+            continue;
+        if (packet.data_type[0] != 0x5A || packet.data_type[1] != 0xA5)
+            continue;
         ingest_points_packet(packet);
     }
 }
 
 auto Ws30Receiver::imu_loop() -> void {
-    auto last_handshake = std::chrono::steady_clock::now() - std::chrono::milliseconds(config_.handshake_interval_ms);
+    auto last_handshake =
+        std::chrono::steady_clock::now() - std::chrono::milliseconds(config_.handshake_interval_ms);
     ImuPacket packet{};
 
     while (!stop_) {
@@ -167,8 +179,10 @@ auto Ws30Receiver::imu_loop() -> void {
             }
             continue;
         }
-        if (static_cast<std::size_t>(received) != sizeof(packet)) continue;
-        if (packet.data_type[0] != 0x1A || packet.data_type[1] != 0xA1) continue;
+        if (static_cast<std::size_t>(received) != sizeof(packet))
+            continue;
+        if (packet.data_type[0] != 0x1A || packet.data_type[1] != 0xA1)
+            continue;
         latest_imu_timestamp_ns_ = packet.timestamp_ns;
     }
 }

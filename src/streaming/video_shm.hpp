@@ -1,7 +1,7 @@
 #pragma once
 #include <atomic>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace rmcs_laser_guidance {
 
@@ -15,7 +15,7 @@ struct ShmHeader {
     std::uint32_t height;
     std::uint32_t stride;
     std::atomic<std::uint32_t> frame_seq;
-    std::atomic<std::uint32_t> write_idx; // 0 or 1
+    std::atomic<std::uint32_t> write_idx;       // 0 or 1
     std::uint8_t _pad[40];
 };
 static_assert(sizeof(ShmHeader) == kHeaderSize);

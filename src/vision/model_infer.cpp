@@ -13,7 +13,7 @@
 #include "vision/model_runtime.hpp"
 
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
-#include "vision/tensorrt_engine.hpp"
+# include "vision/tensorrt_engine.hpp"
 #endif
 
 namespace rmcs_laser_guidance {
@@ -39,8 +39,8 @@ struct TensorrtPreprocessResult {
 
 auto compute_letterbox_params(int width, int height) -> LetterboxParams {
     LetterboxParams params;
-    params.scale = std::min(static_cast<float>(kInputWidth) / width,
-                            static_cast<float>(kInputHeight) / height);
+    params.scale = std::min(
+        static_cast<float>(kInputWidth) / width, static_cast<float>(kInputHeight) / height);
     params.resized_width = std::max(1, static_cast<int>(std::lround(width * params.scale)));
     params.resized_height = std::max(1, static_cast<int>(std::lround(height * params.scale)));
     params.pad_x = static_cast<float>((kInputWidth - params.resized_width) / 2);
@@ -50,20 +50,25 @@ auto compute_letterbox_params(int width, int height) -> LetterboxParams {
 
 auto preprocess_for_tensorrt(const cv::Mat& image) -> TensorrtPreprocessResult {
     cv::Mat bgr;
-    if (image.channels() == 4) cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
-    else if (image.channels() == 1) cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
-    else bgr = image;
+    if (image.channels() == 4)
+        cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
+    else if (image.channels() == 1)
+        cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
+    else
+        bgr = image;
 
     const auto params = compute_letterbox_params(bgr.cols, bgr.rows);
 
     cv::Mat resized;
-    cv::resize(bgr, resized, cv::Size(params.resized_width, params.resized_height),
-               0.0, 0.0, cv::INTER_LINEAR);
+    cv::resize(
+        bgr, resized, cv::Size(params.resized_width, params.resized_height), 0.0, 0.0,
+        cv::INTER_LINEAR);
 
     cv::Mat letterbox(kInputHeight, kInputWidth, CV_8UC3, cv::Scalar(114, 114, 114));
-    resized.copyTo(letterbox(cv::Rect(static_cast<int>(params.pad_x),
-                                      static_cast<int>(params.pad_y),
-                                      params.resized_width, params.resized_height)));
+    resized.copyTo(letterbox(
+        cv::Rect(
+            static_cast<int>(params.pad_x), static_cast<int>(params.pad_y), params.resized_width,
+            params.resized_height)));
 
     cv::Mat rgb;
     cv::cvtColor(letterbox, rgb, cv::COLOR_BGR2RGB);
@@ -76,8 +81,9 @@ auto preprocess_for_tensorrt(const cv::Mat& image) -> TensorrtPreprocessResult {
     std::vector<float> input(3 * kInputHeight * kInputWidth);
     std::size_t ch_size = kInputHeight * kInputWidth;
     for (std::size_t c = 0; c < 3; ++c)
-        std::copy(channels[c].ptr<float>(0), channels[c].ptr<float>(0) + ch_size,
-                  input.begin() + c * ch_size);
+        std::copy(
+            channels[c].ptr<float>(0), channels[c].ptr<float>(0) + ch_size,
+            input.begin() + c * ch_size);
     return {
         .input = std::move(input),
         .params = params,
@@ -85,24 +91,30 @@ auto preprocess_for_tensorrt(const cv::Mat& image) -> TensorrtPreprocessResult {
 }
 
 auto build_tensorrt_run_result(
-    const ModelRunResult& base, const std::vector<float>& output,
-    std::int32_t input_w, std::int32_t input_h, float scale, float pad_x, float pad_y)
-    -> ModelRunResult {
+    const ModelRunResult& base, const std::vector<float>& output, std::int32_t input_w,
+    std::int32_t input_h, float scale, float pad_x, float pad_y) -> ModelRunResult {
     ModelRunResult result;
     result.success = true;
     result.transform = ModelImageTransform{
-        .original_width = input_w, .original_height = input_h,
-        .input_width = kInputWidth, .input_height = kInputHeight,
-        .scale = scale, .pad_x = pad_x, .pad_y = pad_y,
+        .original_width = input_w,
+        .original_height = input_h,
+        .input_width = kInputWidth,
+        .input_height = kInputHeight,
+        .scale = scale,
+        .pad_x = pad_x,
+        .pad_y = pad_y,
     };
-    result.outputs.push_back(ModelTensorData{
-        .name = "output0", .shape = {1, 300, 6},
-        .element_type = "float32", .values = output,
-    });
+    result.outputs.push_back(
+        ModelTensorData{
+            .name = "output0",
+            .shape = {1, 300, 6},
+            .element_type = "float32",
+            .values = output,
+        });
     return result;
 }
 
-}
+} // namespace
 #endif
 
 struct ModelInfer::Details {
@@ -124,8 +136,9 @@ struct ModelInfer::Details {
             }
             tensorrt_engine = std::make_unique<TensorRTEngine>(std::move(*engine_result));
             auto meta = tensorrt_engine->meta();
-            std::println("TensorRT engine loaded: {} ({} inputs, {} outputs)",
-                         meta.engine_path, meta.inputs.size(), meta.outputs.size());
+            std::println(
+                "TensorRT engine loaded: {} ({} inputs, {} outputs)", meta.engine_path,
+                meta.inputs.size(), meta.outputs.size());
             startup_ready = true;
 #else
             message = "tensorrt backend requires -DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON";
@@ -134,9 +147,8 @@ struct ModelInfer::Details {
         }
 
         if (!runtime_enabled) {
-            message =
-                "model backend requires ONNX Runtime support; reconfigure with "
-                "-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON";
+            message = "model backend requires ONNX Runtime support; reconfigure with "
+                      "-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON";
             return;
         }
         if (config.model_path.empty()) {
@@ -148,15 +160,18 @@ struct ModelInfer::Details {
             return;
         }
         message = runtime.load();
-        if (!message.empty()) return;
+        if (!message.empty())
+            return;
         startup_ready = true;
     }
 
     auto make_base_result() const -> ModelInferResult {
         return {
             .enabled = runtime_enabled,
-            .success = false, .contract_supported = false,
-            .observation = {}, .candidates = {},
+            .success = false,
+            .contract_supported = false,
+            .observation = {},
+            .candidates = {},
             .inputs = runtime.input_values(),
             .outputs = runtime.output_values(),
             .message = message,
@@ -173,9 +188,9 @@ struct ModelInfer::Details {
             return result;
         }
         auto run_model = build_tensorrt_run_result(
-            {}, output, frame.image.cols, frame.image.rows,
-            preprocess.params.scale, preprocess.params.pad_x, preprocess.params.pad_y);
-        auto adapter_result = adapt_yolov5_outputs(frame, run_model);
+            {}, output, frame.image.cols, frame.image.rows, preprocess.params.scale,
+            preprocess.params.pad_x, preprocess.params.pad_y);
+        auto adapter_result = adapt_yolo_outputs(frame, run_model);
         result.success = adapter_result.success;
         result.contract_supported = adapter_result.contract_supported;
         result.observation = adapter_result.observation;
@@ -200,7 +215,7 @@ struct ModelInfer::Details {
     InferenceConfig config;
     bool runtime_enabled = false;
     bool startup_ready = false;
-    std::string message {};
+    std::string message{};
     ModelRuntime runtime;
     std::unique_ptr<ModelAdapter> adapter;
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
@@ -233,4 +248,8 @@ auto ModelInfer::infer(const Frame& frame) const -> ModelInferResult {
     return details_->infer_onnx(frame, std::move(result));
 }
 
-}
+auto ModelInfer::is_ready() const -> bool { return details_->startup_ready; }
+
+auto ModelInfer::startup_message() const -> const std::string& { return details_->message; }
+
+} // namespace rmcs_laser_guidance

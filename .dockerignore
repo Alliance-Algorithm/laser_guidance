@@ -1,0 +1,36 @@
+# Build artifacts
+build/
+compile_commands.json
+
+# Logs & runtime traces
+logs/
+
+# Video output
+videos/
+*.mp4
+*.avi
+
+# Model files (large, mount separately)
+models/*.onnx
+models/*.engine
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE & editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker own artifacts
+Dockerfile
+docker-compose.yml
+.dockerignore

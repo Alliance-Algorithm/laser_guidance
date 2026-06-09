@@ -1,9 +1,9 @@
 #include <print>
 
 #include "config.hpp"
-#include "vision/model_infer.hpp"
 #include "core/replay.hpp"
 #include "test_utils.hpp"
+#include "vision/model_infer.hpp"
 
 int main() {
     try {
@@ -20,7 +20,9 @@ int main() {
         rmcs_laser_guidance::ModelInfer default_infer(config.inference);
         const auto default_result = default_infer.infer(frame);
         require(!default_result.success, "default model infer should not succeed");
-        require(!default_result.contract_supported, "default model infer should not support a contract");
+        require(
+            !default_result.contract_supported,
+            "default model infer should not support a contract");
 
 #if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
         require(default_result.enabled, "onnxruntime-enabled build should report enabled");
@@ -35,7 +37,9 @@ int main() {
         rmcs_laser_guidance::ModelInfer missing_model_infer(config.inference);
         const auto missing_model_result = missing_model_infer.infer(frame);
         require(!missing_model_result.success, "missing model path should not succeed");
-        require(!missing_model_result.contract_supported, "missing model should not support a contract");
+        require(
+            !missing_model_result.contract_supported,
+            "missing model should not support a contract");
 
 #if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
         require_contains(

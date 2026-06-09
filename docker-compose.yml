@@ -1,0 +1,80 @@
+# Compose profiles:
+#   default    competition mode (headless, host network, auto-restart)
+#   dev        build & dev with GUI passthrough + OpenCode mounts
+#   stream     competition + ffplay launched from host
+#
+# Examples:
+#   docker compose up -d                        # competition
+#   docker compose --profile stream up          # competition + host ffplay
+#   docker compose run --rm dev                 # interactive dev shell
+#   LASER_CAMERA_DEVICE=/dev/video0 docker compose up -d
+
+services:
+  competition:
+    profiles: [""]
+    image: yukikaze2233/laser-guidance:latest
+    build:
+      context: .
+      target: runtime
+    privileged: true
+    network_mode: host
+    ipc: host
+    environment:
+      - LASER_HEADLESS=1
+      - LASER_CAMERA_DEVICE=${LASER_CAMERA_DEVICE:-}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    volumes:
+      - /dev:/dev:bind
+      - /tmp:/tmp:bind
+      - ./config:/workspace/laser_guidance/config:ro
+      - ./models:/workspace/laser_guidance/models:ro
+      - ./videos:/workspace/laser_guidance/videos
+      - ./logs:/workspace/laser_guidance/logs
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+
+  competition-stream:
+    profiles: ["stream"]
+    extends:
+      service: competition
+    volumes:
+      - /dev:/dev:bind
+      - /tmp:/tmp:bind
+      - ./config:/workspace/laser_guidance/config:ro
+      - ./models:/workspace/laser_guidance/models:ro
+      - ./videos:/workspace/laser_guidance/videos
+
+  dev:
+    profiles: ["dev"]
+    image: yukikaze2233/laser-guidance:develop
+    build:
+      context: .
+      target: develop
+    privileged: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY:-}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    volumes:
+      - /dev:/dev:bind
+      - /tmp:/tmp:bind
+      - /tmp/.X11-unix:/tmp/.X11-unix:bind
+      - /run/user/1000/wayland-0:/run/user/1000/wayland-0:bind
+      - ${HOME}/.config/opencode:/root/.config/opencode:bind
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode:bind
+      - ${HOME}/.codex:/root/.codex:bind
+      - ${HOME}/.npm-global:/root/.npm-global:ro
+      - ${HOME}/.agents/skills:/root/.agents/skills:ro
+      - .:/workspace/laser_guidance:cached
+      - laser_guidance_build:/workspace/laser_guidance/build
+    stdin_open: true
+    tty: true
+
+volumes:
+  laser_guidance_build:
