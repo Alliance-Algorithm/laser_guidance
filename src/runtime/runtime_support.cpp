@@ -32,13 +32,13 @@ auto make_hit_progress_snapshot(const HitProgress& progress) -> HitProgressSnaps
     };
 }
 
-auto make_capture_snapshot(const V4l2NegotiatedFormat& format) -> CaptureFormatSnapshot {
+auto make_capture_snapshot(const CaptureFormat& format) -> CaptureFormatSnapshot {
     return CaptureFormatSnapshot{
         .device_path = format.device_path,
         .width = format.width,
         .height = format.height,
         .framerate = format.framerate,
-        .fourcc = format.fourcc,
+        .fourcc = format.pixel_encoding,
     };
 }
 

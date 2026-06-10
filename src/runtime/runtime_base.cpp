@@ -21,7 +21,7 @@ RuntimeOutputController::RuntimeOutputController(
     , recorder_(recorder)
     , recording_start_(recording_start) {}
 
-auto RuntimeOutputController::start_streaming(const V4l2NegotiatedFormat& format) -> bool {
+auto RuntimeOutputController::start_streaming(const CaptureFormat& format) -> bool {
     return rtp_publisher_.start(
         format.width, format.height, static_cast<float>(format.framerate));
 }
@@ -29,7 +29,7 @@ auto RuntimeOutputController::start_streaming(const V4l2NegotiatedFormat& format
 auto RuntimeOutputController::apply_requests(
     const bool streaming_requested, const bool recording_requested,
     const RecordSessionOptions& record_options,
-    const std::optional<V4l2NegotiatedFormat>& negotiated_format) -> void {
+    const std::optional<CaptureFormat>& negotiated_format) -> void {
     if (streaming_requested && negotiated_format.has_value() && !rtp_publisher_.is_active()) {
         start_streaming(*negotiated_format);
     } else if (!streaming_requested && rtp_publisher_.is_active()) {
@@ -74,7 +74,7 @@ auto RuntimeOutputController::recording_root() const -> std::filesystem::path {
 }
 
 auto RuntimeOutputController::begin_recording(
-    const RecordSessionOptions& record_options, const V4l2NegotiatedFormat& format) -> void {
+    const RecordSessionOptions& record_options, const CaptureFormat& format) -> void {
     if (recorder_ || record_options.output_root.empty()) {
         return;
     }
@@ -89,7 +89,7 @@ auto RuntimeOutputController::begin_recording(
             .width = format.width,
             .height = format.height,
             .framerate = format.framerate > 0.0 ? format.framerate : 60.0,
-            .fourcc = format.fourcc,
+            .fourcc = format.pixel_encoding,
             .capture_start_unix_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(capture_start.time_since_epoch())
                     .count(),
@@ -121,7 +121,7 @@ RuntimeBase::RuntimeBase(
     , window_name_(std::move(window_name))
     , enable_guidance_(enable_guidance)
     , record_options_(std::move(record_options))
-    , capture_(config_.v4l2)
+    , capture_(create_capture_device(config_))
     , telemetry_(config_.udp)
     , shm_publisher_()
     , rtp_publisher_(config_.rtp)
@@ -149,14 +149,14 @@ auto RuntimeBase::start() -> std::expected<void, std::string> {
     if (state_.running) {
         return {};
     }
-    const auto open_result = capture_.open();
+    const auto open_result = capture_->open();
     if (!open_result) {
         return std::unexpected(open_result.error());
     }
     negotiated_format_ = *open_result;
 
     if (auto result = inference_.start(); !result) {
-        capture_.close();
+        capture_->close();
         negotiated_format_.reset();
         state_.last_error = result.error();
         update_status_locked();
@@ -283,7 +283,7 @@ auto RuntimeBase::make_snapshot_locked(
 auto RuntimeBase::update_status_locked() -> void {
     const auto active_backend = inference_.active_backend();
     state_.snapshot.status = make_runtime_status(
-        state_.snapshot, state_.running, state_.stop_requested, capture_.is_open(),
+        state_.snapshot, state_.running, state_.stop_requested, capture_->is_open(),
         inference_.enabled(), config_.guidance.enabled && enable_guidance_,
         executor_ && executor_->is_initialized() && solver_ && solver_->is_initialized(),
         state_.ekf_enabled, active_backend, state_.enemy_color, state_.last_error,
@@ -546,7 +546,7 @@ auto RuntimeBase::run() -> void {
                 break;
             }
         }
-        auto frame = capture_.read_frame();
+        auto frame = capture_->read_frame();
         if (!frame) {
             std::scoped_lock lock(state_.mutex);
             state_.last_error = frame.error();
@@ -604,7 +604,7 @@ auto RuntimeBase::run() -> void {
         }
     }
     output_controller_.stop();
-    capture_.close();
+    capture_->close();
     {
         std::scoped_lock lock(state_.mutex);
         state_.running = false;
@@ -613,14 +613,14 @@ auto RuntimeBase::run() -> void {
     }
 }
 
-CompetitionRuntimeAdapter::CompetitionRuntimeAdapter(Config config, RecordSessionOptions record_options)
+CompetitionRuntimeImpl::CompetitionRuntimeImpl(Config config, RecordSessionOptions record_options)
     : RuntimeBase(std::move(config), kCompetitionWindowName, true, std::move(record_options)) {}
 
-auto CompetitionRuntimeAdapter::after_frame_processed(cv::Mat&, const RuntimeSnapshot&) -> void {}
+auto CompetitionRuntimeImpl::after_frame_processed(cv::Mat&, const RuntimeSnapshot&) -> void {}
 
-PreviewRuntimeAdapter::PreviewRuntimeAdapter(Config config)
+PreviewRuntimeImpl::PreviewRuntimeImpl(Config config)
     : RuntimeBase(std::move(config), kPreviewWindowName, false) {}
 
-auto PreviewRuntimeAdapter::after_frame_processed(cv::Mat&, const RuntimeSnapshot&) -> void {}
+auto PreviewRuntimeImpl::after_frame_processed(cv::Mat&, const RuntimeSnapshot&) -> void {}
 
 } // namespace rmcs_laser_guidance::runtime_internal

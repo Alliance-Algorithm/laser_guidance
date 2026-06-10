@@ -18,7 +18,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "capture/v4l2_capture.hpp"
+#include "capture/capture_device_factory.hpp"
 #include "config.hpp"
 #include "laser_guidance/support.hpp"
 
@@ -502,17 +502,17 @@ int main(int argc, char** argv) {
 
         const auto config = rmcs_laser_guidance::load_config(config_path);
 
-        rmcs_laser_guidance::V4l2Capture capture(config.v4l2);
-        const auto open_result = capture.open();
+        auto capture = rmcs_laser_guidance::create_capture_device(config);
+        const auto open_result = capture->open();
         if (!open_result) {
             std::println(stderr, "Failed to open camera: {}", open_result.error());
             return 1;
         }
 
-        const auto& negotiated = capture.negotiated_format();
+        const auto& negotiated = *capture->negotiated_format();
         std::println(
-            "Camera opened: {} ({}x{} @ {} fps {})", negotiated.device_path.string(),
-            negotiated.width, negotiated.height, negotiated.framerate, negotiated.fourcc);
+            "Camera opened: {} ({}x{} @ {} fps {})", negotiated.device_path,
+            negotiated.width, negotiated.height, negotiated.framerate, negotiated.pixel_encoding);
 
         CalibSession session(
             generate_chessboard_object_points(kChessboardCols, kChessboardRows, kSquareSizeMm));
@@ -520,7 +520,7 @@ int main(int argc, char** argv) {
         cv::namedWindow(kWindowName, cv::WINDOW_NORMAL);
 
         while (true) {
-            auto frame = capture.read_frame();
+            auto frame = capture->read_frame();
             if (!frame) {
                 std::println(stderr, "Frame read error: {}", frame.error());
                 continue;
@@ -555,7 +555,7 @@ int main(int argc, char** argv) {
                 break;
         }
 
-        capture.close();
+        capture->close();
         cv::destroyWindow(kWindowName);
         return 0;
 

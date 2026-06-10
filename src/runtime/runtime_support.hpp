@@ -6,7 +6,7 @@
 
 #include <opencv2/core/mat.hpp>
 
-#include "capture/v4l2_capture.hpp"
+#include "capture/capture_device.hpp"
 #include "laser_guidance/runtime.hpp"
 #include "tracking/ekf_tracker.hpp"
 #include "tracking/hit_progress.hpp"
@@ -23,7 +23,7 @@ auto to_enemy_class_id(EnemyColor color) -> int;
 auto to_enemy_color(int class_id) -> EnemyColor;
 auto to_backend_name(RuntimeBackend backend) -> std::string;
 auto make_hit_progress_snapshot(const HitProgress& progress) -> HitProgressSnapshot;
-auto make_capture_snapshot(const V4l2NegotiatedFormat& format) -> CaptureFormatSnapshot;
+auto make_capture_snapshot(const CaptureFormat& format) -> CaptureFormatSnapshot;
 auto make_runtime_status(
     const RuntimeSnapshot& previous_snapshot, bool running, bool stop_requested, bool capture_open,
     bool inference_enabled, bool guidance_enabled, bool guidance_ready, bool ekf_enabled,

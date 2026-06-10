@@ -12,7 +12,8 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 
-#include "capture/v4l2_capture.hpp"
+#include "capture/capture_device.hpp"
+#include "capture/capture_device_factory.hpp"
 #include "config.hpp"
 #include "guidance/guidance_pipeline.hpp"
 #include "io/ft4222_spi.hpp"
@@ -81,7 +82,7 @@ private:
     auto shutdown_guidance() -> void;
 
     Config config_;
-    V4l2Capture capture_;
+    std::unique_ptr<ICaptureDevice> capture_;
     std::unique_ptr<ModelInfer> infer_;
     std::future<void> model_ready_{};
     std::thread infer_thread_{};

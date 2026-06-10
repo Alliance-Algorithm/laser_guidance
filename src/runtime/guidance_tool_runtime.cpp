@@ -36,7 +36,7 @@ auto open_ft4222() -> std::expected<Ft4222Spi, std::string> {
 
 GuidanceToolRuntime::GuidanceToolRuntime(Config config)
     : config_(std::move(config))
-    , capture_(config_.v4l2)
+    , capture_(create_capture_device(config_))
     , tracker_(config_.ekf)
     , calibration_state_{
           .angle_x_deg = config_.guidance.calib_angle_x_deg,
@@ -48,18 +48,18 @@ GuidanceToolRuntime::GuidanceToolRuntime(Config config)
 GuidanceToolRuntime::~GuidanceToolRuntime() {
     stop_inference_thread();
     shutdown_guidance();
-    capture_.close();
+    capture_->close();
     cv::destroyWindow(kWindowName);
 }
 
 auto GuidanceToolRuntime::run() -> int {
-    const auto open_result = capture_.open();
+    const auto open_result = capture_->open();
     if (!open_result) {
         std::println(stderr, "Failed to open camera: {}", open_result.error());
         return 1;
     }
     std::println(
-        "Camera: {} {}x{} @ {:.0f}fps", open_result->device_path.string(), open_result->width,
+        "Camera: {} {}x{} @ {:.0f}fps", open_result->device_path, open_result->width,
         open_result->height, open_result->framerate);
 
     if (config_.inference.backend != InferenceBackendKind::bright_spot) {
@@ -93,7 +93,7 @@ auto GuidanceToolRuntime::run() -> int {
     unsigned loop_frames = 0;
 
     while (running_) {
-        auto frame = capture_.read_frame();
+        auto frame = capture_->read_frame();
         if (!frame) {
             std::println(stderr, "Frame read error: {}", frame.error());
             continue;

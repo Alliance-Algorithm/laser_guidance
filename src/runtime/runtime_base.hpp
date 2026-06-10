@@ -11,7 +11,8 @@
 
 #include <opencv2/core/mat.hpp>
 
-#include "capture/v4l2_capture.hpp"
+#include "capture/capture_device.hpp"
+#include "capture/capture_device_factory.hpp"
 #include "config.hpp"
 #include "guidance/aim_solver.hpp"
 #include "guidance/galvo_executor.hpp"
@@ -30,7 +31,7 @@
 namespace rmcs_laser_guidance::runtime_internal {
 
 constexpr const char* kCompetitionWindowName = "laser_guidance_competition";
-constexpr const char* kPreviewWindowName = "rmcs_laser_guidance_v4l2";
+constexpr const char* kPreviewWindowName = "laser_guidance_preview";
 
 struct RuntimeState {
     mutable std::mutex mutex;
@@ -55,10 +56,10 @@ public:
         RtpFramePublisher& rtp_publisher, ShmFramePublisher& shm_publisher,
         std::unique_ptr<VideoSessionRecorder>& recorder, std::chrono::steady_clock::time_point& recording_start);
 
-    auto start_streaming(const V4l2NegotiatedFormat& format) -> bool;
+    auto start_streaming(const CaptureFormat& format) -> bool;
     auto apply_requests(
         bool streaming_requested, bool recording_requested, const RecordSessionOptions& record_options,
-        const std::optional<V4l2NegotiatedFormat>& negotiated_format) -> void;
+        const std::optional<CaptureFormat>& negotiated_format) -> void;
     auto publish(cv::Mat& previous_frame) -> void;
     auto record_frame(const cv::Mat& frame) -> void;
     auto stop() -> void;
@@ -67,7 +68,7 @@ public:
     [[nodiscard]] auto recording_root() const -> std::filesystem::path;
 
 private:
-    auto begin_recording(const RecordSessionOptions& record_options, const V4l2NegotiatedFormat& format)
+    auto begin_recording(const RecordSessionOptions& record_options, const CaptureFormat& format)
         -> void;
     auto flush_recording() -> void;
 
@@ -133,7 +134,7 @@ private:
     std::string window_name_;
     bool enable_guidance_ = false;
     RecordSessionOptions record_options_{};
-    V4l2Capture capture_;
+    std::unique_ptr<ICaptureDevice> capture_;
     UdpTelemetryPublisher telemetry_;
     ShmFramePublisher shm_publisher_;
     RtpFramePublisher rtp_publisher_;
@@ -146,7 +147,7 @@ private:
     mutable std::mutex result_mutex_;
     DetectionBatch latest_detection_{};
     std::optional<EkfState> latest_ekf_{};
-    std::optional<V4l2NegotiatedFormat> negotiated_format_{};
+    std::optional<CaptureFormat> negotiated_format_{};
     LatestValue<QueuedFrame> frame_queue_{};
     std::unique_ptr<Ft4222Spi> spi_;
     std::unique_ptr<AimSolver> solver_;
@@ -158,17 +159,17 @@ private:
     std::thread inference_thread_;
 };
 
-class CompetitionRuntimeAdapter final : public RuntimeBase {
+class CompetitionRuntimeImpl final : public RuntimeBase {
 public:
-    explicit CompetitionRuntimeAdapter(Config config, RecordSessionOptions record_options);
+    explicit CompetitionRuntimeImpl(Config config, RecordSessionOptions record_options);
 
 private:
     auto after_frame_processed(cv::Mat& frame, const RuntimeSnapshot& snapshot) -> void override;
 };
 
-class PreviewRuntimeAdapter final : public RuntimeBase {
+class PreviewRuntimeImpl final : public RuntimeBase {
 public:
-    explicit PreviewRuntimeAdapter(Config config);
+    explicit PreviewRuntimeImpl(Config config);
 
 private:
     auto after_frame_processed(cv::Mat& frame, const RuntimeSnapshot& snapshot) -> void override;
