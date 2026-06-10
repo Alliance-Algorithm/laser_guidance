@@ -1,25 +1,25 @@
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
 
-# include "vision/tensorrt_engine.hpp"
+#include "vision/tensorrt_engine.hpp"
 
-# include <cuda_runtime_api.h>
+#include <cuda_runtime_api.h>
 
-# include <NvInfer.h>
+#include <NvInfer.h>
 
-# include <algorithm>
-# include <cerrno>
-# include <cmath>
-# include <cstddef>
-# include <cstring>
-# include <filesystem>
-# include <fstream>
-# include <iterator>
-# include <limits>
-# include <memory>
-# include <numeric>
-# include <print>
-# include <sstream>
-# include <string_view>
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <memory>
+#include <numeric>
+#include <print>
+#include <sstream>
+#include <string_view>
 
 namespace rmcs_laser_guidance {
 
@@ -349,7 +349,7 @@ auto TensorRTEngine::meta() const -> const TensorRTMeta& {
 // without TensorRT support. The compile-time flag RMCS_LASER_GUIDANCE_WITH_TENSORRT
 // controls the real implementation above.
 
-# include "vision/tensorrt_engine.hpp"
+#include "vision/tensorrt_engine.hpp"
 
 namespace rmcs_laser_guidance {
 
