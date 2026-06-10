@@ -1,0 +1,4 @@
+[submodule "vendor/hikcamera"]
+	path = vendor/hikcamera
+	url = https://github.com/Yukikaze2233/ros2-hikcamera.git
+	branch = main
