@@ -122,7 +122,7 @@ struct ModelInfer::Details {
         : config(std::move(config_in))
         , runtime_enabled(model_runtime_enabled_in_build())
         , runtime(config.model_path)
-        , adapter(make_default_model_adapter()) {
+        , adapter(make_yolo_model_adapter()) {
         initialize();
     }
 

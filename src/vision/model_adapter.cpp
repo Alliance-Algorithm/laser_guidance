@@ -450,7 +450,7 @@ auto decode_split_nms_outputs(const Frame& frame, const ModelRunResult& run_resu
     return success_result(frame, detections);
 }
 
-class Yolov5ModelAdapter final : public ModelAdapter {
+class YoloModelAdapter final : public ModelAdapter {
 public:
     auto adapt(const Frame& frame, const ModelRuntime& runtime) const
         -> ModelAdapterResult override {
@@ -501,8 +501,8 @@ auto adapt_yolo_outputs(const Frame& frame, const ModelRunResult& run_result)
         "model output contract is unsupported (last_dim=" + std::to_string(cols) + ")");
 }
 
-auto make_default_model_adapter() -> std::unique_ptr<ModelAdapter> {
-    return std::make_unique<Yolov5ModelAdapter>();
+auto make_yolo_model_adapter() -> std::unique_ptr<ModelAdapter> {
+    return std::make_unique<YoloModelAdapter>();
 }
 
 } // namespace rmcs_laser_guidance

@@ -37,6 +37,6 @@ struct ModelAdapterResult {
 
 auto adapt_yolo_outputs(const Frame& frame, const ModelRunResult& run_result)
     -> ModelAdapterResult;
-auto make_default_model_adapter() -> std::unique_ptr<ModelAdapter>;
+auto make_yolo_model_adapter() -> std::unique_ptr<ModelAdapter>;
 
 } // namespace rmcs_laser_guidance

@@ -11,7 +11,7 @@ struct CompetitionRuntime::Impl {
     explicit Impl(Config config, RecordSessionOptions record_options)
         : runtime(std::move(config), std::move(record_options)) {}
 
-    runtime_internal::CompetitionRuntimeAdapter runtime;
+    runtime_internal::CompetitionRuntimeImpl runtime;
 };
 
 CompetitionRuntime::CompetitionRuntime(Config config, RecordSessionOptions record_options)
@@ -32,7 +32,7 @@ struct PreviewRuntime::Impl {
     explicit Impl(Config config)
         : runtime(std::move(config)) {}
 
-    runtime_internal::PreviewRuntimeAdapter runtime;
+    runtime_internal::PreviewRuntimeImpl runtime;
 };
 
 PreviewRuntime::PreviewRuntime(Config config)
