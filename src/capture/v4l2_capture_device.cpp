@@ -12,6 +12,8 @@ auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat {
         .height = format.height,
         .framerate = format.framerate,
         .format_name = format.fourcc,
+        .device_path = format.device_path.string(),
+        .pixel_encoding = format.fourcc,
     };
 }
 

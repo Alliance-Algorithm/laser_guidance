@@ -5,6 +5,11 @@
 
 namespace rmcs_laser_guidance {
 
+enum class CaptureBackendKind : int {
+    v4l2 = 0,
+    hikcamera = 1,
+};
+
 enum class V4l2PixelFormat {
     mjpeg = 0,
     yuyv,
@@ -163,8 +168,22 @@ struct GuidanceConfig {
     float calib_angle_y_deg = 0.0F;
 };
 
+struct HikCameraConfig {
+    std::string device_id{};
+    unsigned int timeout_ms = 2000;
+    float exposure_us = 2000.0F;
+    float framerate = 80.0F;
+    float gain = 16.9807F;
+    bool invert_image = false;
+    bool software_sync = false;
+    bool trigger_mode = false;
+    bool fixed_framerate = true;
+};
+
 struct Config {
+    CaptureBackendKind capture_backend = CaptureBackendKind::v4l2;
     V4l2Config v4l2{};
+    HikCameraConfig hik{};
     DebugConfig debug{};
     RuntimeConfig runtime{};
     InferenceConfig inference{};

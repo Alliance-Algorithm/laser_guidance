@@ -1,5 +1,48 @@
-capture_backend: v4l2    # v4l2 | hikcamera
+# =============================================================================
+# HikCamera 工业相机配置
+#
+# 使用方式:
+#   ./build/tool_preview config/capture_hik.yaml
+#   ./build/tool_competition config/capture_hik.yaml
+#
+# 切换回 V4L2 USB 相机:
+#   将 capture_backend 改为 v4l2，或直接使用 config/default.yaml
+# =============================================================================
 
+# --- 采集后端选择 -----------------------------------------------------------
+capture_backend: hikcamera    # v4l2 (USB相机) | hikcamera (海康工业相机)
+
+# --- HikCamera 参数 (仅 capture_backend: hikcamera 时生效) -----------------
+hik:
+  # 设备标识：相机序列号 / 用户自定义名称 / 型号
+  # 留空则自动选择第一个枚举到的设备（仅当只有一台相机时安全）
+  device_id: ""
+
+  # 取图超时 (ms)
+  timeout_ms: 2000
+
+  # 曝光时间 (us)，范围取决于具体型号，常见 10~1000000
+  exposure_us: 2000.0
+
+  # 帧率 (fps)，需与相机支持的帧率匹配
+  framerate: 80.0
+
+  # 模拟增益 (dB)，max 约 16.98 (取决于型号)
+  gain: 16.9807
+
+  # 图像水平翻转
+  invert_image: false
+
+  # 软件触发同步（需相机支持 hardware trigger 或 software trigger）
+  software_sync: false
+
+  # 硬件触发模式 (software_sync 开启时自动设为 software trigger source)
+  trigger_mode: false
+
+  # 固定帧率使能（关闭时使用相机默认帧率）
+  fixed_framerate: true
+
+# --- V4L2 参数 (capture_backend: hikcamera 时忽略，保留供快速切换参考) -----
 v4l2:
   device_path: /dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0
   width: 1920
@@ -7,6 +50,8 @@ v4l2:
   framerate: 60.0
   pixel_format: mjpeg
   invert_image: false
+
+# --- 以下为通用配置，与采集后端无关 -----------------------------------------
 
 debug:
   show_window: true
@@ -103,14 +148,3 @@ guidance:
   lidar_cluster_tolerance_mm: 120.0
   lidar_min_cluster_points: 8
   lidar_max_depth_mm: 40000.0
-
-hik:                      # 仅在 capture_backend: hikcamera 时生效
-  device_id: ""
-  timeout_ms: 2000
-  exposure_us: 2000.0
-  framerate: 80.0
-  gain: 16.9807
-  invert_image: false
-  software_sync: false
-  trigger_mode: false
-  fixed_framerate: true

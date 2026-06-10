@@ -4,14 +4,10 @@
 #include <optional>
 #include <string>
 
+#include "config.hpp"
 #include "types.hpp"
 
 namespace rmcs_laser_guidance {
-
-enum class CaptureBackendKind {
-    v4l2,
-    hikcamera,
-};
 
 struct CaptureFormat {
     CaptureBackendKind backend = CaptureBackendKind::v4l2;
@@ -20,6 +16,10 @@ struct CaptureFormat {
     int height = 0;
     double framerate = 0.0;
     std::string format_name{};
+
+    // 录制/推流链路所需，替代原 V4l2NegotiatedFormat 字段
+    std::string device_path{};       // 设备路径或标识（V4L2: /dev/video0; HikCamera: device_id）
+    std::string pixel_encoding{};    // 像素编码（V4L2: fourcc 如 "MJPG"; HikCamera: "BGR8"）
 };
 
 class ICaptureDevice {

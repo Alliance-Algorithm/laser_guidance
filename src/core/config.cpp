@@ -78,12 +78,25 @@ auto parse_guidance_depth_source(const std::string_view value) -> GuidanceDepthS
         "guidance.depth_source must be one of: monocular_bbox, lidar_target_cluster");
 }
 
+auto parse_capture_backend(const std::string_view value) -> CaptureBackendKind {
+    constexpr std::pair<std::string_view, CaptureBackendKind> kMapping[] = {
+        {"v4l2", CaptureBackendKind::v4l2},
+        {"hikcamera", CaptureBackendKind::hikcamera},
+    };
+    return parse_enum(
+        value, kMapping, "capture_backend must be one of: v4l2, hikcamera");
+}
+
 } // namespace
 
 auto load_config(const std::filesystem::path& config_path) -> Config {
     YAML::Node yaml = YAML::LoadFile(config_path.string());
 
     Config config;
+
+    if (yaml["capture_backend"])
+        config.capture_backend =
+            parse_capture_backend(yaml["capture_backend"].as<std::string>());
 
     if (const YAML::Node v4l2 = yaml["v4l2"]) {
         if (v4l2["device_path"])
@@ -95,6 +108,19 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.v4l2.pixel_format =
                 parse_v4l2_pixel_format(v4l2["pixel_format"].as<std::string>());
         read_opt(v4l2, "invert_image", config.v4l2.invert_image);
+    }
+
+    if (const YAML::Node hik = yaml["hik"]) {
+        if (hik["device_id"])
+            config.hik.device_id = hik["device_id"].as<std::string>();
+        read_opt(hik, "timeout_ms", config.hik.timeout_ms);
+        read_opt(hik, "exposure_us", config.hik.exposure_us);
+        read_opt(hik, "framerate", config.hik.framerate);
+        read_opt(hik, "gain", config.hik.gain);
+        read_opt(hik, "invert_image", config.hik.invert_image);
+        read_opt(hik, "software_sync", config.hik.software_sync);
+        read_opt(hik, "trigger_mode", config.hik.trigger_mode);
+        read_opt(hik, "fixed_framerate", config.hik.fixed_framerate);
     }
 
     if (const YAML::Node debug = yaml["debug"]) {
