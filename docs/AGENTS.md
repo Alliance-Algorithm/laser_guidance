@@ -10,6 +10,8 @@
 当前阶段已经落地的能力有：
 
 - `V4L2/UVC` 取图
+- internal 通用采集接口 `ICaptureDevice` / `CaptureFormat`
+- `HikCameraCaptureDevice`（内部实现，主 runtime 暂未接入）
 - 原始视频会话录制与可选离线抽帧导出
 - `Config` / `Frame` / `TargetObservation`
 - `DetectionBatch` / `TargetTrack` / `AimInput` / `AimOutput`
@@ -39,7 +41,7 @@
 - `src/vision/`
   - 视觉/推理模块：`ModelInfer`、`ModelRuntime`、`ModelAdapter`、`TensorRTEngine`、`TrainingData`。
 - `src/capture/`
-  - 视频采集模块：`V4l2Capture`。
+  - 视频采集模块：`V4l2Capture`、`V4l2CaptureDevice`、`HikCameraCaptureDevice`、`ICaptureDevice`。
 - `src/streaming/`
   - 网络推流模块：`RtpStreamer`、`UdpSender`、`VideoShm`。
 - `src/tracking/`
@@ -84,6 +86,9 @@ internal：
 - `src/vision/model_infer.hpp`
 - `src/vision/training_data.hpp`
 - `src/capture/v4l2_capture.hpp`
+- `src/capture/capture_device.hpp`
+- `src/capture/v4l2_capture_device.hpp`
+- `src/capture/hik_camera_capture_device.hpp`
 - `src/streaming/rtp_streamer.hpp`
 - `src/streaming/udp_sender.hpp`
 - `src/streaming/video_shm.hpp`
@@ -98,6 +103,7 @@ internal：
 - `Frame` / `TargetObservation` 仍然公开 `OpenCV` 类型。
 - `tools/` 与白盒 tests 可以直接使用 `src/` 下的内部模块头，但这些头不算 public API。
 - `tool_competition` / `tool_preview` 不再自己拼装 capture/infer/guidance 主循环，统一委托给 runtime facade。
+- internal capture 抽象已支持 `v4l2` / `hikcamera` 两种 backend，但 runtime 主链路当前仍固定走 `V4l2Capture`。
 - `tool_guidance` 入口已压薄，但内部仍由 `GuidanceToolRuntime` 承接兼容主循环。
 - 帧传递使用 `LatestValue<T>` freshness 队列，推理线程消费时检查 `StaleFramePolicy` 过期判定。
 - FIFO 字符串协议只存在于 bridge 层；runtime 内部只处理 `RuntimeCommand`。
@@ -205,7 +211,7 @@ laser_guidance_bridges
 -> fifo bridge / rtp_streamer / udp_sender / video_shm
 
 laser_guidance_runtime
--> runtime facade / runtime_base / inference_facade / v4l2 / ft4222_spi / ws30_receiver
+-> runtime facade / runtime_base / inference_facade / capture / ft4222_spi / ws30_receiver
 
 rmcs_laser_guidance_core
 -> compatibility aggregate target over all layered libraries
@@ -258,6 +264,12 @@ CompetitionRuntime / PreviewRuntime
 
 - ONNX Runtime 只能作为可选构建接入，默认构建仍应可在没有 ONNX Runtime 的机器上通过。
 - `model` 后端当前允许在启用 ONNX Runtime 时接入 YOLO26 端到端 ONNX（输出契约 `[1,300,6]`）；3 class（purple=0, red=1, blue=2）。TensorRT engine 可通过可选构建接入。输出契约不匹配时明确报错并打印输入输出元数据。
+
+当前 Hik 采集约束补充：
+
+- `WITH_HIKCAMERA=ON` 时，MVS SDK 头文件和运行库优先直接使用 `vendor/hikcamera/src/sdk/include` 与 `vendor/hikcamera/src/sdk/lib`
+- 最终工具和测试 target 已追加相应 `BUILD_RPATH`，运行时默认回仓库内 vendor `.so`
+- 本阶段不改 YAML / runtime / tool 入口，不新增 Hik 专用工具
 - 本仓库当前只负责模型接入和数据集生成，不负责本地训练逻辑。
 
 以下内容不应在这个阶段偷偷引入：

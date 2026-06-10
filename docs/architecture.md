@@ -15,6 +15,13 @@
 - 视频输出（共享内存 + RTP 推流）
 - 控制指令收发（FIFO + UDP）
 
+当前采集层状态：
+
+- runtime 主链路当前仍以 `V4l2Capture` 为唯一生产入口
+- `src/capture/` 已新增 internal 抽象 `ICaptureDevice` / `CaptureFormat`
+- `V4l2CaptureDevice` 与 `HikCameraCaptureDevice` 已共享同一内部接口
+- Hik SDK 运行库默认直接来自仓库内 `vendor/hikcamera/src/sdk/lib`
+
 ## 数据输出分离
 
 控制指令 (高频/小数据, 延迟敏感) 与 视频流 (大数据, 带宽敏感) 走不同通道：
@@ -102,6 +109,16 @@ CompetitionRuntime / PreviewRuntime
 -> ShmFramePublisher / RtpFramePublisher / UdpTelemetryPublisher
 -> cv::imshow()                           ← 可选本地预览
 ```
+
+采集层已具备的内部扩展路径：
+
+```text
+ICaptureDevice
+-> V4l2CaptureDevice -> V4l2Capture
+-> HikCameraCaptureDevice -> hikcamera::Camera -> vendor/hikcamera/src/sdk/lib
+```
+
+当前该抽象仅供内部实现和后续接入准备，未进入 public facade，runtime 主循环也尚未切换到多 backend。
 
 `tool_guidance` 当前仍是独立兼容路径：
 
@@ -192,6 +209,9 @@ or
 - `UdpTelemetryPublisher` / `UdpSender` 负责通过 UDP 发送兼容观测格式
 - `FifoControlServer` 负责 `/tmp/laser_cmd` -> `RuntimeCommand` 映射
 - `V4l2Capture` 负责从 `/dev/videoN` 读取 UVC 图像
+- `ICaptureDevice` / `CaptureFormat` 负责统一 internal capture backend 抽象
+- `V4l2CaptureDevice` 负责把 `V4l2Capture` 适配到统一 internal 接口
+- `HikCameraCaptureDevice` 负责把 `hikcamera::Camera` 适配到统一 internal 接口，并统一输出 BGR 帧
 
 ## 模块职责
 

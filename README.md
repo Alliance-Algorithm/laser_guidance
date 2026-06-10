@@ -3,6 +3,8 @@
 `laser_guidance` 是一个激光视觉引导系统，当前阶段覆盖：
 
 - `V4L2/UVC` 采集卡取图
+- internal 通用采集接口（`ICaptureDevice` / `CaptureFormat`）
+- Hik 工业相机采集实现（内部接入，主 runtime 暂未切换）
 - 原始视频会话录制与可选离线抽帧导出
 - YAML 配置加载
 - `CompetitionRuntime` / `PreviewRuntime` 统一运行时入口
@@ -21,6 +23,7 @@
 - ROS 控制总线 / `/gimbal/*` 接口
 - 通用 `solver` / `planner`
 - `fire_control`
+- Hik runtime/tool/config 正式接入
 
 ## Runtime 架构
 
@@ -102,7 +105,13 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ONNXRUNTIME=ON
 
 # 禁用 FT4222H
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_FT4222=OFF
+
+# 显式关闭 Hik 工业相机支持
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_HIKCAMERA=OFF
 ```
+
+`WITH_HIKCAMERA=ON` 时，Hik MVS SDK 默认直接使用仓库内 `vendor/hikcamera/src/sdk/lib` 的 `.so`，
+不再把系统安装 MVS 作为默认前提；最终工具和测试 target 已写入对应 `RUNPATH`。
 
 ## Tests
 
@@ -204,7 +213,7 @@ laser_guidance/
 ├── src/
 │   ├── core/              # 核心模块
 │   ├── vision/            # 检测/推理模块
-│   ├── capture/           # 视频采集 (V4L2)
+│   ├── capture/           # 视频采集 (V4L2 + internal Hik backend abstraction)
 │   ├── streaming/         # 网络推流 (RTP/UDP/SHM)
 │   ├── tracking/          # EKF 跟踪
 │   ├── guidance/          # AimSolver / GalvoExecutor / ScanController / GuidancePipeline(兼容)
@@ -236,6 +245,13 @@ laser_guidance/
 兼容层 `rmcs_laser_guidance_core` 仍保留，用于平滑迁移现有工具和测试。
 
 建议新增代码直接依赖分层 target，而不是继续把所有依赖都挂在兼容聚合 target 上。
+
+## Capture Status
+
+- 现有主 runtime 和 `tool_record` / `tool_preview` / `tool_competition` 仍走 `V4l2Capture`
+- `src/capture/` 已新增 internal `ICaptureDevice`、`V4l2CaptureDevice`、`HikCameraCaptureDevice`
+- Hik 实现统一输出 `Frame { image=BGR, timestamp }`
+- 本阶段只完成采集层和 vendor SDK 接入，未改 public API、YAML 配置和工具入口
 
 ## C++ API 示例
 

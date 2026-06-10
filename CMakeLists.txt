@@ -11,6 +11,7 @@ option(WITH_ONNXRUNTIME "Enable ONNX Runtime model backend." OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to ONNX Runtime installation")
 option(WITH_TENSORRT "Enable TensorRT engine backend." OFF)
 option(WITH_FT4222 "Enable FT4222H USB-to-SPI support." ON)
+option(WITH_HIKCAMERA "Enable Hikcamera industrial camera support." ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O2 -Wall -Wextra -Wpedantic)
@@ -25,16 +26,20 @@ file(GLOB_RECURSE SUPPORT_SOURCES
   src/runtime/support.cpp
   src/runtime/runtime_command.cpp)
 file(GLOB_RECURSE VISION_SOURCES src/vision/*.cpp)
+list(FILTER VISION_SOURCES EXCLUDE REGEX "tensorrt_engine\.cpp$")
 file(GLOB_RECURSE TRACKING_SOURCES src/tracking/*.cpp)
 file(GLOB_RECURSE GUIDANCE_SOURCES src/guidance/*.cpp)
 file(GLOB_RECURSE BRIDGE_SOURCES src/streaming/*.cpp src/bridges/*.cpp)
+set(CAPTURE_SOURCES
+  src/capture/v4l2_capture.cpp
+  src/capture/v4l2_capture_device.cpp
+  src/capture/hik_camera_capture_device.cpp)
 set(RUNTIME_SOURCES
   src/runtime/runtime.cpp
   src/runtime/runtime_base.cpp
   src/runtime/guidance_tool_runtime.cpp
   src/runtime/runtime_support.cpp
   src/runtime/inference_facade.cpp
-  src/capture/v4l2_capture.cpp
   src/io/ft4222_spi.cpp
   src/io/ws30_receiver.cpp)
 
@@ -83,6 +88,7 @@ if(WITH_TENSORRT)
     IMPORTED_LOCATION "${TENSORRT_PLUGIN}"
     INTERFACE_INCLUDE_DIRECTORIES "${TENSORRT_INCLUDE_DIR};${CUDA_INCLUDE_DIR}")
   add_compile_definitions(RMCS_LASER_GUIDANCE_WITH_TENSORRT=1)
+  list(APPEND VISION_SOURCES src/vision/tensorrt_engine.cpp)
   message(STATUS "TensorRT enabled")
 endif()
 
@@ -108,10 +114,25 @@ if(WITH_FT4222)
   message(STATUS "FT4222H enabled (${FT4222_LIBRARY})")
 endif()
 
+# ---- Hikcamera (optional) ------------------------------------------------------
+if(WITH_HIKCAMERA)
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/hikcamera/CMakeLists.txt")
+    message(FATAL_ERROR "WITH_HIKCAMERA=ON requires vendor/hikcamera submodule. "
+      "Run: git submodule update --init")
+  endif()
+  add_compile_definitions(WITH_HIKCAMERA=1)
+  add_subdirectory(vendor/hikcamera)
+  get_target_property(HIKCAMERA_RUNTIME_DIR hikcamera HIKCAMERA_RUNTIME_DIR)
+  message(STATUS "Hikcamera enabled")
+endif()
+
 # ---- common settings -----------------------------------------------------------
 set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread)
 if(WITH_FT4222)
   list(APPEND COMMON_LIBS ft4222::ft4222)
+endif()
+if(WITH_HIKCAMERA)
+  list(APPEND COMMON_LIBS hikcamera)
 endif()
 
 set(COMMON_INCLUDES
@@ -165,7 +186,7 @@ target_compile_definitions(laser_guidance_bridges PRIVATE ${DEFAULT_PATH_DEFS})
 target_link_libraries(laser_guidance_bridges PUBLIC
   laser_guidance_support laser_guidance_tracking ${COMMON_LIBS})
 
-add_library(laser_guidance_runtime ${RUNTIME_SOURCES})
+add_library(laser_guidance_runtime ${RUNTIME_SOURCES} ${CAPTURE_SOURCES})
 target_include_directories(laser_guidance_runtime PUBLIC ${COMMON_INCLUDES})
 target_compile_definitions(laser_guidance_runtime PRIVATE ${DEFAULT_PATH_DEFS})
 target_link_libraries(laser_guidance_runtime PUBLIC
@@ -200,6 +221,13 @@ if(WITH_FT4222)
     VERBATIM)
 endif()
 
+if(WITH_HIKCAMERA)
+  foreach(_target
+      laser_guidance_runtime)
+    set_property(TARGET ${_target} APPEND PROPERTY BUILD_RPATH "${HIKCAMERA_RUNTIME_DIR}")
+  endforeach()
+endif()
+
 # ---- tools ---------------------------------------------------------------------
 enable_testing()
 
@@ -213,6 +241,9 @@ foreach(_src ${TOOL_SOURCES})
   if(WITH_FT4222)
     set_property(TARGET tool_${_name} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
     add_dependencies(tool_${_name} ft4222_runtime_link)
+  endif()
+  if(WITH_HIKCAMERA)
+    set_property(TARGET tool_${_name} APPEND PROPERTY BUILD_RPATH "${HIKCAMERA_RUNTIME_DIR}")
   endif()
 endforeach()
 
@@ -238,6 +269,9 @@ foreach(_src ${TEST_SOURCES})
   if(WITH_FT4222)
     set_property(TARGET ${_name} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
     add_dependencies(${_name} ft4222_runtime_link)
+  endif()
+  if(WITH_HIKCAMERA)
+    set_property(TARGET ${_name} APPEND PROPERTY BUILD_RPATH "${HIKCAMERA_RUNTIME_DIR}")
   endif()
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()
