@@ -3,50 +3,45 @@
 #include <memory>
 #include <utility>
 
-#include "runtime/runtime_base.hpp"
+#include "runtime/control_loop.hpp"
 
 namespace rmcs_laser_guidance {
 
 struct CompetitionRuntime::Impl {
-    explicit Impl(Config config, RecordSessionOptions record_options)
-        : runtime(std::move(config), std::move(record_options)) {}
+    explicit Impl(Config config, CompetitionRuntimeOptions options)
+        : config(std::move(config))
+        , options(std::move(options))
+        , runtime(std::make_unique<runtime_internal::ControlLoop>(this->config, this->options)) {}
 
-    runtime_internal::CompetitionRuntimeImpl runtime;
+    Config config;
+    CompetitionRuntimeOptions options;
+    std::unique_ptr<runtime_internal::ControlLoop> runtime{};
 };
 
-CompetitionRuntime::CompetitionRuntime(Config config, RecordSessionOptions record_options)
-    : impl_(std::make_unique<Impl>(std::move(config), std::move(record_options))) {}
+CompetitionRuntime::CompetitionRuntime(Config config, CompetitionRuntimeOptions options)
+    : impl_(std::make_unique<Impl>(std::move(config), std::move(options))) {}
 
 CompetitionRuntime::~CompetitionRuntime() = default;
 
-auto CompetitionRuntime::start() -> std::expected<void, std::string> { return impl_->runtime.start(); }
-auto CompetitionRuntime::stop() -> void { impl_->runtime.stop(); }
-auto CompetitionRuntime::join() -> void { impl_->runtime.join(); }
+auto CompetitionRuntime::start() -> std::expected<void, std::string> {
+    return impl_->runtime->start();
+}
+auto CompetitionRuntime::stop() -> void {
+    if (impl_->runtime) {
+        impl_->runtime->stop();
+    }
+}
+auto CompetitionRuntime::join() -> void {
+    if (impl_->runtime) {
+        impl_->runtime->join();
+    }
+}
 auto CompetitionRuntime::submit_command(const RuntimeCommand& command)
     -> std::expected<void, std::string> {
-    return impl_->runtime.submit_command(command);
+    return impl_->runtime->submit_command(command);
 }
-auto CompetitionRuntime::snapshot() const -> RuntimeSnapshot { return impl_->runtime.snapshot(); }
-
-struct PreviewRuntime::Impl {
-    explicit Impl(Config config)
-        : runtime(std::move(config)) {}
-
-    runtime_internal::PreviewRuntimeImpl runtime;
-};
-
-PreviewRuntime::PreviewRuntime(Config config)
-    : impl_(std::make_unique<Impl>(std::move(config))) {}
-
-PreviewRuntime::~PreviewRuntime() = default;
-
-auto PreviewRuntime::start() -> std::expected<void, std::string> { return impl_->runtime.start(); }
-auto PreviewRuntime::stop() -> void { impl_->runtime.stop(); }
-auto PreviewRuntime::join() -> void { impl_->runtime.join(); }
-auto PreviewRuntime::submit_command(const RuntimeCommand& command)
-    -> std::expected<void, std::string> {
-    return impl_->runtime.submit_command(command);
+auto CompetitionRuntime::snapshot() const -> RuntimeSnapshot {
+    return impl_->runtime ? impl_->runtime->snapshot() : RuntimeSnapshot{};
 }
-auto PreviewRuntime::snapshot() const -> RuntimeSnapshot { return impl_->runtime.snapshot(); }
 
 } // namespace rmcs_laser_guidance

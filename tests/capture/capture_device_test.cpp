@@ -2,17 +2,14 @@
 #include <stdexcept>
 #include <vector>
 
-#include "capture/hik_camera_capture_device.hpp"
-#include "capture/v4l2_capture_device.hpp"
+#include "capture/capture_device.hpp"
 #include "test_utils.hpp"
 
 int main() {
     try {
         using rmcs_laser_guidance::CaptureBackendKind;
+        using rmcs_laser_guidance::CaptureDevice;
         using rmcs_laser_guidance::CaptureFormat;
-        using rmcs_laser_guidance::HikCameraCaptureConfig;
-        using rmcs_laser_guidance::HikCameraCaptureDevice;
-        using rmcs_laser_guidance::V4l2CaptureDevice;
         using rmcs_laser_guidance::V4l2NegotiatedFormat;
         using rmcs_laser_guidance::tests::require;
         using rmcs_laser_guidance::tests::require_near;
@@ -108,7 +105,9 @@ int main() {
         }
 #else
         {
-            HikCameraCaptureDevice capture(HikCameraCaptureConfig{});
+            rmcs_laser_guidance::Config config;
+            config.capture_backend = CaptureBackendKind::hikcamera;
+            CaptureDevice capture(config);
             const auto result = capture.open();
             require(!result.has_value(), "hik open should fail when support is disabled");
         }

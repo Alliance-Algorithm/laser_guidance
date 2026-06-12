@@ -71,18 +71,6 @@ struct UdpConfig {
     int port = 5001;
 };
 
-struct Ws30Config {
-    bool enabled = false;
-    std::string host = "192.168.137.200";
-    int points_port = 1001;
-    int imu_port = 1002;
-    int scan_port = 1003;
-    int handshake_interval_ms = 500;
-    bool receive_imu = false;
-    int grid_cols = 360;
-    int grid_rows = 150;
-};
-
 struct EkfConfig {
     bool enabled = true;
     double process_noise_q = 0.05;
@@ -109,11 +97,6 @@ enum class GuidanceCommandModelKind : int {
     direct_voltage,
 };
 
-enum class GuidanceDepthSourceKind : int {
-    monocular_bbox = 0,
-    lidar_target_cluster,
-};
-
 struct TargetGeometry {
     int class_id = 0;
     float width_mm = 150.0F;
@@ -131,7 +114,6 @@ struct GalvoWiringConfig {
 struct GuidanceConfig {
     bool enabled = false;
     GuidanceCommandModelKind command_model = GuidanceCommandModelKind::geometry;
-    GuidanceDepthSourceKind depth_source = GuidanceDepthSourceKind::monocular_bbox;
     std::vector<TargetGeometry> target_geometry{};
     std::filesystem::path camera_calib_path{};
     std::filesystem::path voltage_model_path{};
@@ -159,10 +141,6 @@ struct GuidanceConfig {
     float scan_width_deg = 1.0F;
     float scan_height_deg = 0.8F;
     int scan_grid_n = 10;
-    float lidar_bbox_margin_px = 24.0F;
-    float lidar_cluster_tolerance_mm = 120.0F;
-    int lidar_min_cluster_points = 8;
-    float lidar_max_depth_mm = 40000.0F;
     bool calib_mode = false;
     float calib_angle_x_deg = 0.0F;
     float calib_angle_y_deg = 0.0F;
@@ -189,7 +167,6 @@ struct Config {
     InferenceConfig inference{};
     RtpConfig rtp{};
     UdpConfig udp{};
-    Ws30Config ws30{};
     EkfConfig ekf{};
     GuidanceConfig guidance{};
 };

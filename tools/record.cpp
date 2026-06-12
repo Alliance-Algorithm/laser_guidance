@@ -7,7 +7,6 @@
 #include <opencv2/highgui.hpp>
 
 #include "capture/capture_device.hpp"
-#include "capture/capture_device_factory.hpp"
 #include "config.hpp"
 #include "laser_guidance/support.hpp"
 #include "vision/training_data.hpp"
@@ -59,12 +58,18 @@ auto resolve_target_color(int argc, char** argv) -> std::string {
 }
 
 auto print_mode(
-    const rmcs_laser_guidance::V4l2Config& requested,
+    const rmcs_laser_guidance::Config& requested,
     const rmcs_laser_guidance::CaptureFormat& actual) -> void {
-    std::println(
-        "requested device={} mode={}x{}@{} format={}", requested.device_path.string(),
-        requested.width, requested.height, requested.framerate,
-        rmcs_laser_guidance::pixel_format_name(requested.pixel_format));
+    if (requested.capture_backend == rmcs_laser_guidance::CaptureBackendKind::v4l2) {
+        std::println(
+            "requested device={} mode={}x{}@{} format={}", requested.v4l2.device_path.string(),
+            requested.v4l2.width, requested.v4l2.height, requested.v4l2.framerate,
+            rmcs_laser_guidance::pixel_format_name(requested.v4l2.pixel_format));
+    } else {
+        std::println(
+            "requested device={} mode={}x{}@{} backend=hikcamera", requested.hik.device_id,
+            requested.v4l2.width, requested.v4l2.height, requested.hik.framerate);
+    }
     std::println(
         "actual    device={} mode={}x{}@{} format={}", actual.device_path, actual.width,
         actual.height, actual.framerate, actual.pixel_encoding);
@@ -122,14 +127,14 @@ int main(int argc, char** argv) {
             "record_session override: forcing v4l2.pixel_format={} for capture",
             rmcs_laser_guidance::pixel_format_name(record_config.v4l2.pixel_format));
 
-        auto capture = rmcs_laser_guidance::create_capture_device(record_config);
-        const auto open_result = capture->open();
+        rmcs_laser_guidance::CaptureDevice capture(record_config);
+        const auto open_result = capture.open();
         if (!open_result) {
-            std::println(stderr, "Failed to open V4L2 capture: {}", open_result.error());
+            std::println(stderr, "Failed to open capture: {}", open_result.error());
             return 1;
         }
 
-        print_mode(record_config.v4l2, *open_result);
+        print_mode(record_config, *open_result);
 
         const auto capture_start = std::chrono::system_clock::now();
         const std::string session_id = rmcs_laser_guidance::format_session_id(capture_start);
@@ -165,7 +170,7 @@ int main(int argc, char** argv) {
         }
 
         while (!stop_requested() && std::chrono::steady_clock::now() < deadline) {
-            auto frame = capture->read_frame();
+            auto frame = capture.read_frame();
             if (!frame) {
                 std::println(stderr, "Failed to read frame: {}", frame.error());
                 continue;
@@ -180,7 +185,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        capture->close();
+        capture.close();
         if (stop_requested())
             std::println("stop requested, finalizing recorded session");
 

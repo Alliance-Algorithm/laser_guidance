@@ -1,21 +1,13 @@
 # Runtime Operations
 
-## Runtime Assumptions
+## 运行约定
 
-- `CompetitionRuntime.start()` / `PreviewRuntime.start()` 仍然是同步 readiness barrier。
-- 推理后端在启动时一次性探测，运行时只切换已可用 backend。
-- `InferenceFacade` 是 active backend 的唯一事实源。
-- shutdown 顺序固定为：
-  - `stop_requested = true`
-  - `frame_queue_.shutdown()`
-  - inference worker 退出并 join
-  - `InferenceFacade::stop()`
-  - guidance recenter / recorder / RTP / SHM / capture 收尾
-  - snapshot/status 收敛为 stopped
+- `CompetitionRuntime.start()` 仍然是同步 readiness barrier。
+- `main` / `preview` 共用同一套 `ControlLoop`，只是在 profile 上区分输出能力。
+- `tool_guidance` 使用独立 `GuidanceOpsApp`。
+- 运行时 backend 只在已构建可用的后端之间切换。
 
 ## Runtime Config
-
-当前有效 runtime 配置项：
 
 ```yaml
 runtime:
@@ -34,13 +26,11 @@ runtime:
 
 说明：
 
-- 当前没有 `runtime.mode` 配置项。
-- TensorRT engine 路径来自 `runtime.engine_path`。
-- recording / streaming 运行时开关通过 `RuntimeCommand` 和 FIFO bridge 动态控制。
+- `record_enabled` 只在 `main` profile 下生效。
+- `streaming`、`recording`、`enemy`、`backend`、`ekf` 都通过 `RuntimeCommand` 动态控制。
+- `guidance.depth_source`、`guidance.lidar_*`、`ws30` 已删除。
 
-## Build Commands
-
-### Default Build
+## Build
 
 ```bash
 cmake -S . -B build/default -DCMAKE_BUILD_TYPE=Release
@@ -48,59 +38,27 @@ cmake --build build/default --parallel
 ctest --test-dir build/default --output-on-failure
 ```
 
-### ONNX Runtime Build
+可选后端：
 
 ```bash
-cmake -S . -B build/onnx -DCMAKE_BUILD_TYPE=Release \
-  -DWITH_ONNXRUNTIME=ON
-cmake --build build/onnx --parallel
-```
-
-### TensorRT Build
-
-```bash
-cmake -S . -B build/tensorrt -DCMAKE_BUILD_TYPE=Release \
+cmake -S . -B build/full -DCMAKE_BUILD_TYPE=Release \
   -DWITH_ONNXRUNTIME=ON \
-  -DWITH_TENSORRT=ON
-cmake --build build/tensorrt --parallel
-```
-
-### FT4222 Toggle
-
-```bash
-cmake -S . -B build/no-ft4222 -DCMAKE_BUILD_TYPE=Release \
-  -DWITH_FT4222=OFF
-cmake --build build/no-ft4222 --parallel
-```
-
-## TensorRT Engine Build
-
-```bash
-trtexec \
-  --onnx=models/target.onnx \
-  --saveEngine=models/target_fp16_1x3x640x640.engine \
-  --fp16 \
-  --optShapes=images:1x3x640x640 \
-  --skipInference
+  -DWITH_TENSORRT=ON \
+  -DWITH_FT4222=ON \
+  -DWITH_HIKCAMERA=ON
 ```
 
 ## Operational Notes
 
-- Debug 和 recording 都必须是 lossy 的，不能阻塞 capture -> infer 主路径。
-- `tool_competition` / `tool_preview` 只处理 runtime 生命周期和 FIFO bridge。
-- `tool_guidance` 现由 internal `GuidanceToolRuntime` 承接：
-  - 异步推理
-  - WASD 校准步进
-  - geometry/direct-voltage CSV 记录
-  - purple confirmed hit 边沿记录
-- 统一 runtime 当前只覆盖 `CompetitionRuntime` / `PreviewRuntime`；`GuidanceToolRuntime` 仍是兼容独立路径。
-- UDP telemetry 继续输出兼容 `TargetObservation` 语义，但数据来源统一走 `RuntimeSnapshot`.
+- `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。
+- `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、recording。
+- `GuidanceSession` 负责 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
+- `tool_guidance` 的校准记录和 hit edge 记录都在独立 app 内完成。
 
-## Verification Focus
+## Verification
 
-- backend 切换是否只在可用 backend 间发生
-- stop 后 `active_backend_name` / `backend_uses_tensorrt` 是否正确清空
-- FIFO 多行、半行、非法命令后恢复是否正常
-- `RuntimeSnapshot` / `TargetTrack` 是否保持值语义安全
-- `tool_guidance` 校准记录和 purple hit 边沿记录是否稳定
-- `ws30_receiver_test` 是否避免固定端口导致的环境敏感失败
+- backend 切换只发生在可用后端之间。
+- `main` profile 允许录制，`preview` profile 不允许录制。
+- FIFO 多行、半行、非法命令后可以恢复。
+- `RuntimeSnapshot` 保持值语义安全。
+- `tool_guidance` 仍能完成标定和 CSV 落盘。

@@ -3,9 +3,16 @@
 #include <expected>
 #include <optional>
 #include <string>
+#include <utility>
+#include <variant>
 
+#include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "types.hpp"
+
+#ifdef WITH_HIKCAMERA
+#include <hikcamera/capturer.hpp>
+#endif
 
 namespace rmcs_laser_guidance {
 
@@ -16,22 +23,56 @@ struct CaptureFormat {
     int height = 0;
     double framerate = 0.0;
     std::string format_name{};
-
-    // 录制/推流链路所需，替代原 V4l2NegotiatedFormat 字段
-    std::string device_path{};       // 设备路径或标识（V4L2: /dev/video0; HikCamera: device_id）
-    std::string pixel_encoding{};    // 像素编码（V4L2: fourcc 如 "MJPG"; HikCamera: "BGR8"）
+    std::string device_path{};
+    std::string pixel_encoding{};
 };
 
-class ICaptureDevice {
-public:
-    virtual ~ICaptureDevice() = default;
+auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat;
 
-    virtual auto open() -> std::expected<CaptureFormat, std::string> = 0;
-    virtual auto read_frame() -> std::expected<Frame, std::string> = 0;
-    virtual auto close() noexcept -> void = 0;
-    [[nodiscard]] virtual auto is_open() const noexcept -> bool = 0;
-    [[nodiscard]] virtual auto negotiated_format() const noexcept
-        -> const std::optional<CaptureFormat>& = 0;
+#ifdef WITH_HIKCAMERA
+auto to_capture_format(
+    const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
+    -> CaptureFormat;
+#endif
+
+class CaptureDevice {
+public:
+    explicit CaptureDevice(Config config);
+
+    auto open() -> std::expected<CaptureFormat, std::string>;
+    auto read_frame() -> std::expected<Frame, std::string>;
+    auto close() noexcept -> void;
+    [[nodiscard]] auto is_open() const noexcept -> bool;
+    [[nodiscard]] auto negotiated_format() const noexcept -> const std::optional<CaptureFormat>&;
+
+private:
+    struct V4l2BackendState {
+        explicit V4l2BackendState(V4l2Config config_in)
+            : capture(std::move(config_in)) {}
+
+        V4l2Capture capture;
+    };
+
+#ifdef WITH_HIKCAMERA
+    struct HikBackendState {
+        hikcamera::Camera camera{};
+    };
+#endif
+
+    using BackendState = std::variant<
+        std::monostate,
+        V4l2BackendState
+#ifdef WITH_HIKCAMERA
+        ,
+        HikBackendState
+#endif
+        >;
+
+    [[nodiscard]] auto make_backend_state() const -> BackendState;
+
+    Config config_{};
+    BackendState backend_{};
+    std::optional<CaptureFormat> negotiated_{};
 };
 
 } // namespace rmcs_laser_guidance

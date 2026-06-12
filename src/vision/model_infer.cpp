@@ -121,8 +121,7 @@ struct ModelInfer::Details {
     explicit Details(InferenceConfig config_in)
         : config(std::move(config_in))
         , runtime_enabled(model_runtime_enabled_in_build())
-        , runtime(config.model_path)
-        , adapter(make_yolo_model_adapter()) {
+        , runtime(config.model_path) {
         initialize();
     }
 
@@ -203,7 +202,7 @@ struct ModelInfer::Details {
     }
 
     auto infer_onnx(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
-        const auto adapter_result = adapter->adapt(frame, runtime);
+        const auto adapter_result = adapt_yolo_outputs(frame, runtime);
         result.success = adapter_result.success;
         result.contract_supported = adapter_result.contract_supported;
         result.observation = adapter_result.observation;
@@ -217,7 +216,6 @@ struct ModelInfer::Details {
     bool startup_ready = false;
     std::string message{};
     ModelRuntime runtime;
-    std::unique_ptr<ModelAdapter> adapter;
 #ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
     std::unique_ptr<TensorRTEngine> tensorrt_engine;
 #endif

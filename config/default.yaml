@@ -41,17 +41,6 @@ udp:
   host: "127.0.0.1"
   port: 5001
 
-ws30:
-  enabled: false
-  host: "192.168.137.200"
-  points_port: 1001
-  imu_port: 1002
-  scan_port: 1003
-  handshake_interval_ms: 500
-  receive_imu: false
-  grid_cols: 360
-  grid_rows: 150
-
 ekf:
   process_noise_q: 0.05
   measurement_noise_r: 0.5
@@ -64,7 +53,6 @@ ekf:
 guidance:
   enabled: true
   command_model: geometry
-  depth_source: monocular_bbox
   target_geometry:
     - class_id: 0
       width_mm: 72.0
@@ -99,10 +87,6 @@ guidance:
   scan_width_deg: 0.12
   scan_height_deg: 0.16
   scan_grid_n: 8
-  lidar_bbox_margin_px: 24.0
-  lidar_cluster_tolerance_mm: 120.0
-  lidar_min_cluster_points: 8
-  lidar_max_depth_mm: 40000.0
 
 hik:                      # 仅在 capture_backend: hikcamera 时生效
   device_id: ""

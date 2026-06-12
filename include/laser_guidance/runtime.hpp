@@ -61,7 +61,6 @@ struct DetectionBatch {
     std::vector<Detection> detections{};
     bool detected = false;
     cv::Point2f selected_center{-1.0F, -1.0F};
-    LidarFrame lidar_frame{};
 };
 
 struct TargetTrack {
@@ -82,7 +81,6 @@ struct TargetTrack {
 struct AimInput {
     bool ekf_enabled = false;
     TargetTrack track{};
-    LidarFrame lidar_frame{};
     float last_valid_depth_mm = 0.0F;
 };
 
@@ -144,50 +142,29 @@ struct RuntimeSnapshot {
     std::filesystem::path current_recording_root{};
 };
 
-class IRuntime {
-public:
-    virtual ~IRuntime() = default;
-
-    virtual auto start() -> std::expected<void, std::string> = 0;
-    virtual auto stop() -> void = 0;
-    virtual auto join() -> void = 0;
-    virtual auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>
-        = 0;
-    [[nodiscard]] virtual auto snapshot() const -> RuntimeSnapshot = 0;
+enum class CompetitionProfile : std::uint8_t {
+    main,
+    preview,
 };
 
-class CompetitionRuntime final : public IRuntime {
+struct CompetitionRuntimeOptions {
+    CompetitionProfile profile = CompetitionProfile::main;
+    RecordSessionOptions record_options{};
+};
+
+class CompetitionRuntime {
 public:
-    explicit CompetitionRuntime(Config config, RecordSessionOptions record_options = {});
-    ~CompetitionRuntime() override;
+    explicit CompetitionRuntime(Config config, CompetitionRuntimeOptions options = {});
+    ~CompetitionRuntime();
 
     CompetitionRuntime(const CompetitionRuntime&) = delete;
     auto operator=(const CompetitionRuntime&) -> CompetitionRuntime& = delete;
 
-    auto start() -> std::expected<void, std::string> override;
-    auto stop() -> void override;
-    auto join() -> void override;
-    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string> override;
-    [[nodiscard]] auto snapshot() const -> RuntimeSnapshot override;
-
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
-class PreviewRuntime final : public IRuntime {
-public:
-    explicit PreviewRuntime(Config config);
-    ~PreviewRuntime() override;
-
-    PreviewRuntime(const PreviewRuntime&) = delete;
-    auto operator=(const PreviewRuntime&) -> PreviewRuntime& = delete;
-
-    auto start() -> std::expected<void, std::string> override;
-    auto stop() -> void override;
-    auto join() -> void override;
-    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string> override;
-    [[nodiscard]] auto snapshot() const -> RuntimeSnapshot override;
+    auto start() -> std::expected<void, std::string>;
+    auto stop() -> void;
+    auto join() -> void;
+    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>;
+    [[nodiscard]] auto snapshot() const -> RuntimeSnapshot;
 
 private:
     struct Impl;
