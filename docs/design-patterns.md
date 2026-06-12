@@ -55,8 +55,9 @@ bridge 层只做协议转换和搬运：
 对 SDK / 外部实现细节仍保留 concrete wrapper 或 Pimpl：
 
 - Hik SDK
-- `CompetitionRuntime`
 - 若干 bridge / infer 细节实现
+
+> `CompetitionRuntime` 本身是 public facade（见 §1），其 Pimpl 只是为了隐藏内部依赖，不属于"外部依赖隔离"范畴。
 
 保留这层隔离的目的是控制编译依赖和第三方头泄漏，不是为了在业务层继续加接口层级。
 

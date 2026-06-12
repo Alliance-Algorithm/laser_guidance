@@ -26,16 +26,8 @@ CompetitionRuntime::~CompetitionRuntime() = default;
 auto CompetitionRuntime::start() -> std::expected<void, std::string> {
     return impl_->runtime->start();
 }
-auto CompetitionRuntime::stop() -> void {
-    if (impl_->runtime) {
-        impl_->runtime->stop();
-    }
-}
-auto CompetitionRuntime::join() -> void {
-    if (impl_->runtime) {
-        impl_->runtime->join();
-    }
-}
+auto CompetitionRuntime::stop() -> void { impl_->runtime->stop(); }
+auto CompetitionRuntime::join() -> void { impl_->runtime->join(); }
 auto CompetitionRuntime::submit_command(const RuntimeCommand& command)
     -> std::expected<void, std::string> {
     return impl_->runtime->submit_command(command);

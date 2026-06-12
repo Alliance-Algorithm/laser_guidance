@@ -49,9 +49,8 @@ auto RuntimeOutputs::publish_previous(cv::Mat& previous_output) -> void {
 
     if (capabilities_.allow_rtp && rtp_publisher_.is_active()) {
         rtp_publisher_.publish(std::move(previous_output));
+        // cv::Mat move leaves source empty — no explicit reset needed
     }
-
-    previous_output = cv::Mat{};
 }
 
 auto RuntimeOutputs::record_current(const cv::Mat& frame) -> void {

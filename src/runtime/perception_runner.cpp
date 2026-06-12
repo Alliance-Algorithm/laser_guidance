@@ -323,12 +323,14 @@ auto PerceptionRunner::infer_active(const Frame& frame) const -> std::optional<M
         return std::nullopt;
     }
 
-    std::scoped_lock lock(state_mutex_);
     const ModelInfer* active = nullptr;
-    if (active_backend_ == RuntimeBackend::tensorrt) {
-        active = infer_trt_.get();
-    } else if (active_backend_ == RuntimeBackend::onnx) {
-        active = infer_onnx_.get();
+    {
+        std::scoped_lock lock(state_mutex_);
+        if (active_backend_ == RuntimeBackend::tensorrt) {
+            active = infer_trt_.get();
+        } else if (active_backend_ == RuntimeBackend::onnx) {
+            active = infer_onnx_.get();
+        }
     }
     if (active == nullptr) {
         return std::nullopt;

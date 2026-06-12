@@ -43,8 +43,9 @@ public:
         -> std::expected<GuidanceSession, std::string>;
 
     [[nodiscard]] auto mode() const -> Mode { return mode_; }
-    [[nodiscard]] auto enabled() const -> bool { return true; }
-    [[nodiscard]] auto ready() const -> bool { return true; }
+    // Session existence implies readiness — factory methods return
+    // std::expected<GuidanceSession, std::string> so callers check
+    // guidance_.has_value() instead of calling enabled()/ready().
     [[nodiscard]] auto calibration_state() const -> const GuidanceCalibrationState*;
     auto mutable_calibration_state() -> GuidanceCalibrationState*;
     auto execute(const TargetTrack& track) -> GuidanceFrameResult;

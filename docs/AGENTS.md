@@ -36,7 +36,7 @@
 - `src/vision/`
   - 视觉与推理：`ModelInfer`、`ModelRuntime`、`ModelAdapter`、`TensorRTEngine`、`TrainingData`。
 - `src/guidance/`
-  - 引导模块：`AimSolver`、`GalvoExecutor`、`ScanController`、`VoltageMapper`、`GalvoDriver`、`CameraProjection`、`DepthEstimator`。
+  - 引导模块：`AimSolver`、`GalvoExecutor`、`ScanController`、`VoltageMapper`、`GalvoDriver`、`CameraProjection`。
 - `src/runtime/`
   - runtime 核心：`ControlLoop`、`PerceptionRunner`、`GuidanceSession`、`RuntimeOutputs`、`OverlayRenderer`、`GuidanceOpsApp`。
 - `src/bridges/`

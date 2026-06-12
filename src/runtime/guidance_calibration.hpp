@@ -1,7 +1,5 @@
 #pragma once
 
-#include <opencv2/core/types.hpp>
-
 namespace rmcs_laser_guidance::runtime_internal {
 
 struct GuidanceCalibrationState {
