@@ -10,7 +10,6 @@
 #include "guidance/camera_projection.hpp"
 #include "guidance/depth_estimator.hpp"
 #include "guidance/galvo_kinematics.hpp"
-#include "guidance/lidar_depth_estimator.hpp"
 #include "guidance/voltage_mapper.hpp"
 
 namespace rmcs_laser_guidance {
@@ -99,7 +98,6 @@ auto AimSolver::load_geometry_calibration(const std::filesystem::path& path) -> 
         auto [camera, dist] = load_yaml_calibration(path);
         projection_ = std::make_unique<CameraProjection>(camera.clone(), dist.clone());
         depth_estimator_ = std::make_unique<DepthEstimator>(config_, camera.clone());
-        lidar_depth_estimator_ = std::make_unique<LidarDepthEstimator>(config_);
         kinematics_ = std::make_unique<GalvoKinematics>(config_);
         return {};
     } catch (const std::exception& e) {
@@ -107,19 +105,22 @@ auto AimSolver::load_geometry_calibration(const std::filesystem::path& path) -> 
     }
 }
 
-auto AimSolver::solve(AimInput& input) -> AimOutput {
+auto AimSolver::solve(const AimInput& input) -> AimSolveResult {
     if (!initialized_) {
-        return AimOutput{
-            .message = init_error_.empty() ? "aim solver not initialized" : init_error_,
+        return AimSolveResult{
+            .aim_output =
+                AimOutput{
+                    .message = init_error_.empty() ? "aim solver not initialized" : init_error_,
+                },
         };
     }
     if (config_.calib_mode) {
-        return AimOutput{.message = ""};
+        return AimSolveResult{.aim_output = AimOutput{.message = ""}};
     }
     if (input.track.aim_center.x < 0.0F || input.track.aim_center.y < 0.0F
         || input.track.aim_center.x >= std::max(1.0F, image_width_)
         || input.track.aim_center.y >= std::max(1.0F, image_height_)) {
-        return AimOutput{.message = "invalid aim center"};
+        return AimSolveResult{.aim_output = AimOutput{.message = "invalid aim center"}};
     }
 
     if (config_.command_model == GuidanceCommandModelKind::direct_voltage) {
@@ -128,15 +129,29 @@ auto AimSolver::solve(AimInput& input) -> AimOutput {
     return solve_geometry(input);
 }
 
-auto AimSolver::estimate_depth(const Detection& detection, const LidarFrame* lidar_frame) const
-    -> std::optional<float> {
-    const auto model_candidate = to_model_candidate(detection);
-    if (config_.depth_source == GuidanceDepthSourceKind::lidar_target_cluster
-        && lidar_depth_estimator_ && lidar_frame != nullptr) {
-        if (const auto lidar_depth = lidar_depth_estimator_->estimate(model_candidate, *lidar_frame)) {
-            return lidar_depth;
+auto AimSolver::observe_target(const Detection* detection) -> AimSolveTelemetry {
+    AimSolveTelemetry telemetry;
+    if (detection != nullptr) {
+        if (const auto depth = estimate_depth(*detection)) {
+            last_valid_depth_mm_ = *depth;
+            telemetry.measured_depth_mm = depth;
         }
     }
+
+    if (last_valid_depth_mm_ > 0.0F) {
+        telemetry.active_depth_mm = last_valid_depth_mm_;
+        telemetry.used_cached_depth = !telemetry.measured_depth_mm.has_value();
+    }
+
+    if (detection != nullptr && telemetry.active_depth_mm.has_value() && projection_) {
+        telemetry.selected_target_point = projection_->project(detection->center, *telemetry.active_depth_mm);
+    }
+
+    return telemetry;
+}
+
+auto AimSolver::estimate_depth(const Detection& detection) const -> std::optional<float> {
+    const auto model_candidate = to_model_candidate(detection);
     if (depth_estimator_) {
         return depth_estimator_->estimate(model_candidate);
     }
@@ -151,52 +166,69 @@ auto AimSolver::project_to_camera(const cv::Point2f& pixel, const float depth_mm
     return projection_->project(pixel, depth_mm);
 }
 
-auto AimSolver::solve_geometry(AimInput& input) -> AimOutput {
+auto AimSolver::cached_depth_mm() const -> std::optional<float> {
+    if (last_valid_depth_mm_ <= 0.0F) {
+        return std::nullopt;
+    }
+    return last_valid_depth_mm_;
+}
+
+auto AimSolver::solve_geometry(const AimInput& input) -> AimSolveResult {
     if (!projection_ || !kinematics_) {
-        return AimOutput{.message = "geometry guidance not initialized"};
-    }
-
-    if (input.track.selected_detection.has_value()) {
-        if (const auto depth = estimate_depth(*input.track.selected_detection, &input.lidar_frame)) {
-            input.last_valid_depth_mm = *depth;
-        }
-    }
-
-    if (input.last_valid_depth_mm <= 0.0F) {
-        return AimOutput{
-            .message = "no valid depth",
+        return AimSolveResult{
+            .aim_output = AimOutput{.message = "geometry guidance not initialized"},
         };
     }
 
-    const auto P_c = projection_->project(input.track.aim_center, input.last_valid_depth_mm);
+    const auto* selected =
+        input.track.selected_detection.has_value() ? &*input.track.selected_detection : nullptr;
+    auto result = AimSolveResult{
+        .telemetry = observe_target(selected),
+    };
+    if (!result.telemetry.active_depth_mm.has_value()) {
+        result.aim_output.message = "no valid depth";
+        return result;
+    }
+
+    const auto P_c = projection_->project(input.track.aim_center, *result.telemetry.active_depth_mm);
     const auto angles = kinematics_->compute(P_c);
     if (!angles.valid) {
-        return AimOutput{.message = "kinematics failed"};
+        result.aim_output.message = "kinematics failed";
+        return result;
     }
 
     const cv::Point2f output_angles{
         angles.theta_x_optical_deg + config_.angle_offset_x_deg,
         angles.theta_y_optical_deg + config_.angle_offset_y_deg,
     };
-    return AimOutput{
+    result.aim_output = AimOutput{
         .command_issued = true,
         .depth_valid = true,
-        .depth_mm = input.last_valid_depth_mm,
+        .depth_mm = *result.telemetry.active_depth_mm,
         .message = "",
         .output_angles = output_angles,
     };
+    return result;
 }
 
-auto AimSolver::solve_direct_voltage(AimInput& input) -> AimOutput {
+auto AimSolver::solve_direct_voltage(const AimInput& input) -> AimSolveResult {
+    const auto* selected =
+        input.track.selected_detection.has_value() ? &*input.track.selected_detection : nullptr;
+    auto result = AimSolveResult{
+        .telemetry = observe_target(selected),
+    };
     if (!voltage_mapper_) {
-        return AimOutput{.message = "direct voltage mapper not initialized"};
+        result.aim_output.message = "direct voltage mapper not initialized";
+        return result;
     }
     if (!input.track.selected_detection.has_value()) {
-        return AimOutput{.message = "no candidate for direct voltage"};
+        result.aim_output.message = "no candidate for direct voltage";
+        return result;
     }
     const auto& detection = *input.track.selected_detection;
     if (detection.bbox.width <= 0.0F || detection.bbox.height <= 0.0F) {
-        return AimOutput{.message = "invalid bbox for direct voltage"};
+        result.aim_output.message = "invalid bbox for direct voltage";
+        return result;
     }
 
     VoltageFeatures features;
@@ -212,19 +244,21 @@ auto AimSolver::solve_direct_voltage(AimInput& input) -> AimOutput {
 
     const auto command = voltage_mapper_->predict(features);
     if (!command || !command->valid) {
-        return AimOutput{.message = "direct voltage predict failed"};
+        result.aim_output.message = "direct voltage predict failed";
+        return result;
     }
 
-    return AimOutput{
+    result.aim_output = AimOutput{
         .command_issued = true,
-        .depth_valid = input.last_valid_depth_mm > 0.0F,
-        .depth_mm = input.last_valid_depth_mm,
+        .depth_valid = result.telemetry.active_depth_mm.has_value(),
+        .depth_mm = result.telemetry.active_depth_mm.value_or(0.0F),
         .message = "",
         .output_voltages = cv::Point2f{
             command->vx + config_.voltage_offset_vx,
             command->vy + config_.voltage_offset_vy,
         },
     };
+    return result;
 }
 
 } // namespace rmcs_laser_guidance

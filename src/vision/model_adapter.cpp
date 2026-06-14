@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -450,18 +449,15 @@ auto decode_split_nms_outputs(const Frame& frame, const ModelRunResult& run_resu
     return success_result(frame, detections);
 }
 
-class Yolov5ModelAdapter final : public ModelAdapter {
-public:
-    auto adapt(const Frame& frame, const ModelRuntime& runtime) const
-        -> ModelAdapterResult override {
-        const auto run_result = runtime.run(frame.image);
-        if (!run_result.success)
-            return failure_result(run_result.message);
-        return adapt_yolo_outputs(frame, run_result);
-    }
-};
-
 } // namespace
+
+auto adapt_yolo_outputs(const Frame& frame, const ModelRuntime& runtime) -> ModelAdapterResult {
+    const auto run_result = runtime.run(frame.image);
+    if (!run_result.success) {
+        return failure_result(run_result.message);
+    }
+    return adapt_yolo_outputs(frame, run_result);
+}
 
 auto adapt_yolo_outputs(const Frame& frame, const ModelRunResult& run_result)
     -> ModelAdapterResult {
@@ -500,9 +496,4 @@ auto adapt_yolo_outputs(const Frame& frame, const ModelRunResult& run_result)
     return failure_result(
         "model output contract is unsupported (last_dim=" + std::to_string(cols) + ")");
 }
-
-auto make_default_model_adapter() -> std::unique_ptr<ModelAdapter> {
-    return std::make_unique<Yolov5ModelAdapter>();
-}
-
 } // namespace rmcs_laser_guidance

@@ -23,7 +23,8 @@ int main(int argc, char** argv) {
         const auto config_path = resolve_config_path(argc, argv);
         const auto config = rmcs_laser_guidance::load_config(config_path);
 
-        rmcs_laser_guidance::PreviewRuntime runtime(config);
+        rmcs_laser_guidance::CompetitionRuntime runtime(
+            config, {.profile = rmcs_laser_guidance::CompetitionProfile::preview});
         if (auto start_result = runtime.start(); !start_result) {
             std::println(stderr, "preview runtime start failed: {}", start_result.error());
             return 1;

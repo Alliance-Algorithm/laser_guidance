@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
             std::println(stderr, "record options unavailable: {}", e.what());
         }
 
-        rmcs_laser_guidance::CompetitionRuntime runtime(config, record_options);
+        rmcs_laser_guidance::CompetitionRuntime runtime(config, {.record_options = record_options});
         if (auto start_result = runtime.start(); !start_result) {
             std::println(stderr, "competition runtime start failed: {}", start_result.error());
             return 1;

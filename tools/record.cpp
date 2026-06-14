@@ -6,7 +6,7 @@
 
 #include <opencv2/highgui.hpp>
 
-#include "capture/v4l2_capture.hpp"
+#include "capture/capture_device.hpp"
 #include "config.hpp"
 #include "laser_guidance/support.hpp"
 #include "vision/training_data.hpp"
@@ -58,15 +58,21 @@ auto resolve_target_color(int argc, char** argv) -> std::string {
 }
 
 auto print_mode(
-    const rmcs_laser_guidance::V4l2Config& requested,
-    const rmcs_laser_guidance::V4l2NegotiatedFormat& actual) -> void {
+    const rmcs_laser_guidance::Config& requested,
+    const rmcs_laser_guidance::CaptureFormat& actual) -> void {
+    if (requested.capture_backend == rmcs_laser_guidance::CaptureBackendKind::v4l2) {
+        std::println(
+            "requested device={} mode={}x{}@{} format={}", requested.v4l2.device_path.string(),
+            requested.v4l2.width, requested.v4l2.height, requested.v4l2.framerate,
+            rmcs_laser_guidance::pixel_format_name(requested.v4l2.pixel_format));
+    } else {
+        std::println(
+            "requested device={} mode={}x{}@{} backend=hikcamera", requested.hik.device_id,
+            requested.v4l2.width, requested.v4l2.height, requested.hik.framerate);
+    }
     std::println(
-        "requested device={} mode={}x{}@{} format={}", requested.device_path.string(),
-        requested.width, requested.height, requested.framerate,
-        rmcs_laser_guidance::pixel_format_name(requested.pixel_format));
-    std::println(
-        "actual    device={} mode={}x{}@{} format={}", actual.device_path.string(), actual.width,
-        actual.height, actual.framerate, actual.fourcc);
+        "actual    device={} mode={}x{}@{} format={}", actual.device_path, actual.width,
+        actual.height, actual.framerate, actual.pixel_encoding);
 }
 
 auto unix_time_milliseconds(const std::chrono::system_clock::time_point value) -> std::int64_t {
@@ -115,20 +121,20 @@ int main(int argc, char** argv) {
         install_signal_handlers();
 
         const auto config = rmcs_laser_guidance::load_config(config_path);
-        const auto record_v4l2_config =
-            rmcs_laser_guidance::record_session_v4l2_config(config.v4l2);
+        auto record_config = config;
+        record_config.v4l2.pixel_format = rmcs_laser_guidance::V4l2PixelFormat::yuyv;
         std::println(
             "record_session override: forcing v4l2.pixel_format={} for capture",
-            rmcs_laser_guidance::pixel_format_name(record_v4l2_config.pixel_format));
+            rmcs_laser_guidance::pixel_format_name(record_config.v4l2.pixel_format));
 
-        rmcs_laser_guidance::V4l2Capture capture(record_v4l2_config);
+        rmcs_laser_guidance::CaptureDevice capture(record_config);
         const auto open_result = capture.open();
         if (!open_result) {
-            std::println(stderr, "Failed to open V4L2 capture: {}", open_result.error());
+            std::println(stderr, "Failed to open capture: {}", open_result.error());
             return 1;
         }
 
-        print_mode(record_v4l2_config, *open_result);
+        print_mode(record_config, *open_result);
 
         const auto capture_start = std::chrono::system_clock::now();
         const std::string session_id = rmcs_laser_guidance::format_session_id(capture_start);
@@ -143,7 +149,7 @@ int main(int argc, char** argv) {
                 .width = open_result->width,
                 .height = open_result->height,
                 .framerate = fps,
-                .fourcc = open_result->fourcc,
+                .fourcc = open_result->pixel_encoding,
                 .capture_start_unix_ms = unix_time_milliseconds(capture_start),
                 .duration_ms = 0,
                 .lighting_tag = record_options.lighting_tag,

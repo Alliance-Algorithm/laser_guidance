@@ -1,21 +1,20 @@
 # Agent Notes
 
-本文件保留在仓库根目录，作为 agent / tooling 的稳定入口。
+本文件是仓库根目录的稳定入口，详细说明见 [docs/AGENTS.md](docs/AGENTS.md)。
 
-详细仓库指南已迁移到：
+当前运行时状态：
 
-- [docs/AGENTS.md](/home/yukikaze/Documents/workspace/laser_guidance/docs/AGENTS.md)
+- 唯一 public runtime 是 `CompetitionRuntime`
+- `CompetitionProfile` 只保留 `main` / `preview`
+- `tool_guidance` 走独立的 `runtime_internal::GuidanceOpsApp`
+- `ControlLoop` 直接组合 `CaptureDevice`、`PerceptionRunner`、可选 `GuidanceSession`、`RuntimeOutputs`
+- capture 后端选择收口在 `CaptureDevice` 内部
+- ws30 / lidar 接入已删除
 
-当前 Phase 1 采集层补充：
+当仓库结构、架构边界或阶段约束变化时，请同步更新：
 
-- `src/capture/` 已新增 internal 通用采集接口 `ICaptureDevice`、`CaptureFormat`
-- `V4l2Capture` 保持原状，新增 `V4l2CaptureDevice` adapter
-- 已新增 `HikCameraCaptureDevice`，但主 runtime / tool 链路暂未切换到 Hik
-- Hik SDK 运行库默认直接来自仓库内 `vendor/hikcamera/src/sdk/lib`
-
-当仓库结构、架构边界或阶段约束发生变化时，请至少同步更新：
-
-- [AGENTS.md](/home/yukikaze/Documents/workspace/laser_guidance/AGENTS.md)
-- [docs/AGENTS.md](/home/yukikaze/Documents/workspace/laser_guidance/docs/AGENTS.md)
-- [README.md](/home/yukikaze/Documents/workspace/laser_guidance/README.md)
-- [docs/architecture.md](/home/yukikaze/Documents/workspace/laser_guidance/docs/architecture.md)
+- [AGENTS.md](AGENTS.md)
+- [docs/AGENTS.md](docs/AGENTS.md)
+- [README.md](README.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/runtime_operations.md](docs/runtime_operations.md)

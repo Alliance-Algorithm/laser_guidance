@@ -31,17 +31,17 @@ file(GLOB_RECURSE TRACKING_SOURCES src/tracking/*.cpp)
 file(GLOB_RECURSE GUIDANCE_SOURCES src/guidance/*.cpp)
 file(GLOB_RECURSE BRIDGE_SOURCES src/streaming/*.cpp src/bridges/*.cpp)
 set(CAPTURE_SOURCES
-  src/capture/v4l2_capture.cpp
-  src/capture/v4l2_capture_device.cpp
-  src/capture/hik_camera_capture_device.cpp)
+  src/capture/capture_device.cpp
+  src/capture/v4l2_capture.cpp)
 set(RUNTIME_SOURCES
   src/runtime/runtime.cpp
-  src/runtime/runtime_base.cpp
-  src/runtime/guidance_tool_runtime.cpp
-  src/runtime/runtime_support.cpp
-  src/runtime/inference_facade.cpp
-  src/io/ft4222_spi.cpp
-  src/io/ws30_receiver.cpp)
+  src/runtime/control_loop.cpp
+  src/runtime/guidance_ops_app.cpp
+  src/runtime/guidance_session.cpp
+  src/runtime/overlay_renderer.cpp
+  src/runtime/perception_runner.cpp
+  src/runtime/runtime_outputs.cpp
+  src/io/ft4222_spi.cpp)
 
 # ---- ONNX Runtime (optional) --------------------------------------------------
 if(WITH_ONNXRUNTIME)

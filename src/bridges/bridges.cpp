@@ -56,7 +56,6 @@ auto to_target_observation(const DetectionBatch& batch) -> TargetObservation {
         .detected = batch.detected,
         .center = batch.selected_center,
         .candidates = to_model_candidates(batch),
-        .lidar_frame = batch.lidar_frame,
     };
 }
 

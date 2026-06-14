@@ -61,7 +61,6 @@ ekf:
 guidance:
   enabled: true
   command_model: geometry
-  depth_source: monocular_bbox
   calib_mode: false
   target_geometry:
     - class_id: 0
