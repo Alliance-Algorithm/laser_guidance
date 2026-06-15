@@ -2,6 +2,8 @@
 
 #include "laser_guidance/runtime.hpp"
 
+
+namespace rmcs_laser_guidance {
 #ifdef WITH_ROS2_BRIDGE
 
 #include <rclcpp/rclcpp.hpp>
@@ -9,8 +11,6 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <std_msgs/msg/float64.hpp>
 
-
-namespace rmcs_laser_guidance {
 
 
 namespace {

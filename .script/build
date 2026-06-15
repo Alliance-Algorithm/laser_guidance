@@ -8,10 +8,14 @@ cd "$REPO_ROOT"
 BUILD_TYPE="${LASER_BUILD_TYPE:-Release}"
 JOBS="${LASER_JOBS:-$(nproc)}"
 WITH_ROS2="${LASER_ROS2_BRIDGE:-OFF}"
+USE_CLANG="${LASER_USE_CLANG:-OFF}"
+CMAKE_ARGS=()
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --clang)   USE_CLANG=ON; shift ;;
+        --gcc)     USE_CLANG=OFF; shift ;;
         --debug)   BUILD_TYPE=Debug; shift ;;
         --release) BUILD_TYPE=Release; shift ;;
         -j)        JOBS="$2"; shift 2 ;;
@@ -22,9 +26,35 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "=== Build: ${BUILD_TYPE} (jobs=${JOBS}, ros2=${WITH_ROS2}) ==="
+# ---- LLVM toolchain (参照 RMCS build-rmcs) ---------------------------------
+if [[ "$USE_CLANG" == "ON" ]]; then
+    missing_tools=()
+    for tool in clang clang++ ninja ld.lld llvm-ar llvm-ranlib; do
+        command -v "$tool" &>/dev/null || missing_tools+=("$tool")
+    done
+    if ((${#missing_tools[@]} > 0)); then
+        echo "ERROR: LLVM toolchain required when --clang is set."
+        echo "Missing tools: ${missing_tools[*]}"
+        echo "Install them or use --gcc."
+        exit 1
+    fi
 
-cmake -S . -B build -G Ninja \
+    echo "=== Build: Clang $(clang --version | head -1 | awk '{print $NF}') + Ninja + LLD ($BUILD_TYPE, jobs=$JOBS, ros2=$WITH_ROS2) ==="
+    export CC=clang
+    export CXX=clang++
+    CMAKE_ARGS=(
+        -GNinja
+        "-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld"
+        "-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld"
+        "-DCMAKE_AR=$(command -v llvm-ar)"
+        "-DCMAKE_RANLIB=$(command -v llvm-ranlib)"
+    )
+else
+    echo "=== Build: GCC $(gcc --version | head -1 | awk '{print $NF}') + Ninja ($BUILD_TYPE, jobs=$JOBS, ros2=$WITH_ROS2) ==="
+    CMAKE_ARGS=(-GNinja)
+fi
+
+cmake -S . -B build "${CMAKE_ARGS[@]}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DWITH_ROS2_BRIDGE="${WITH_ROS2}" \
     "${EXTRA_ARGS[@]}"

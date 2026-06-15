@@ -2,11 +2,13 @@
 #   default    competition mode (headless, host network, auto-restart)
 #   stream     competition + ffplay launched from host
 #   shell      interactive shell into the container
+#   dev        persistent dev container (IDE mounts, UID 1000)
 #
 # Examples:
 #   docker compose up -d                        # competition
 #   docker compose --profile stream up          # competition + host ffplay
 #   docker compose run --rm shell               # enter container shell
+#   docker compose up -d dev && docker compose exec dev zsh   # dev
 #   LASER_CAMERA_DEVICE=/dev/video0 docker compose up -d
 
 services:
@@ -51,6 +53,9 @@ services:
 
   shell:
     profiles: ["shell"]
+    build:
+      context: .
+      target: develop
     image: yukikaze2233/laser-guidance:latest
     privileged: true
     network_mode: host
@@ -67,8 +72,51 @@ services:
       - ./models:/workspace/laser_guidance/models:ro
       - ./videos:/workspace/laser_guidance/videos
       - ./logs:/workspace/laser_guidance/logs
+      - ${HOME}/.config/opencode:/home/yukikaze/.config/opencode
+      - ${HOME}/.local/share/opencode:/home/yukikaze/.local/share/opencode
+      - ${HOME}/.codex:/home/yukikaze/.codex
+      - ${HOME}/.claude:/home/yukikaze/.claude
+      - ${HOME}/.claude.json:/home/yukikaze/.claude.json
+      - ${HOME}/.config/nvim:/home/yukikaze/.config/nvim
+      - ${HOME}/.agents/skills:/home/yukikaze/.agents/skills:ro
     ports:
       - "8765:8765"
-    entrypoint: ["/bin/bash"]
+    entrypoint: ["/bin/zsh"]
     stdin_open: true
     tty: true
+
+  dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      target: develop
+    image: yukikaze2233/laser-guidance:latest
+    user: "1000:1000"
+    privileged: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY:-}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    volumes:
+      - /dev:/dev:bind
+      - /tmp:/tmp:bind
+      - /tmp/.X11-unix:/tmp/.X11-unix:bind
+      - /run/user/1000/wayland-0:/run/user/1000/wayland-0:bind
+      - ${HOME}/.config/opencode:/home/yukikaze/.config/opencode
+      - ${HOME}/.local/share/opencode:/home/yukikaze/.local/share/opencode
+      - ${HOME}/.codex:/home/yukikaze/.codex
+      - ${HOME}/.claude:/home/yukikaze/.claude
+      - ${HOME}/.claude.json:/home/yukikaze/.claude.json
+      - ${HOME}/.config/nvim:/home/yukikaze/.config/nvim
+      - ${HOME}/.agents/skills:/home/yukikaze/.agents/skills:ro
+      - .:/workspace/laser_guidance:cached
+      - laser_guidance_build:/workspace/laser_guidance/build
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    stdin_open: true
+    tty: true
+
+volumes:
+  laser_guidance_build:

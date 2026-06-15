@@ -234,3 +234,71 @@ exit $LASER_EXIT\n' > /opt/laser_guidance/bin/entrypoint.sh \
 
 ENTRYPOINT ["tini", "--"]
 CMD ["/opt/laser_guidance/bin/entrypoint.sh", "tool_competition", "config/direct_voltage_run.yaml"]
+
+# ---- Develop stage (build tools + IDE/agent support) --------------------------
+FROM runtime AS develop
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build pkg-config gdb lldb git \
+    libopencv-dev libyaml-cpp-dev \
+    sudo zsh wget curl ca-certificates gnupg \
+    software-properties-common lsb-release \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# Node.js 24 (for opencode/codex/claude CLI tools)
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# LLVM toolchain (clangd + clang-format + clang-tidy)
+RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/apt.llvm.org.gpg \
+  && chmod 644 /etc/apt/keyrings/apt.llvm.org.gpg \
+  && echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" \
+    > /etc/apt/sources.list.d/llvm.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    clang-19 clangd-19 clang-format-19 clang-tidy-19 \
+    lld-19 llvm-19 \
+  && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 50 \
+  && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 50 \
+  && update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-19 50 \
+  && update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 50 \
+  && update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-19 50 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# neovim (latest prebuilt release)
+RUN curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
+  && rm -rf /opt/nvim \
+  && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \
+  && mv /opt/nvim-linux-x86_64 /opt/nvim \
+  && rm nvim-linux-x86_64.tar.gz
+ENV PATH="/opt/nvim/bin:${PATH}"
+
+# ONNX Runtime dev headers (for local cmake development)
+COPY --from=deps /opt/onnxruntime/include /opt/onnxruntime/include
+COPY --from=deps /opt/onnxruntime/lib/cmake /opt/onnxruntime/lib/cmake
+ENV ONNXRUNTIME_ROOT=/opt/onnxruntime
+
+# CUDA headers (for local TensorRT dev)
+COPY --from=build /usr/local/cuda/include /usr/local/cuda/include
+
+# yukikaze user (UID 1000, matches host)
+RUN useradd -m -u 1000 -o -s /bin/zsh yukikaze \
+  && echo "yukikaze ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers \
+  && mkdir -p /home/yukikaze/.config /home/yukikaze/.local/share /home/yukikaze/.agents \
+  && chown -R yukikaze:yukikaze /home/yukikaze
+
+# oh-my-zsh for yukikaze
+USER yukikaze
+RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
+  && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+
+# Root fallback: oh-my-zsh for root too
+USER root
+RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
+  && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+
+WORKDIR /workspace/laser_guidance
+CMD ["/bin/zsh"]

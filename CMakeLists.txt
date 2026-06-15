@@ -51,7 +51,7 @@ endif()
 add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
 set_target_properties(onnxruntime::onnxruntime PROPERTIES
   IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
-  INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}")
+  INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR};${ONNXRUNTIME_INCLUDE_DIR}/onnxruntime")
 message(STATUS "ONNX Runtime enabled")
 
 # ---- TensorRT (required) -------------------------------------------------------
