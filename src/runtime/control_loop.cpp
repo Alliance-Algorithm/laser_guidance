@@ -1,5 +1,6 @@
 #include "runtime/control_loop.hpp"
 
+#include <chrono>
 #include <utility>
 
 #include <opencv2/highgui.hpp>
@@ -243,6 +244,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     outputs_.start(
         *negotiated_format_, state_.streaming_requested, state_.recording_requested);
 
+    ros_bridge_ = std::make_unique<RosBridge>();
+
     if (show_window()) {
         cv::namedWindow(window_name(), cv::WINDOW_NORMAL);
         window_open_ = true;
@@ -251,12 +254,52 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
 }
 
 auto ControlLoop::run_loop() -> void {
+    using Clock = std::chrono::steady_clock;
+
+    int consecutive_errors = 0;
+    constexpr int kMaxConsecutiveErrors = 3;
+    constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
+    constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
+    std::optional<Clock::time_point> next_reconnect_at;
+
     while (!stop_requested()) {
+        if (next_reconnect_at.has_value()) {
+            const auto now = Clock::now();
+            if (now < *next_reconnect_at) {
+                std::this_thread::sleep_for(kReadErrorDelay);
+                continue;
+            }
+
+            sync_last_error("Attempting to reconnect camera...");
+            if (auto reconnect_result = capture_.reconnect(); reconnect_result) {
+                sync_last_error("Camera reconnected successfully");
+                consecutive_errors = 0;
+                next_reconnect_at.reset();
+            } else {
+                sync_last_error("Reconnect failed: " + reconnect_result.error());
+                consecutive_errors = kMaxConsecutiveErrors;
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+            }
+            continue;
+        }
+
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             sync_last_error(frame_result.error());
+            consecutive_errors++;
+
+            if (consecutive_errors >= kMaxConsecutiveErrors) {
+                consecutive_errors = kMaxConsecutiveErrors;
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                sync_last_error("Camera read failed repeatedly; entering reconnect state");
+            } else {
+                std::this_thread::sleep_for(kReadErrorDelay);
+            }
             continue;
         }
+
+        consecutive_errors = 0;
+        next_reconnect_at.reset();
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
@@ -326,6 +369,11 @@ auto ControlLoop::run_loop() -> void {
             state_.latest_snapshot = latest_snapshot;
         }
         outputs_.publish_snapshot(latest_snapshot);
+
+        if (ros_bridge_ && ros_bridge_->ready()) {
+            ros_bridge_->publish_snapshot(latest_snapshot);
+            ros_bridge_->spin();
+        }
 
         if (show_window()) {
             cv::imshow(window_name(), frame.display);

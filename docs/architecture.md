@@ -41,6 +41,17 @@ CaptureDevice
 -> RuntimeOutputs / overlay / RuntimeSnapshot
 ```
 
+## 调试桥接
+
+`RosBridge` (可选，`WITH_ROS2_BRIDGE`) 将 `RuntimeSnapshot` 发布为 ROS2 topic：
+
+- `/laser_guidance/detections` → `MarkerArray`（检测框）
+- `/laser_guidance/tracks` → `MarkerArray`（跟踪轨迹+速度箭头）
+- `/laser_guidance/aim_point` → `Marker`（瞄准方向）
+- `/laser_guidance/hit_progress` → `Float64`（命中进度）
+
+通过 Foxglove Studio（WebSocket `ws://localhost:8765`）或 rviz2 可视化。
+
 ## 采集层
 
 `CaptureDevice` 在内部按配置选择 backend：
@@ -52,6 +63,8 @@ CaptureDevice
 ```
 
 外部只依赖 `CaptureFormat`，不再接触 backend 细节。
+
+Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 `hikcamera`，但 Hik SDK 的运行时环境注入和构建接入仍由主仓库处理，不向 `CompetitionRuntime` 暴露 `hikcamera::param::*` 等子模块类型。
 
 ## 推理层
 
@@ -106,9 +119,17 @@ CaptureDevice
   - `GuidanceOpsApp`
   - 不走 `CompetitionRuntime`
 
+## 构建脚本
+
+- `.script/build` — CMake 构建（`--ros2` 启用 ROS2 桥接）
+- `.script/clean` — 清理 `build/`
+- `.script/docker-build` — Docker 镜像构建（`--push` 推送）
+- `.script/foxglove` — 启动 Foxglove WebSocket 桥接
+
 ## 约束
 
 - 入口只负责启动和退出，不承载业务编排。
 - 新控制项先扩 `RuntimeCommand` / `RuntimeSnapshot`。
 - 新输出先扩 `RuntimeOutputs`，不要回塞主循环。
 - 新引导能力优先扩 `GuidanceSession` / `AimSolver` / `GalvoExecutor`。
+- `WITH_ROS2_BRIDGE` 是唯一的可选编译选项；`ros_bridge.cpp` 始终编译（无 ROS2 时为 no-op）。

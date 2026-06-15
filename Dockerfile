@@ -21,8 +21,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-yaml \
     ca-certificates curl wget \
     v4l-utils usbutils \
+    software-properties-common \
   && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 50 \
   && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 50 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# ROS2 Jazzy (build deps)
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+    > /etc/apt/sources.list.d/ros2.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base ros-jazzy-rclcpp \
+    ros-jazzy-visualization-msgs ros-jazzy-std-msgs \
   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 RUN set -eux; \
@@ -47,6 +59,7 @@ FROM deps AS build
 ARG CMAKE_BUILD_TYPE
 WORKDIR /workspace/laser_guidance
 
+# NVIDIA TensorRT + CUDA headers and stubs for build linking
 COPY --from=nvidia-libs /usr/include/x86_64-linux-gnu/ /tmp/nvidia-headers/
 RUN cp /tmp/nvidia-headers/NvInfer*.h /usr/include/x86_64-linux-gnu/ && rm -rf /tmp/nvidia-headers
 COPY --from=nvidia-libs /usr/local/cuda/include /usr/local/cuda/include
@@ -81,21 +94,20 @@ COPY --from=nvidia-libs \
     /usr/lib/x86_64-linux-gnu/
 RUN ln -sf libnvinfer_plugin.so.10 /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so && ldconfig
 
-COPY libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1.4.4.232
+COPY vendor/ft4222/lib/libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1.4.4.232
 RUN ln -sf libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1 && \
     ln -sf libft4222.so.1           /opt/libft4222/libft4222.so && \
     echo "/opt/libft4222" > /etc/ld.so.conf.d/libft4222.conf && ldconfig
 
 COPY . .
 RUN rm -rf build && \
+    . /opt/ros/jazzy/setup.sh && \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
-      -DWITH_ONNXRUNTIME=ON \
       -DONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT}" \
-      -DWITH_TENSORRT=ON \
       -DCUDA_LIBRARY=/usr/local/cuda/lib64/libcudart.so \
       -DCUDA_RT_LIBRARY=/usr/local/cuda/lib64/stubs/libcuda.so \
-      -DWITH_FT4222=ON \
+      -DWITH_ROS2_BRIDGE=ON \
     && cmake --build build --parallel \
     && mkdir -p /opt/laser_guidance/bin \
     && find build -maxdepth 1 -type f -executable -exec cp {} /opt/laser_guidance/bin/ \;
@@ -110,6 +122,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-imgcodecs406t64 libopencv-imgproc406t64 libopencv-videoio406t64 \
     libyaml-cpp0.8 libusb-1.0-0 \
     ffmpeg python3 python3-yaml v4l-utils usbutils tini \
+    software-properties-common curl \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# ROS2 Jazzy runtime + Foxglove bridge
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+    > /etc/apt/sources.list.d/ros2.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base ros-jazzy-foxglove-bridge \
   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 COPY --from=deps /opt/onnxruntime/lib/libonnxruntime.so.1.26.0 \
@@ -193,48 +216,89 @@ COPY --from=build /workspace/laser_guidance/models  /workspace/laser_guidance/mo
 COPY --from=build /workspace/laser_guidance/test_data /workspace/laser_guidance/test_data
 WORKDIR /workspace/laser_guidance
 
-ENTRYPOINT ["tini", "--"]
-CMD ["tool_competition", "config/direct_voltage_run.yaml"]
+# Startup script: source ROS2, launch foxglove bridge, run tool
+RUN printf '#!/bin/bash\n\
+set -e\n\
+source /opt/ros/jazzy/setup.bash\n\
+echo "[entry] Starting foxglove_bridge on port 8765..."\n\
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 &\n\
+FOXGLOVE_PID=$!\n\
+sleep 2\n\
+echo "[entry] Starting laser_guidance..."\n\
+"$@"\n\
+LASER_EXIT=$?\n\
+kill $FOXGLOVE_PID 2>/dev/null || true\n\
+wait $FOXGLOVE_PID 2>/dev/null || true\n\
+exit $LASER_EXIT\n' > /opt/laser_guidance/bin/entrypoint.sh \
+  && chmod +x /opt/laser_guidance/bin/entrypoint.sh
 
+ENTRYPOINT ["tini", "--"]
+CMD ["/opt/laser_guidance/bin/entrypoint.sh", "tool_competition", "config/direct_voltage_run.yaml"]
+
+# ---- Develop stage (build tools + IDE/agent support) --------------------------
 FROM runtime AS develop
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake ninja-build pkg-config \
-    libopencv-dev libyaml-cpp-dev gdb lldb git \
-    zsh wget \
+    build-essential cmake ninja-build pkg-config gdb lldb git \
+    libopencv-dev libyaml-cpp-dev \
+    sudo zsh wget curl ca-certificates gnupg \
+    software-properties-common lsb-release \
   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
-RUN curl -kfsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+# Node.js 24 (for opencode/codex/claude CLI tools)
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
-RUN chsh -s /bin/zsh root
+# LLVM toolchain (clangd + clang-format + clang-tidy)
+RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /etc/apt/keyrings/apt.llvm.org.gpg \
+  && chmod 644 /etc/apt/keyrings/apt.llvm.org.gpg \
+  && echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" \
+    > /etc/apt/sources.list.d/llvm.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    clang-19 clangd-19 clang-format-19 clang-tidy-19 \
+    lld-19 llvm-19 \
+  && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 50 \
+  && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 50 \
+  && update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-19 50 \
+  && update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 50 \
+  && update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-19 50 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
-RUN git config --global http.sslVerify false && \
-    sh -c "$(wget --no-check-certificate https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)" "" --unattended && \
-    sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc && \
-    sed -i 's/plugins=(git)/plugins=(git)/' ~/.zshrc && \
-    git config --global --unset http.sslVerify
+# neovim (latest prebuilt release)
+RUN curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
+  && rm -rf /opt/nvim \
+  && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \
+  && mv /opt/nvim-linux-x86_64 /opt/nvim \
+  && rm nvim-linux-x86_64.tar.gz
+ENV PATH="/opt/nvim/bin:${PATH}"
 
-RUN printf '#!/bin/zsh\n\
-: "${LASER_PATH:=/workspace/laser_guidance}"\n\
-export PATH="${LASER_PATH}/build:${PATH}"\n\
-export PATH="/opt/laser_guidance/bin:${PATH}"\n\
-export PATH="/root/.npm-global/bin:${PATH}"\n' > /root/env_setup.zsh && \
-    printf '#!/bin/bash\n\
-: "${LASER_PATH:=/workspace/laser_guidance}"\n\
-export PATH="${LASER_PATH}/build:${PATH}"\n\
-export PATH="/opt/laser_guidance/bin:${PATH}"\n\
-export PATH="/root/.npm-global/bin:${PATH}"\n' > /root/env_setup.bash && \
-    chmod +x /root/env_setup.zsh /root/env_setup.bash
-
-RUN echo 'source ~/env_setup.zsh' >> ~/.zshrc
-
-RUN mkdir -p /root/.agents /root/.config /root/.local/share
-
+# ONNX Runtime dev headers (for local cmake development)
 COPY --from=deps /opt/onnxruntime/include /opt/onnxruntime/include
 COPY --from=deps /opt/onnxruntime/lib/cmake /opt/onnxruntime/lib/cmake
-COPY --from=build /usr/local/cuda/include /usr/local/cuda/include
 ENV ONNXRUNTIME_ROOT=/opt/onnxruntime
-SHELL ["/bin/zsh", "-c"]
+
+# CUDA headers (for local TensorRT dev)
+COPY --from=build /usr/local/cuda/include /usr/local/cuda/include
+
+# yukikaze user (UID 1000, matches host)
+RUN useradd -m -u 1000 -o -s /bin/zsh yukikaze \
+  && echo "yukikaze ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers \
+  && mkdir -p /home/yukikaze/.config /home/yukikaze/.local/share /home/yukikaze/.agents \
+  && chown -R yukikaze:yukikaze /home/yukikaze
+
+# oh-my-zsh for yukikaze
+USER yukikaze
+RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
+  && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+
+# Root fallback: oh-my-zsh for root too
+USER root
+RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
+  && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+
+WORKDIR /workspace/laser_guidance
 CMD ["/bin/zsh"]

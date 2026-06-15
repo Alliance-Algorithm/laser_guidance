@@ -1,0 +1,29 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+readonly REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)"
+
+cmd="${1:-}"
+
+case "$cmd" in
+    build)
+        exec "$REPO_ROOT/.script/docker-build" "${@:2}"
+        ;;
+    push)
+        docker push yukikaze2233/laser-guidance:latest
+        ;;
+    pull)
+        docker pull yukikaze2233/laser-guidance:latest
+        ;;
+    foxglove)
+        cd "$REPO_ROOT"
+        docker compose up -d dev 2>/dev/null || true
+        docker compose exec dev \
+            bash -c "source /opt/ros/jazzy/setup.bash && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765"
+        ;;
+    *)
+        cd "$REPO_ROOT"
+        docker compose up -d dev 2>/dev/null || true
+        exec docker compose exec -u 1000:1000 dev zsh
+        ;;
+esac

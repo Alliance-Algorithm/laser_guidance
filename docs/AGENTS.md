@@ -12,6 +12,8 @@
 - YAML 配置加载
 - `CompetitionRuntime` + `CompetitionProfile(main / preview)`
 - 独立的 `tool_guidance` / `GuidanceOpsApp`
+- `WITH_ROS2_BRIDGE` 是唯一的可选编译选项，用于 Foxglove/rviz 调试；始终编译 `ros_bridge.cpp`（无 ROS2 时为 no-op）。
+- `.script/build` (构建)、`.script/clean` (清理)、`.script/docker-build` (镜像)、`.script/foxglove` (桥接) 为统一构建入口。
 - 调试 overlay 与回放样本
 - 自动测试与工具入口
 - ONNX / TensorRT 推理后端切换
@@ -52,6 +54,8 @@
 
 - `CompetitionRuntime` 只服务比赛 / 预览两种 profile。
 - `tool_guidance` 不再通过 `CompetitionRuntime` 复用主 runtime。
+- Hik typed parameter API 只保留在 `vendor/hikcamera` 与 `CaptureDevice` 内部，不进入 `CompetitionRuntime` public API。
+- Hik SDK 的 RPATH、运行时环境注入和 mode 选择属于主仓库集成层，不继续下沉到子模块业务逻辑。
 - runtime 内部不再保留 `guidance_ops`、`ControlLoopBuilder`、`GuidanceController`、`ModeHooks`、`OutputBundle`、`SnapshotAssembler`、`InferenceFacade`、`ICaptureDevice`。
 - `RuntimeCommand` / `RuntimeSnapshot` 是 runtime 的 typed 控制面和观测面。
 - 新增控制项优先改 typed command，再考虑是否映射到 FIFO。

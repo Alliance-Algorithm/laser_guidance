@@ -12,13 +12,10 @@
 #include "vision/model_adapter.hpp"
 #include "vision/model_runtime.hpp"
 
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
-# include "vision/tensorrt_engine.hpp"
-#endif
+#include "vision/tensorrt_engine.hpp"
 
 namespace rmcs_laser_guidance {
 
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
 namespace {
 
 constexpr int kInputWidth = 640;
@@ -115,19 +112,18 @@ auto build_tensorrt_run_result(
 }
 
 } // namespace
-#endif
 
 struct ModelInfer::Details {
     explicit Details(InferenceConfig config_in)
         : config(std::move(config_in))
         , runtime_enabled(model_runtime_enabled_in_build())
-        , runtime(config.model_path) {
+        , runtime(config.backend == InferenceBackendKind::tensorrt
+              ? std::filesystem::path{} : config.model_path) {
         initialize();
     }
 
     auto initialize() -> void {
         if (config.backend == InferenceBackendKind::tensorrt) {
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
             auto engine_result = TensorRTEngine::load(config.model_path.string());
             if (!engine_result) {
                 message = "TensorRT: " + engine_result.error();
@@ -139,17 +135,9 @@ struct ModelInfer::Details {
                 "TensorRT engine loaded: {} ({} inputs, {} outputs)", meta.engine_path,
                 meta.inputs.size(), meta.outputs.size());
             startup_ready = true;
-#else
-            message = "tensorrt backend requires -DRMCS_LASER_GUIDANCE_WITH_TENSORRT=ON";
-#endif
             return;
         }
 
-        if (!runtime_enabled) {
-            message = "model backend requires ONNX Runtime support; reconfigure with "
-                      "-DRMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME=ON";
-            return;
-        }
         if (config.model_path.empty()) {
             message = "model backend requires inference.model_path to be set";
             return;
@@ -178,7 +166,6 @@ struct ModelInfer::Details {
     }
 
     auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
         const auto preprocess = preprocess_for_tensorrt(frame.image);
         std::vector<float> output(300 * 6);
         auto run_result = tensorrt_engine->run(preprocess.input, output);
@@ -195,9 +182,6 @@ struct ModelInfer::Details {
         result.observation = adapter_result.observation;
         result.candidates = adapter_result.candidates;
         result.message = adapter_result.message;
-#else
-        (void)frame;
-#endif
         return result;
     }
 
@@ -216,9 +200,7 @@ struct ModelInfer::Details {
     bool startup_ready = false;
     std::string message{};
     ModelRuntime runtime;
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
     std::unique_ptr<TensorRTEngine> tensorrt_engine;
-#endif
 };
 
 ModelInfer::ModelInfer(InferenceConfig config)
@@ -238,10 +220,8 @@ auto ModelInfer::infer(const Frame& frame) const -> ModelInferResult {
         return result;
     }
 
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
     if (details_->tensorrt_engine)
         return details_->infer_tensorrt(frame, std::move(result));
-#endif
 
     return details_->infer_onnx(frame, std::move(result));
 }

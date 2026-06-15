@@ -1,4 +1,7 @@
+
+
 #include <filesystem>
+#include <csignal>
 #include <print>
 #include <thread>
 
@@ -8,6 +11,15 @@
 #include "laser_guidance/support.hpp"
 
 namespace {
+
+volatile sig_atomic_t g_stop_requested{0};
+
+auto handle_signal(int) -> void { g_stop_requested = 1; }
+
+auto install_signal_handlers() -> void {
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
+}
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1) {
@@ -20,37 +32,50 @@ auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
 
 int main(int argc, char** argv) {
     try {
+        install_signal_handlers();
+
         const auto config_path = resolve_config_path(argc, argv);
         const auto config = rmcs_laser_guidance::load_config(config_path);
 
         rmcs_laser_guidance::CompetitionRuntime runtime(
             config, {.profile = rmcs_laser_guidance::CompetitionProfile::preview});
-        if (auto start_result = runtime.start(); !start_result) {
-            std::println(stderr, "preview runtime start failed: {}", start_result.error());
-            return 1;
-        }
 
         rmcs_laser_guidance::FifoControlServer fifo;
-        if (auto fifo_result = fifo.start(); fifo_result) {
+        const bool fifo_started = fifo.start().has_value();
+        if (fifo_started) {
             std::println("FIFO ready: {}", fifo.fifo_path().string());
         }
 
-        while (true) {
-            if (auto command = fifo.poll_command(); command.has_value()) {
-                if (auto result = runtime.submit_command(*command); !result) {
-                    std::println(stderr, "command rejected: {}", result.error());
+        std::thread command_thread([&] {
+            while (g_stop_requested == 0) {
+                if (fifo_started) {
+                    if (auto command = fifo.poll_command(); command.has_value()) {
+                        if (auto result = runtime.submit_command(*command); !result) {
+                            std::println(stderr, "command rejected: {}", result.error());
+                        }
+                    } else if (!fifo.last_error().empty()) {
+                        std::println(stderr, "FIFO parse error: {}", fifo.last_error());
+                    }
                 }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            runtime.stop();
+        });
 
-            const auto snapshot = runtime.snapshot();
-            if (!snapshot.status.running || snapshot.status.stop_requested) {
-                break;
+        if (auto run_result = runtime.run(); !run_result) {
+            std::println(stderr, "preview runtime start failed: {}", run_result.error());
+            g_stop_requested = true;
+            if (command_thread.joinable()) {
+                command_thread.join();
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            fifo.stop();
+            return 1;
         }
 
-        runtime.stop();
-        runtime.join();
+        g_stop_requested = true;
+        if (command_thread.joinable()) {
+            command_thread.join();
+        }
         fifo.stop();
         return 0;
     } catch (const std::exception& e) {

@@ -17,27 +17,15 @@
 namespace rmcs_laser_guidance::tests {
 
 inline auto default_config_path() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH
-    return RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH;
-#else
     return "config/default.yaml";
-#endif
 }
 
 inline auto default_sample_replay_path() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH
-    return RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH;
-#else
     return "test_data/sample_images";
-#endif
 }
 
 inline auto default_video_session_root() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT
-    return RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT;
-#else
     return "videos";
-#endif
 }
 
 inline auto make_temp_path(std::string_view stem) -> std::filesystem::path {

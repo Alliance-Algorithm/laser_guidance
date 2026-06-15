@@ -13,6 +13,22 @@ if [ -z "$CONFIG" ]; then
         CONFIG="$REPO_ROOT/config/default.yaml"
     fi
 fi
+if [[ "$CONFIG" != /* ]]; then
+    CONFIG="$REPO_ROOT/$CONFIG"
+fi
+CONFIG="$(realpath "$CONFIG")"
+
+CAPTURE_BACKEND="$(python3 - "$CONFIG" <<'PYEOF'
+import sys, yaml
+cfg = yaml.safe_load(open(sys.argv[1]))
+print(cfg.get('capture_backend', 'v4l2'))
+PYEOF
+)"
+
+if [ "$CAPTURE_BACKEND" = "hikcamera" ]; then
+    source "$SCRIPT_DIR/hik-mvs-env.sh"
+    laser_configure_hik_mvs_env
+fi
 
 echo "=== 正常预览 (imshow) ==="
 echo "配置: $CONFIG"
@@ -21,13 +37,15 @@ echo ""
 TMP_CONFIG="$(mktemp /tmp/laser_guidance_preview_XXXX.yaml)"
 cleanup() { rm -f "$TMP_CONFIG"; }
 trap cleanup EXIT
-python3 -c "
-import yaml, sys
-with open('$CONFIG') as f:
-    cfg = yaml.safe_load(f)
+python3 - "$CONFIG" "$TMP_CONFIG" <<'PYEOF'
+import sys, yaml
+
+cfg = yaml.safe_load(open(sys.argv[1]))
 cfg.setdefault('streaming', {})['enabled'] = False
 cfg.setdefault('debug', {})['show_window'] = True
-yaml.dump(cfg, sys.stdout, default_flow_style=False, allow_unicode=True)
-" > "$TMP_CONFIG"
+
+with open(sys.argv[2], 'w') as f:
+    yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+PYEOF
 cd "$REPO_ROOT"
 ./build/tool_preview "$TMP_CONFIG"

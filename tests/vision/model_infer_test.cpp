@@ -24,14 +24,9 @@ int main() {
             !default_result.contract_supported,
             "default model infer should not support a contract");
 
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
-        require(default_result.enabled, "onnxruntime-enabled build should report enabled");
+        require(default_result.enabled, "onnxruntime build should report enabled");
         require_contains(
             default_result.message, "inference.model_path", "missing model path message");
-#else
-        require(!default_result.enabled, "default build should report model backend disabled");
-        require_contains(default_result.message, "ONNX Runtime", "build-disabled message");
-#endif
 
         config.inference.model_path = "models/mock_detector.onnx";
         rmcs_laser_guidance::ModelInfer missing_model_infer(config.inference);
@@ -41,13 +36,8 @@ int main() {
             !missing_model_result.contract_supported,
             "missing model should not support a contract");
 
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
         require_contains(
             missing_model_result.message, "does not exist", "missing model file message");
-#else
-        require_contains(
-            missing_model_result.message, "ONNX Runtime", "build-disabled missing model message");
-#endif
 
         return 0;
     } catch (const std::exception& e) {

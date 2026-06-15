@@ -62,7 +62,7 @@ struct RtpConfig {
     int port = 5002;
     std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
     std::string encoder = "h264_nvenc";
-    std::string bitrate = "8M";
+    std::string bitrate = "50M";
 };
 
 struct UdpConfig {
