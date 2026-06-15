@@ -53,6 +53,8 @@ CaptureDevice
 
 外部只依赖 `CaptureFormat`，不再接触 backend 细节。
 
+Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 `hikcamera`，但 Hik SDK 的运行时环境注入和构建接入仍由主仓库处理，不向 `CompetitionRuntime` 暴露 `hikcamera::param::*` 等子模块类型。
+
 ## 推理层
 
 `PerceptionRunner` 负责：

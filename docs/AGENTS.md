@@ -52,6 +52,8 @@
 
 - `CompetitionRuntime` 只服务比赛 / 预览两种 profile。
 - `tool_guidance` 不再通过 `CompetitionRuntime` 复用主 runtime。
+- Hik typed parameter API 只保留在 `vendor/hikcamera` 与 `CaptureDevice` 内部，不进入 `CompetitionRuntime` public API。
+- Hik SDK 的 RPATH、运行时环境注入和 mode 选择属于主仓库集成层，不继续下沉到子模块业务逻辑。
 - runtime 内部不再保留 `guidance_ops`、`ControlLoopBuilder`、`GuidanceController`、`ModeHooks`、`OutputBundle`、`SnapshotAssembler`、`InferenceFacade`、`ICaptureDevice`。
 - `RuntimeCommand` / `RuntimeSnapshot` 是 runtime 的 typed 控制面和观测面。
 - 新增控制项优先改 typed command，再考虑是否映射到 FIFO。

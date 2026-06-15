@@ -6,11 +6,7 @@
 namespace rmcs_laser_guidance {
 
 auto default_config_path() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH
-    return RMCS_LASER_GUIDANCE_DEFAULT_CONFIG_PATH;
-#else
     return "config/default.yaml";
-#endif
 }
 
 auto resolve_config_path(std::filesystem::path explicit_path) -> std::filesystem::path {
@@ -25,19 +21,11 @@ auto resolve_config_path(std::filesystem::path explicit_path) -> std::filesystem
 }
 
 auto default_sample_replay_path() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH
-    return RMCS_LASER_GUIDANCE_DEFAULT_SAMPLE_REPLAY_PATH;
-#else
     return "test_data/sample_images";
-#endif
 }
 
 auto default_video_session_root() -> std::filesystem::path {
-#ifdef RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT
-    return RMCS_LASER_GUIDANCE_DEFAULT_VIDEO_SESSION_ROOT;
-#else
     return "videos";
-#endif
 }
 
 auto default_record_session_options() -> RecordSessionOptions {

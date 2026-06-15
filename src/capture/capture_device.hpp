@@ -1,18 +1,16 @@
 #pragma once
 
 #include <expected>
+#include <memory>
 #include <optional>
 #include <string>
-#include <utility>
-#include <variant>
 
+#include "capture/capture_backend.hpp"
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
 #include "types.hpp"
 
-#ifdef WITH_HIKCAMERA
 #include <hikcamera/capturer.hpp>
-#endif
 
 namespace rmcs_laser_guidance {
 
@@ -29,11 +27,36 @@ struct CaptureFormat {
 
 auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat;
 
-#ifdef WITH_HIKCAMERA
 auto to_capture_format(
     const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
     -> CaptureFormat;
-#endif
+
+struct V4l2Backend : public CaptureBackend {
+    explicit V4l2Backend(V4l2Config config_in)
+        : capture(std::move(config_in)) {}
+
+    auto open() -> std::expected<CaptureFormat, std::string> override;
+    auto read_frame() -> std::expected<Frame, std::string> override;
+    auto close() noexcept -> void override;
+    [[nodiscard]] auto is_open() const noexcept -> bool override;
+    auto reconnect() -> std::expected<CaptureFormat, std::string> override;
+
+    V4l2Capture capture;
+};
+
+struct HikBackend : public CaptureBackend {
+    explicit HikBackend(HikCameraConfig config_in)
+        : config(std::move(config_in)) {}
+
+    auto open() -> std::expected<CaptureFormat, std::string> override;
+    auto read_frame() -> std::expected<Frame, std::string> override;
+    auto close() noexcept -> void override;
+    [[nodiscard]] auto is_open() const noexcept -> bool override;
+    auto reconnect() -> std::expected<CaptureFormat, std::string> override;
+
+    hikcamera::Camera camera{};
+    HikCameraConfig config{};
+};
 
 class CaptureDevice {
 public:
@@ -45,33 +68,13 @@ public:
     [[nodiscard]] auto is_open() const noexcept -> bool;
     [[nodiscard]] auto negotiated_format() const noexcept -> const std::optional<CaptureFormat>&;
 
+    auto reconnect() -> std::expected<void, std::string>;
+
 private:
-    struct V4l2BackendState {
-        explicit V4l2BackendState(V4l2Config config_in)
-            : capture(std::move(config_in)) {}
-
-        V4l2Capture capture;
-    };
-
-#ifdef WITH_HIKCAMERA
-    struct HikBackendState {
-        hikcamera::Camera camera{};
-    };
-#endif
-
-    using BackendState = std::variant<
-        std::monostate,
-        V4l2BackendState
-#ifdef WITH_HIKCAMERA
-        ,
-        HikBackendState
-#endif
-        >;
-
-    [[nodiscard]] auto make_backend_state() const -> BackendState;
+    [[nodiscard]] auto make_backend() const -> std::unique_ptr<CaptureBackend>;
 
     Config config_{};
-    BackendState backend_{};
+    std::unique_ptr<CaptureBackend> backend_{};
     std::optional<CaptureFormat> negotiated_{};
 };
 

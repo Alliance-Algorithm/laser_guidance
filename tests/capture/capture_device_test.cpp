@@ -31,7 +31,6 @@ int main() {
             require(format.format_name == "MJPG", "v4l2 format name mismatch");
         }
 
-#ifdef WITH_HIKCAMERA
         {
             const hikcamera::DeviceInfo device_info{
                 .device_id = "cam-a",
@@ -103,15 +102,6 @@ int main() {
             require(single.has_value(), "single-device empty selection should succeed");
             require(*single == 0, "single-device selection index mismatch");
         }
-#else
-        {
-            rmcs_laser_guidance::Config config;
-            config.capture_backend = CaptureBackendKind::hikcamera;
-            CaptureDevice capture(config);
-            const auto result = capture.open();
-            require(!result.has_value(), "hik open should fail when support is disabled");
-        }
-#endif
 
         return 0;
     } catch (const std::exception& e) {

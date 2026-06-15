@@ -161,6 +161,7 @@ public:
     auto operator=(const CompetitionRuntime&) -> CompetitionRuntime& = delete;
 
     auto start() -> std::expected<void, std::string>;
+    auto run() -> std::expected<void, std::string>;
     auto stop() -> void;
     auto join() -> void;
     auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>;

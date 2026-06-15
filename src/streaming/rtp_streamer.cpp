@@ -39,16 +39,21 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         return false;
 
     const auto& encoder = details_->config.encoder;
+    const int gop = static_cast<int>(framerate > 0.0F ? framerate : 60.0F);
+    const std::string x264_params = std::format(
+        "keyint={}:min-keyint={}:scenecut=0:repeat-headers=1", gop, gop);
     std::string encoder_opts;
     if (encoder.find("nvenc") != std::string::npos) {
-        encoder_opts =
-            std::format("-preset p1 -tune ll -rc cbr -b:v {} -g 2 -bf 0", details_->config.bitrate);
+        encoder_opts = std::format(
+            "-preset p1 -tune ll -rc cbr -b:v {} -g {} -bf 0 "
+            "-pix_fmt yuv420p -profile:v high -zerolatency 1 -forced-idr 1",
+            details_->config.bitrate, gop);
     } else {
         encoder_opts = std::format(
-            "-preset ultrafast -tune zerolatency -b:v {} "
-            "-x264-params "
-            "\"keyint=2:min-keyint=2:scenecut=0:repeat-headers=1\"",
-            details_->config.bitrate);
+            "-preset ultrafast -tune zerolatency -b:v {} -g {} "
+            "-pix_fmt yuv420p -profile:v high "
+            "-x264-params \"{}\"",
+            details_->config.bitrate, gop, x264_params);
     }
 
     const std::string command = std::format(
@@ -56,6 +61,7 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
         "-framerate {} -i pipe:0 "
         "-c:v {} {} "
+        "-flags:v +global_header "
         "-f rtp -sdp_file \"{}\" \"rtp://{}:{}\"",
         width, height, framerate, encoder, encoder_opts, details_->config.sdp_path.string(),
         details_->config.host, details_->config.port);

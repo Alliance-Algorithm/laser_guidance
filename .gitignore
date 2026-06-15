@@ -19,6 +19,7 @@ __pycache__/
 *.swo
 models/*.pt
 .script/.config-path
+MvSdkLog/
 calib_records*.csv
 hit_calib_records*.csv
 calib_all.csv

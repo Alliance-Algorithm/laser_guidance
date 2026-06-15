@@ -47,6 +47,7 @@ FROM deps AS build
 ARG CMAKE_BUILD_TYPE
 WORKDIR /workspace/laser_guidance
 
+# NVIDIA TensorRT + CUDA headers and stubs for build linking
 COPY --from=nvidia-libs /usr/include/x86_64-linux-gnu/ /tmp/nvidia-headers/
 RUN cp /tmp/nvidia-headers/NvInfer*.h /usr/include/x86_64-linux-gnu/ && rm -rf /tmp/nvidia-headers
 COPY --from=nvidia-libs /usr/local/cuda/include /usr/local/cuda/include
@@ -81,7 +82,7 @@ COPY --from=nvidia-libs \
     /usr/lib/x86_64-linux-gnu/
 RUN ln -sf libnvinfer_plugin.so.10 /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so && ldconfig
 
-COPY libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1.4.4.232
+COPY vendor/ft4222/lib/libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1.4.4.232
 RUN ln -sf libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1 && \
     ln -sf libft4222.so.1           /opt/libft4222/libft4222.so && \
     echo "/opt/libft4222" > /etc/ld.so.conf.d/libft4222.conf && ldconfig
@@ -90,12 +91,9 @@ COPY . .
 RUN rm -rf build && \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
-      -DWITH_ONNXRUNTIME=ON \
       -DONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT}" \
-      -DWITH_TENSORRT=ON \
       -DCUDA_LIBRARY=/usr/local/cuda/lib64/libcudart.so \
       -DCUDA_RT_LIBRARY=/usr/local/cuda/lib64/stubs/libcuda.so \
-      -DWITH_FT4222=ON \
     && cmake --build build --parallel \
     && mkdir -p /opt/laser_guidance/bin \
     && find build -maxdepth 1 -type f -executable -exec cp {} /opt/laser_guidance/bin/ \;
@@ -195,46 +193,3 @@ WORKDIR /workspace/laser_guidance
 
 ENTRYPOINT ["tini", "--"]
 CMD ["tool_competition", "config/direct_voltage_run.yaml"]
-
-FROM runtime AS develop
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake ninja-build pkg-config \
-    libopencv-dev libyaml-cpp-dev gdb lldb git \
-    zsh wget \
-  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
-
-RUN curl -kfsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
-
-RUN chsh -s /bin/zsh root
-
-RUN git config --global http.sslVerify false && \
-    sh -c "$(wget --no-check-certificate https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)" "" --unattended && \
-    sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc && \
-    sed -i 's/plugins=(git)/plugins=(git)/' ~/.zshrc && \
-    git config --global --unset http.sslVerify
-
-RUN printf '#!/bin/zsh\n\
-: "${LASER_PATH:=/workspace/laser_guidance}"\n\
-export PATH="${LASER_PATH}/build:${PATH}"\n\
-export PATH="/opt/laser_guidance/bin:${PATH}"\n\
-export PATH="/root/.npm-global/bin:${PATH}"\n' > /root/env_setup.zsh && \
-    printf '#!/bin/bash\n\
-: "${LASER_PATH:=/workspace/laser_guidance}"\n\
-export PATH="${LASER_PATH}/build:${PATH}"\n\
-export PATH="/opt/laser_guidance/bin:${PATH}"\n\
-export PATH="/root/.npm-global/bin:${PATH}"\n' > /root/env_setup.bash && \
-    chmod +x /root/env_setup.zsh /root/env_setup.bash
-
-RUN echo 'source ~/env_setup.zsh' >> ~/.zshrc
-
-RUN mkdir -p /root/.agents /root/.config /root/.local/share
-
-COPY --from=deps /opt/onnxruntime/include /opt/onnxruntime/include
-COPY --from=deps /opt/onnxruntime/lib/cmake /opt/onnxruntime/lib/cmake
-COPY --from=build /usr/local/cuda/include /usr/local/cuda/include
-ENV ONNXRUNTIME_ROOT=/opt/onnxruntime
-SHELL ["/bin/zsh", "-c"]
-CMD ["/bin/zsh"]

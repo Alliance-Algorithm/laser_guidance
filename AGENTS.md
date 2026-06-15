@@ -9,6 +9,8 @@
 - `tool_guidance` 走独立的 `runtime_internal::GuidanceOpsApp`
 - `ControlLoop` 直接组合 `CaptureDevice`、`PerceptionRunner`、可选 `GuidanceSession`、`RuntimeOutputs`
 - capture 后端选择收口在 `CaptureDevice` 内部
+- Hik typed parameter API 只保留在 `vendor/hikcamera` 与 `CaptureDevice` 内部边界，不暴露到 `CompetitionRuntime`
+- Hik SDK 运行时环境注入只由上层脚本处理，不下沉到子模块
 - ws30 / lidar 接入已删除
 
 当仓库结构、架构边界或阶段约束变化时，请同步更新：

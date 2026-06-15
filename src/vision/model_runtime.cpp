@@ -9,13 +9,10 @@
 
 #include <opencv2/imgproc.hpp>
 
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
-# include <onnxruntime/core/session/onnxruntime_cxx_api.h>
-#endif
+#include <onnxruntime/core/session/onnxruntime_cxx_api.h>
 
 namespace rmcs_laser_guidance {
 
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
 namespace {
 
 auto tensor_element_type_name(const ONNXTensorElementDataType type) -> std::string {
@@ -233,14 +230,6 @@ struct ModelRuntime::Details {
     std::string provider_message{};
 };
 
-#else
-
-struct ModelRuntime::Details {
-    std::vector<ModelValueInfo> inputs{};
-    std::vector<ModelValueInfo> outputs{};
-};
-
-#endif
 
 ModelRuntime::ModelRuntime(std::filesystem::path model_path)
     : model_path_(std::move(model_path))
@@ -253,7 +242,6 @@ ModelRuntime::ModelRuntime(ModelRuntime&&) noexcept = default;
 auto ModelRuntime::operator=(ModelRuntime&&) noexcept -> ModelRuntime& = default;
 
 auto ModelRuntime::load() -> std::string {
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
     if (details_->session)
         return {};
 
@@ -274,13 +262,9 @@ auto ModelRuntime::load() -> std::string {
         oss << "failed to load ONNX model '" << model_path_.string() << "': " << e.what();
         return oss.str();
     }
-#else
-    return "model backend was built without ONNX Runtime support";
-#endif
 }
 
 auto ModelRuntime::run(const cv::Mat& image) const -> ModelRunResult {
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
     ModelRunResult result;
     if (!details_->session) {
         result.message = "model runtime is not loaded";
@@ -327,21 +311,10 @@ auto ModelRuntime::run(const cv::Mat& image) const -> ModelRunResult {
         result.message = "model runtime inference failed: " + std::string(e.what());
         return result;
     }
-#else
-    (void)image;
-    return ModelRunResult{
-        .success = false,
-        .message = "model backend was built without ONNX Runtime support",
-    };
-#endif
 }
 
 auto ModelRuntime::is_loaded() const noexcept -> bool {
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
     return static_cast<bool>(details_->session);
-#else
-    return false;
-#endif
 }
 
 auto ModelRuntime::model_path() const noexcept -> const std::filesystem::path& {
@@ -357,11 +330,7 @@ auto ModelRuntime::output_values() const noexcept -> const std::vector<ModelValu
 }
 
 auto model_runtime_enabled_in_build() noexcept -> bool {
-#if defined(RMCS_LASER_GUIDANCE_WITH_ONNXRUNTIME)
     return true;
-#else
-    return false;
-#endif
 }
 
 } // namespace rmcs_laser_guidance

@@ -1,5 +1,6 @@
 #include "runtime/control_loop.hpp"
 
+#include <chrono>
 #include <utility>
 
 #include <opencv2/highgui.hpp>
@@ -251,12 +252,52 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
 }
 
 auto ControlLoop::run_loop() -> void {
+    using Clock = std::chrono::steady_clock;
+
+    int consecutive_errors = 0;
+    constexpr int kMaxConsecutiveErrors = 3;
+    constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
+    constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
+    std::optional<Clock::time_point> next_reconnect_at;
+
     while (!stop_requested()) {
+        if (next_reconnect_at.has_value()) {
+            const auto now = Clock::now();
+            if (now < *next_reconnect_at) {
+                std::this_thread::sleep_for(kReadErrorDelay);
+                continue;
+            }
+
+            sync_last_error("Attempting to reconnect camera...");
+            if (auto reconnect_result = capture_.reconnect(); reconnect_result) {
+                sync_last_error("Camera reconnected successfully");
+                consecutive_errors = 0;
+                next_reconnect_at.reset();
+            } else {
+                sync_last_error("Reconnect failed: " + reconnect_result.error());
+                consecutive_errors = kMaxConsecutiveErrors;
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+            }
+            continue;
+        }
+
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             sync_last_error(frame_result.error());
+            consecutive_errors++;
+
+            if (consecutive_errors >= kMaxConsecutiveErrors) {
+                consecutive_errors = kMaxConsecutiveErrors;
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                sync_last_error("Camera read failed repeatedly; entering reconnect state");
+            } else {
+                std::this_thread::sleep_for(kReadErrorDelay);
+            }
             continue;
         }
+
+        consecutive_errors = 0;
+        next_reconnect_at.reset();
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);

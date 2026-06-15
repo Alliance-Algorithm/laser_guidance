@@ -1,4 +1,3 @@
-#ifdef RMCS_LASER_GUIDANCE_WITH_TENSORRT
 
 #include "vision/tensorrt_engine.hpp"
 
@@ -343,34 +342,3 @@ auto TensorRTEngine::meta() const -> const TensorRTMeta& {
 
 } // namespace rmcs_laser_guidance
 
-#else
-
-// TensorRT not enabled — provide no-op stubs that report the build was compiled
-// without TensorRT support. The compile-time flag RMCS_LASER_GUIDANCE_WITH_TENSORRT
-// controls the real implementation above.
-
-#include "vision/tensorrt_engine.hpp"
-
-namespace rmcs_laser_guidance {
-
-struct TensorRTEngine::Impl {};
-
-TensorRTEngine::~TensorRTEngine() = default;
-
-auto TensorRTEngine::load(const std::string&) -> std::expected<TensorRTEngine, std::string> {
-    return std::unexpected(std::string("TensorRT support was not enabled at build time"));
-}
-
-auto TensorRTEngine::run(const std::vector<float>&, std::vector<float>&)
-    -> std::expected<void, std::string> {
-    return std::unexpected(std::string("TensorRT is not available in this build"));
-}
-
-auto TensorRTEngine::meta() const -> const TensorRTMeta& {
-    static const TensorRTMeta empty{};
-    return empty;
-}
-
-} // namespace rmcs_laser_guidance
-
-#endif
