@@ -11,6 +11,7 @@
 #include "capture/capture_device.hpp"
 #include "config.hpp"
 #include "laser_guidance/runtime.hpp"
+#include "bridges/ros_bridge.hpp"
 #include "runtime/guidance_session.hpp"
 #include "runtime/overlay_renderer.hpp"
 #include "runtime/perception_runner.hpp"
@@ -76,6 +77,7 @@ private:
     CaptureDevice capture_;
     PerceptionRunner perception_;
     RuntimeOutputs outputs_;
+    std::unique_ptr<RosBridge> ros_bridge_{};
     std::optional<GuidanceSession> guidance_{};
     HitProgress hit_progress_{};
     std::optional<CaptureFormat> negotiated_format_{};

@@ -12,6 +12,8 @@
 - Hik typed parameter API 只保留在 `vendor/hikcamera` 与 `CaptureDevice` 内部边界，不暴露到 `CompetitionRuntime`
 - Hik SDK 运行时环境注入只由上层脚本处理，不下沉到子模块
 - ws30 / lidar 接入已删除
+- `WITH_ROS2_BRIDGE` 是唯一的可选编译选项，用于 Foxglove/rviz 调试；始终编译 `ros_bridge.cpp`（无 ROS2 时为 no-op）。
+- `.script/build` (构建)、`.script/clean` (清理)、`.script/docker-build` (镜像)、`.script/foxglove` (桥接) 为统一构建入口。
 
 当仓库结构、架构边界或阶段约束变化时，请同步更新：
 

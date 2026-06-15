@@ -43,10 +43,24 @@
 
 ### Docker (推荐)
 
+Docker Hub: [`yukikaze2233/laser-guidance`](https://hub.docker.com/r/yukikaze2233/laser-guidance)
+
+```bash
+docker pull yukikaze2233/laser-guidance:latest
+```
+
+启动：
+
 ```bash
 docker compose up -d                        # 比赛模式
 docker compose --profile stream up          # 比赛 + ffplay
 docker compose run --rm shell               # 交互 shell
+```
+
+Foxglove 可视化（连接 `ws://localhost:8765`）：
+
+```bash
+docker compose run --rm shell .script/foxglove  # 仅启动桥接
 ```
 
 ### 宿主机依赖
@@ -87,6 +101,16 @@ CMake 变量：
 | `CUDA_RT_LIBRARY` | `libcuda.so` stub 路径（默认搜 `/opt/cuda/lib64/stubs`） |
 | `HIKCAMERA_SDK_MODE` | `AUTO`（默认）/ `vendor` / `system` |
 | `MVS_SDK_ROOT` | system 模式下的 MVS SDK 路径 |
+| `WITH_ROS2_BRIDGE` | 启用 ROS2 调试桥接（Foxglove/rviz），默认 `OFF` |
+
+### 构建脚本
+
+```bash
+.script/build --ros2    # 启用 ROS2 桥接的构建
+.script/clean           # 清理
+.script/docker-build    # Docker 构建（--push 推送）
+.script/foxglove        # 启动 Foxglove WebSocket 桥接
+```
 
 ## Tools
 

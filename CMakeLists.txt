@@ -9,6 +9,7 @@ set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
 # All backends are unconditionally required (no compile-time options / #ifdef).
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to ONNX Runtime installation")
+option(WITH_ROS2_BRIDGE "Enable ROS2 visualization bridge for Foxglove/rviz." OFF)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O2 -Wall -Wextra -Wpedantic)
@@ -109,6 +110,15 @@ add_library(ft4222::ft4222 SHARED IMPORTED)
 set_target_properties(ft4222::ft4222 PROPERTIES IMPORTED_LOCATION "${FT4222_LIBRARY}")
 message(STATUS "FT4222H enabled (${FT4222_LIBRARY})")
 
+# ---- ROS2 Bridge (optional) ---------------------------------------------------
+if(WITH_ROS2_BRIDGE)
+  find_package(rclcpp REQUIRED)
+  find_package(visualization_msgs REQUIRED)
+  find_package(std_msgs REQUIRED)
+  add_compile_definitions(WITH_ROS2_BRIDGE=1)
+  message(STATUS "ROS2 bridge enabled")
+endif()
+
 # ---- Hikcamera (always enabled) ------------------------------------------------
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/hikcamera/CMakeLists.txt")
   message(FATAL_ERROR "Hikcamera requires vendor/hikcamera submodule. "
@@ -167,6 +177,12 @@ add_library(laser_guidance_bridges ${BRIDGE_SOURCES})
 target_include_directories(laser_guidance_bridges PUBLIC ${COMMON_INCLUDES})
 target_link_libraries(laser_guidance_bridges PUBLIC
   laser_guidance_support laser_guidance_tracking ${COMMON_LIBS})
+if(WITH_ROS2_BRIDGE)
+  target_include_directories(laser_guidance_bridges PUBLIC
+    ${rclcpp_INCLUDE_DIRS} ${visualization_msgs_INCLUDE_DIRS} ${std_msgs_INCLUDE_DIRS})
+  target_link_libraries(laser_guidance_bridges PUBLIC
+    ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES})
+endif()
 
 add_library(laser_guidance_runtime ${RUNTIME_SOURCES} ${CAPTURE_SOURCES})
 target_include_directories(laser_guidance_runtime PUBLIC ${COMMON_INCLUDES})

@@ -244,6 +244,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     outputs_.start(
         *negotiated_format_, state_.streaming_requested, state_.recording_requested);
 
+    ros_bridge_ = std::make_unique<RosBridge>();
+
     if (show_window()) {
         cv::namedWindow(window_name(), cv::WINDOW_NORMAL);
         window_open_ = true;
@@ -367,6 +369,11 @@ auto ControlLoop::run_loop() -> void {
             state_.latest_snapshot = latest_snapshot;
         }
         outputs_.publish_snapshot(latest_snapshot);
+
+        if (ros_bridge_ && ros_bridge_->ready()) {
+            ros_bridge_->publish_snapshot(latest_snapshot);
+            ros_bridge_->spin();
+        }
 
         if (show_window()) {
             cv::imshow(window_name(), frame.display);

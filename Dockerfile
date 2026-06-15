@@ -21,8 +21,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-yaml \
     ca-certificates curl wget \
     v4l-utils usbutils \
+    software-properties-common \
   && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 50 \
   && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 50 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# ROS2 Jazzy (build deps)
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+    > /etc/apt/sources.list.d/ros2.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base ros-jazzy-rclcpp \
+    ros-jazzy-visualization-msgs ros-jazzy-std-msgs \
   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 RUN set -eux; \
@@ -89,11 +101,13 @@ RUN ln -sf libft4222.so.1.4.4.232 /opt/libft4222/libft4222.so.1 && \
 
 COPY . .
 RUN rm -rf build && \
+    . /opt/ros/jazzy/setup.sh && \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
       -DONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT}" \
       -DCUDA_LIBRARY=/usr/local/cuda/lib64/libcudart.so \
       -DCUDA_RT_LIBRARY=/usr/local/cuda/lib64/stubs/libcuda.so \
+      -DWITH_ROS2_BRIDGE=ON \
     && cmake --build build --parallel \
     && mkdir -p /opt/laser_guidance/bin \
     && find build -maxdepth 1 -type f -executable -exec cp {} /opt/laser_guidance/bin/ \;
@@ -108,6 +122,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-imgcodecs406t64 libopencv-imgproc406t64 libopencv-videoio406t64 \
     libyaml-cpp0.8 libusb-1.0-0 \
     ffmpeg python3 python3-yaml v4l-utils usbutils tini \
+    software-properties-common curl \
+  && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# ROS2 Jazzy runtime + Foxglove bridge
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
+    > /etc/apt/sources.list.d/ros2.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-base ros-jazzy-foxglove-bridge \
   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
 COPY --from=deps /opt/onnxruntime/lib/libonnxruntime.so.1.26.0 \
@@ -191,5 +216,21 @@ COPY --from=build /workspace/laser_guidance/models  /workspace/laser_guidance/mo
 COPY --from=build /workspace/laser_guidance/test_data /workspace/laser_guidance/test_data
 WORKDIR /workspace/laser_guidance
 
+# Startup script: source ROS2, launch foxglove bridge, run tool
+RUN printf '#!/bin/bash\n\
+set -e\n\
+source /opt/ros/jazzy/setup.bash\n\
+echo "[entry] Starting foxglove_bridge on port 8765..."\n\
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 &\n\
+FOXGLOVE_PID=$!\n\
+sleep 2\n\
+echo "[entry] Starting laser_guidance..."\n\
+"$@"\n\
+LASER_EXIT=$?\n\
+kill $FOXGLOVE_PID 2>/dev/null || true\n\
+wait $FOXGLOVE_PID 2>/dev/null || true\n\
+exit $LASER_EXIT\n' > /opt/laser_guidance/bin/entrypoint.sh \
+  && chmod +x /opt/laser_guidance/bin/entrypoint.sh
+
 ENTRYPOINT ["tini", "--"]
-CMD ["tool_competition", "config/direct_voltage_run.yaml"]
+CMD ["/opt/laser_guidance/bin/entrypoint.sh", "tool_competition", "config/direct_voltage_run.yaml"]

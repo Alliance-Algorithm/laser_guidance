@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
+BUILD_TYPE="${LASER_BUILD_TYPE:-Release}"
+JOBS="${LASER_JOBS:-$(nproc)}"
+WITH_ROS2="${LASER_ROS2_BRIDGE:-OFF}"
+EXTRA_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --debug)   BUILD_TYPE=Debug; shift ;;
+        --release) BUILD_TYPE=Release; shift ;;
+        -j)        JOBS="$2"; shift 2 ;;
+        -j*)       JOBS="${1#-j}"; shift ;;
+        --ros2)    WITH_ROS2=ON; shift ;;
+        --no-ros2) WITH_ROS2=OFF; shift ;;
+        *)         EXTRA_ARGS+=("$1"); shift ;;
+    esac
+done
+
+echo "=== Build: ${BUILD_TYPE} (jobs=${JOBS}, ros2=${WITH_ROS2}) ==="
+
+cmake -S . -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+    -DWITH_ROS2_BRIDGE="${WITH_ROS2}" \
+    "${EXTRA_ARGS[@]}"
+
+cmake --build build --parallel "${JOBS}"
+echo "=== Build complete ==="

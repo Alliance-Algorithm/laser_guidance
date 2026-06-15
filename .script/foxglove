@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launch Foxglove WebSocket bridge inside the container.
+# Usage: .script/foxglove [port]
+# Default port: 8765
+
+PORT="${1:-8765}"
+echo "=== Launching Foxglove bridge on ws://0.0.0.0:${PORT} ==="
+
+if ! command -v ros2 &>/dev/null; then
+    echo "ERROR: ros2 not found. Is ROS2 sourced?"
+    exit 1
+fi
+
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:="${PORT}"

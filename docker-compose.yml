@@ -26,10 +26,13 @@ services:
     volumes:
       - /dev:/dev:bind
       - /tmp:/tmp:bind
+      - /tmp/.X11-unix:/tmp/.X11-unix:bind
       - ./config:/workspace/laser_guidance/config:ro
       - ./models:/workspace/laser_guidance/models:ro
       - ./videos:/workspace/laser_guidance/videos
       - ./logs:/workspace/laser_guidance/logs
+    ports:
+      - "8765:8765"
     restart: unless-stopped
     tty: true
     stdin_open: true
@@ -64,6 +67,8 @@ services:
       - ./models:/workspace/laser_guidance/models:ro
       - ./videos:/workspace/laser_guidance/videos
       - ./logs:/workspace/laser_guidance/logs
+    ports:
+      - "8765:8765"
     entrypoint: ["/bin/bash"]
     stdin_open: true
     tty: true
