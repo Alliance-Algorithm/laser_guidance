@@ -62,8 +62,10 @@ find_path(CUDA_INCLUDE_DIR cuda_runtime_api.h
 find_library(TENSORRT_LIBRARY nvinfer)
 find_library(TENSORRT_ONNX_PARSER nvonnxparser)
 find_library(TENSORRT_PLUGIN nvinfer_plugin)
-find_library(CUDA_LIBRARY cudart PATHS /opt/cuda/lib64)
-find_library(CUDA_RT_LIBRARY cuda PATHS /opt/cuda/lib64/stubs)
+find_library(CUDA_LIBRARY cudart
+  PATHS /opt/cuda/lib64 /usr/local/cuda/lib64 /usr/lib/x86_64-linux-gnu)
+find_library(CUDA_RT_LIBRARY cuda
+  PATHS /opt/cuda/lib64/stubs /usr/local/cuda/lib64/stubs)
 if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY OR NOT TENSORRT_ONNX_PARSER OR NOT TENSORRT_PLUGIN)
   message(FATAL_ERROR "TensorRT is required.")
 endif()

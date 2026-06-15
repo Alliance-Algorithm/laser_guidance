@@ -39,7 +39,7 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         return false;
 
     const auto& encoder = details_->config.encoder;
-    const int gop = static_cast<int>(framerate > 0.0F ? framerate : 60.0F);
+    const int gop = std::max(1, static_cast<int>(framerate > 0.0F ? framerate : 60.0F));
     const std::string x264_params = std::format(
         "keyint={}:min-keyint={}:scenecut=0:repeat-headers=1", gop, gop);
     std::string encoder_opts;

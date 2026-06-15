@@ -1,6 +1,7 @@
-#include <atomic>
-#include <csignal>
+
+
 #include <filesystem>
+#include <csignal>
 #include <print>
 #include <thread>
 
@@ -11,9 +12,9 @@
 
 namespace {
 
-std::atomic_bool g_stop_requested{false};
+volatile sig_atomic_t g_stop_requested{0};
 
-auto handle_signal(int) -> void { g_stop_requested.store(true); }
+auto handle_signal(int) -> void { g_stop_requested = 1; }
 
 auto install_signal_handlers() -> void {
     std::signal(SIGINT, handle_signal);
@@ -46,7 +47,7 @@ int main(int argc, char** argv) {
         }
 
         std::thread command_thread([&] {
-            while (!g_stop_requested.load()) {
+            while (g_stop_requested == 0) {
                 if (fifo_started) {
                     if (auto command = fifo.poll_command(); command.has_value()) {
                         if (auto result = runtime.submit_command(*command); !result) {

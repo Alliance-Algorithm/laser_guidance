@@ -1,14 +1,13 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-readonly REPO_ROOT="/home/yukikaze/Documents/workspace/laser_guidance"
+readonly REPO_ROOT="$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)"
 
 cmd="${1:-}"
 
 case "$cmd" in
     build)
-        cd "$REPO_ROOT"
-        docker build --target develop -t yukikaze2233/laser-guidance:latest .
+        exec "$REPO_ROOT/.script/docker-build" "${@:2}"
         ;;
     push)
         docker push yukikaze2233/laser-guidance:latest

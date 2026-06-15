@@ -12,6 +12,9 @@ struct CaptureFormat;
 class CaptureBackend {
 public:
     virtual ~CaptureBackend() noexcept = default;
+    CaptureBackend() = default;
+    CaptureBackend(const CaptureBackend&) = delete;
+    CaptureBackend& operator=(const CaptureBackend&) = delete;
     virtual auto open() -> std::expected<CaptureFormat, std::string> = 0;
     virtual auto read_frame() -> std::expected<Frame, std::string> = 0;
     virtual auto close() noexcept -> void = 0;

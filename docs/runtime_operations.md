@@ -38,7 +38,7 @@ cmake --build build/default --parallel
 ctest --test-dir build/default --output-on-failure
 ```
 
-所有后端均为强制依赖，不再需要 CMake option 开关。Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺失时回退系统 MVS。可显式 `HIKCAMERA_SDK_MODE=system|vendor`，系统模式下用 `-DMVS_SDK_ROOT` 指定路径。
+除 `WITH_ROS2_BRIDGE` 外，不再需要其他 CMake option 开关。Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺失时回退系统 MVS。可显式 `HIKCAMERA_SDK_MODE=system|vendor`，系统模式下用 `-DMVS_SDK_ROOT` 指定路径。
 
 ## Operational Notes
 

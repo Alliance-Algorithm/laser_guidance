@@ -145,7 +145,7 @@ struct RosBridge::Impl {
             m.pose.position.x = track.aim_center.x;
             m.pose.position.y = track.aim_center.y;
             m.pose.position.z = 0.0;
-            m.scale.x = std::abs(track.velocity.x);
+            m.scale.x = static_cast<double>(std::hypot(track.velocity.x, track.velocity.y));
             m.scale.y = 3.0;
             m.scale.z = 3.0;
             m.color.r = 1.0F;
@@ -209,7 +209,11 @@ RosBridge::RosBridge()
     impl_->init();
 }
 
-RosBridge::~RosBridge() = default;
+RosBridge::~RosBridge() {
+    if (impl_->owns_context && rclcpp::ok()) {
+        rclcpp::shutdown();
+    }
+}
 
 auto RosBridge::ready() const noexcept -> bool { return impl_->initialized; }
 
@@ -238,7 +242,7 @@ auto RosBridge::ready() const noexcept -> bool { return false; }
 auto RosBridge::publish_snapshot(const RuntimeSnapshot&) -> void {}
 
 auto RosBridge::spin() -> void {}
-
 #endif // WITH_ROS2_BRIDGE
+
 
 } // namespace rmcs_laser_guidance

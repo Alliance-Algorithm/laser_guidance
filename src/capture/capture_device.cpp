@@ -173,7 +173,7 @@ auto CaptureDevice::make_backend() const -> std::unique_ptr<CaptureBackend> {
     case CaptureBackendKind::hikcamera:
         return std::make_unique<HikBackend>(config_.hik);
     }
-    return nullptr;
+    __builtin_unreachable();
 }
 
 } // namespace rmcs_laser_guidance
