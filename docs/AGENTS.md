@@ -12,7 +12,7 @@
 - YAML 配置加载
 - `CompetitionRuntime` + `CompetitionProfile(main / preview)`
 - 独立的 `tool_guidance` / `GuidanceOpsApp`
-- `WITH_ROS2_BRIDGE` 是唯一的可选编译选项，用于 Foxglove/rviz 调试；始终编译 `ros_bridge.cpp`（无 ROS2 时为 no-op）。
+- ROS2 bridge 为强制编译依赖（Docker 内置），`ros_bridge.cpp` 始终以完整 ROS2 实现编译；ROS2 类型通过 PIMPL 隔离在 `.cpp` 内部，不泄露到公共头文件。
 - `.script/build` (构建)、`.script/clean` (清理)、`.script/docker-build` (镜像)、`.script/foxglove` (桥接) 为统一构建入口。
 - 调试 overlay 与回放样本
 - 自动测试与工具入口

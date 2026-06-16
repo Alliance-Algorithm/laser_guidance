@@ -43,7 +43,7 @@ CaptureDevice
 
 ## 调试桥接
 
-`RosBridge` (可选，`WITH_ROS2_BRIDGE`) 将 `RuntimeSnapshot` 发布为 ROS2 topic：
+`RosBridge` 将 `RuntimeSnapshot` 发布为 ROS2 topic：
 
 - `/laser_guidance/detections` → `MarkerArray`（检测框）
 - `/laser_guidance/tracks` → `MarkerArray`（跟踪轨迹+速度箭头）
@@ -132,4 +132,4 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 - 新控制项先扩 `RuntimeCommand` / `RuntimeSnapshot`。
 - 新输出先扩 `RuntimeOutputs`，不要回塞主循环。
 - 新引导能力优先扩 `GuidanceSession` / `AimSolver` / `GalvoExecutor`。
-- `WITH_ROS2_BRIDGE` 是唯一的可选编译选项；`ros_bridge.cpp` 始终编译（无 ROS2 时为 no-op）。
+- ROS2 bridge 为强制依赖（Docker 内置），ROS2 类型通过 PIMPL 隔离在 `ros_bridge.cpp` 内部。

@@ -73,6 +73,7 @@ docker compose run --rm shell .script/foxglove  # 仅启动桥接
 | **TensorRT + CUDA** | CUDA Toolkit、TensorRT SDK（`libnvinfer`、`libnvonnxparser`、`libnvinfer_plugin`） |
 | **FT4222H** | `libft4222.so` 放 `vendor/ft4222/lib/`、`/opt/libft4222/` 或系统库路径 |
 | **Hik MVS SDK** | submodule 自带 vendor SDK，或 `MVS_SDK_ROOT` 指向系统安装路径 |
+| **ROS2 Jazzy** | rclcpp、visualization_msgs、std_msgs |
 
 Docker 镜像已内置所有依赖，推荐使用 Docker 构建和运行。
 
@@ -101,15 +102,14 @@ CMake 变量：
 | `CUDA_RT_LIBRARY` | `libcuda.so` stub 路径（默认搜 `/opt/cuda/lib64/stubs`） |
 | `HIKCAMERA_SDK_MODE` | `AUTO`（默认）/ `vendor` / `system` |
 | `MVS_SDK_ROOT` | system 模式下的 MVS SDK 路径 |
-| `WITH_ROS2_BRIDGE` | 启用 ROS2 调试桥接（Foxglove/rviz），默认 `OFF` |
 
 ### 构建脚本
 
 ```bash
-.script/build --ros2    # 启用 ROS2 桥接的构建
-.script/clean           # 清理
-.script/docker-build    # Docker 构建（--push 推送）
-.script/foxglove        # 启动 Foxglove WebSocket 桥接
+.script/build                # 构建
+.script/clean                # 清理
+.script/docker-build         # Docker 构建（--push 推送）
+.script/foxglove             # 启动 Foxglove WebSocket 桥接
 ```
 
 ## Tools
