@@ -107,7 +107,6 @@ RUN rm -rf build && \
       -DONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT}" \
       -DCUDA_LIBRARY=/usr/local/cuda/lib64/libcudart.so \
       -DCUDA_RT_LIBRARY=/usr/local/cuda/lib64/stubs/libcuda.so \
-      -DWITH_ROS2_BRIDGE=ON \
     && cmake --build build --parallel \
     && mkdir -p /opt/laser_guidance/bin \
     && find build -maxdepth 1 -type f -executable -exec cp {} /opt/laser_guidance/bin/ \;
