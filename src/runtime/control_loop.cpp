@@ -283,18 +283,29 @@ auto ControlLoop::run_loop() -> void {
             if (auto reconnect_result = capture_.reconnect(); reconnect_result) {
                 std::println("camera reconnected");
                 sync_last_error("Camera reconnected");
-                negotiated_format_ = capture_.negotiated_format();
-                if (guidance_enabled_in_profile() && !guidance_ && negotiated_format_.has_value()) {
+
+                auto new_format = capture_.negotiated_format();
+                std::optional<GuidanceSession> new_guidance;
+                if (guidance_enabled_in_profile() && !guidance_ && new_format.has_value()) {
                     auto guidance = GuidanceSession::create_auto(
-                        config_, *negotiated_format_);
+                        config_, *new_format);
                     if (guidance) {
-                        guidance_ = std::move(*guidance);
-                        std::println("guidance re-initialized after camera reconnect");
+                        new_guidance = std::move(*guidance);
                     } else {
                         std::println(
                             stderr, "guidance re-init failed: {}", guidance.error());
                     }
                 }
+
+                {
+                    std::scoped_lock lock(state_mutex_);
+                    negotiated_format_ = std::move(new_format);
+                    if (new_guidance) {
+                        guidance_ = std::move(*new_guidance);
+                        std::println("guidance re-initialized after camera reconnect");
+                    }
+                }
+
                 consecutive_errors = 0;
                 next_reconnect_at.reset();
             } else {

@@ -2,7 +2,7 @@
 # HikCamera 比赛配置 (geometry command model)
 #
 # 使用方式:
-#   ./build/tool_competition config/hik_competition.yaml
+#   .script/build && ./build/tool_competition config/hik_competition.yaml
 #   make set-config config/hik_competition.yaml && make competition
 # =============================================================================
 
@@ -68,6 +68,11 @@ streaming:
 
 udp:
   enabled: true
+  host: "127.0.0.1"
+  port: 5002
+
+zmq:
+  enabled: false
   host: "127.0.0.1"
   port: 5001
 

@@ -121,7 +121,7 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 
 ## 构建脚本
 
-- `.script/build` — CMake 构建（`--ros2` 启用 ROS2 桥接）
+- `.script/build` — CMake 构建
 - `.script/clean` — 清理 `build/`
 - `.script/docker-build` — Docker 镜像构建（`--push` 推送）
 - `.script/foxglove` — 启动 Foxglove WebSocket 桥接
