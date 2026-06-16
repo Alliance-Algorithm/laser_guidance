@@ -1,0 +1,123 @@
+# =============================================================================
+# HikCamera 比赛配置 (geometry command model)
+#
+# 使用方式:
+#   ./build/tool_competition config/hik_competition.yaml
+#   make set-config config/hik_competition.yaml && make competition
+# =============================================================================
+
+capture_backend: hikcamera
+
+# --- HikCamera 工业相机参数 --------------------------------------------------
+hik:
+  device_id: ""
+  timeout_ms: 2000
+  exposure_us: 2000.0
+  framerate: 80.0
+  gain: 16.9807
+  invert_image: false
+  software_sync: false
+  trigger_mode: false
+  fixed_framerate: true
+
+# --- V4L2 参数 (hikcamera 后端时忽略，保留供校验通过) -------------------------
+v4l2:
+  device_path: /dev/v4l/by-id/usb-MACROSILICON_Hagibis_20210623-video-index0
+  width: 1920
+  height: 1080
+  framerate: 60.0
+  pixel_format: mjpeg
+  invert_image: false
+
+debug:
+  show_window: true
+  draw_overlay: true
+
+runtime:
+  max_input_age_ms: 25
+  max_observation_age_ms: 35
+  max_infer_fps: 60
+  warmup_frames: 30
+  engine_path: "models/exp.engine"
+  hit_confirm_frames: 3
+  hit_release_frames: 5
+  debug_enabled: true
+  debug_max_fps: 30
+  record_enabled: false
+  record_queue_size: 16
+
+inference:
+  backend: tensorrt
+  model_path: models/exp.engine
+  enemy_color: auto
+
+record:
+  output_root: ./videos
+  lighting_tag: competition
+  background_tag: field
+  distance_tag: variable
+  target_color: purple
+
+streaming:
+  enabled: true
+  host: "127.0.0.1"
+  port: 5004
+  sdp_path: "/tmp/laser_guidance.sdp"
+  encoder: "h264_nvenc"
+  bitrate: "50M"
+
+udp:
+  enabled: true
+  host: "127.0.0.1"
+  port: 5001
+
+ekf:
+  enabled: false
+  process_noise_q: 0.35
+  measurement_noise_r: 0.015
+  initial_pos_std: 100.0
+  initial_vel_std: 100.0
+  initial_acc_std: 35.0
+  max_missed_frames: 5
+  lookahead_ms: 30.0
+
+guidance:
+  enabled: true
+  command_model: geometry
+  calib_mode: false
+  target_geometry:
+    - class_id: 0
+      width_mm: 72.0
+      height_mm: 50.0
+    - class_id: 1
+      width_mm: 72.0
+      height_mm: 50.0
+    - class_id: 2
+      width_mm: 72.0
+      height_mm: 50.0
+  camera_calib_path: "config/camera_calib.yaml"
+  depth_scale: 1.0
+  voltage_gain_x: 1.0
+  voltage_gain_y: 1.35
+  t_x_mm: -97.0
+  t_y_mm: 15.1
+  t_z_mm: 146.0
+  r_x_deg: 0.31
+  r_y_deg: 0.05
+  r_z_deg: 1.82
+  mirror_separation_mm: 15.0
+  max_optical_angle_deg: 30.0
+  input_voltage_range_v: 5.0
+  dac_voltage_range_v: 10.0
+  wiring:
+    mode: differential
+    x_plus_channel: 0
+    x_minus_channel: 2
+    y_plus_channel: 1
+    y_minus_channel: 3
+  angle_offset_x_deg: 0.03
+  angle_offset_y_deg: -0.01
+  scan_mode: single
+  scan_width_deg: 0.06
+  scan_height_deg: 0.08
+  scan_grid_n: 6
