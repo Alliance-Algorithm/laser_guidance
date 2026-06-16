@@ -3,14 +3,13 @@
 #include "laser_guidance/runtime.hpp"
 
 
-namespace rmcs_laser_guidance {
-#ifdef WITH_ROS2_BRIDGE
 
 #include <rclcpp/rclcpp.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <std_msgs/msg/float64.hpp>
 
+namespace rmcs_laser_guidance {
 
 
 namespace {
@@ -209,11 +208,7 @@ RosBridge::RosBridge()
     impl_->init();
 }
 
-RosBridge::~RosBridge() {
-    if (impl_->owns_context && rclcpp::ok()) {
-        rclcpp::shutdown();
-    }
-}
+RosBridge::~RosBridge() = default;
 
 auto RosBridge::ready() const noexcept -> bool { return impl_->initialized; }
 
@@ -227,22 +222,5 @@ auto RosBridge::publish_snapshot(const RuntimeSnapshot& snapshot) -> void {
 }
 
 auto RosBridge::spin() -> void { impl_->spin(); }
-
-#else // !WITH_ROS2_BRIDGE — stub implementation
-
-struct RosBridge::Impl {};
-
-RosBridge::RosBridge()
-    : impl_(std::make_unique<Impl>()) {}
-
-RosBridge::~RosBridge() = default;
-
-auto RosBridge::ready() const noexcept -> bool { return false; }
-
-auto RosBridge::publish_snapshot(const RuntimeSnapshot&) -> void {}
-
-auto RosBridge::spin() -> void {}
-#endif // WITH_ROS2_BRIDGE
-
 
 } // namespace rmcs_laser_guidance
