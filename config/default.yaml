@@ -40,6 +40,11 @@ streaming:
 udp:
   enabled: true
   host: "127.0.0.1"
+  port: 5002
+
+zmq:
+  enabled: false
+  host: "127.0.0.1"
   port: 5001
 
 ekf:

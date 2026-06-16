@@ -9,6 +9,7 @@ label_upload/
 .omo/
 .codex/
 .mimo/
+.mimocode/
 
 # python
 __pycache__/
