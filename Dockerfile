@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive TZ=Asia/Shanghai
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc-14 g++-14 cmake ninja-build pkg-config \
-    libopencv-dev libyaml-cpp-dev \
+    libopencv-dev libyaml-cpp-dev libzmq3-dev cppzmq-dev \
     libusb-1.0-0-dev \
     libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
     ffmpeg \

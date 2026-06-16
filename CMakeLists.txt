@@ -17,6 +17,17 @@ endif()
 find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc videoio)
 find_package(yaml-cpp REQUIRED)
 
+find_library(ZMQ_LIBRARY zmq)
+find_path(ZMQ_INCLUDE_DIR zmq.hpp PATH_SUFFIXES include)
+if(NOT ZMQ_LIBRARY OR NOT ZMQ_INCLUDE_DIR)
+  message(FATAL_ERROR "libzmq is required.")
+endif()
+add_library(zmq::zmq UNKNOWN IMPORTED)
+set_target_properties(zmq::zmq PROPERTIES
+  IMPORTED_LOCATION "${ZMQ_LIBRARY}"
+  INTERFACE_INCLUDE_DIRECTORIES "${ZMQ_INCLUDE_DIR}")
+message(STATUS "ZMQ enabled")
+
 file(GLOB_RECURSE ALL_SOURCES src/*.cpp)
 file(GLOB_RECURSE SUPPORT_SOURCES
   src/core/*.cpp
@@ -140,7 +151,7 @@ message(STATUS "Hikcamera runtime dir: ${HIKCAMERA_RUNTIME_DIR}")
 message(STATUS "Hikcamera enabled")
 
 # ---- common settings -----------------------------------------------------------
-set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread ft4222::ft4222 hikcamera)
+set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread ft4222::ft4222 hikcamera zmq::zmq)
 
 set(COMMON_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include

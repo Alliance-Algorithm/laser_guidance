@@ -12,6 +12,7 @@
 #include "streaming/rtp_streamer.hpp"
 #include "streaming/udp_sender.hpp"
 #include "streaming/video_shm.hpp"
+#include "streaming/zmq_sender.hpp"
 
 namespace rmcs_laser_guidance {
 namespace {
@@ -191,6 +192,22 @@ UdpTelemetryPublisher::UdpTelemetryPublisher(UdpConfig config)
 UdpTelemetryPublisher::~UdpTelemetryPublisher() = default;
 
 auto UdpTelemetryPublisher::publish(const RuntimeSnapshot& snapshot) -> void {
+    impl_->sender.send(to_target_observation(snapshot.detection));
+}
+
+struct ZmqTelemetryPublisher::Impl {
+    explicit Impl(ZmqConfig config)
+        : sender(std::move(config)) {}
+
+    ZmqSender sender;
+};
+
+ZmqTelemetryPublisher::ZmqTelemetryPublisher(ZmqConfig config)
+    : impl_(std::make_unique<Impl>(std::move(config))) {}
+
+ZmqTelemetryPublisher::~ZmqTelemetryPublisher() = default;
+
+auto ZmqTelemetryPublisher::publish(const RuntimeSnapshot& snapshot) -> void {
     impl_->sender.send(to_target_observation(snapshot.detection));
 }
 

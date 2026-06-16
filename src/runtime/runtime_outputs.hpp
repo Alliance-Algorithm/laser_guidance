@@ -59,6 +59,7 @@ private:
     RecordSessionOptions record_options_{};
     RuntimeOutputCapabilities capabilities_{};
     UdpTelemetryPublisher telemetry_;
+    ZmqTelemetryPublisher zmq_telemetry_;
     ShmFramePublisher shm_publisher_;
     RtpFramePublisher rtp_publisher_;
     std::unique_ptr<VideoSessionRecorder> recorder_{};
