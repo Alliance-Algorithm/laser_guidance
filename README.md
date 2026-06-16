@@ -1,5 +1,8 @@
 # laser_guidance
 
+[![Docker Publish](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml)
+[![Docker Hub](https://img.shields.io/docker/v/yukikaze2233/laser-guidance/latest?color=blue&label=Docker%20Hub)](https://hub.docker.com/r/yukikaze2233/laser-guidance)
+
 `laser_guidance` 是一个激光视觉引导系统，当前覆盖：
 
 - `V4L2/UVC` 采集
@@ -19,6 +22,31 @@
 - ROS 控制总线
 - 通用 planner / planner-like 抽象
 
+## Quick Start
+
+```bash
+docker pull yukikaze2233/laser-guidance:latest
+
+# 比赛模式
+docker compose up -d
+
+# 比赛 + ffplay 推流
+docker compose --profile stream up
+
+# 交互 shell
+docker compose run --rm shell
+```
+
+## 镜像标签
+
+| 标签 | 说明 |
+|------|------|
+| `latest` | main 分支最新构建 |
+| `sha-XXXXXX` | 指定 commit 构建 |
+| `vX.Y.Z` | 发行版本 |
+
+由 GitHub Actions 在 push main 或打 tag 时自动构建推送。
+
 ## Runtime
 
 - `CompetitionRuntime`
@@ -33,7 +61,7 @@
 - `GuidanceSession`
   - 封装 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
 - `RuntimeOutputs`
-  - 管理 RTP、共享内存、UDP telemetry、录制。
+  - 管理 RTP、共享内存、UDP/ZMQ telemetry、录制。
 - `tool_guidance`
   - 独立的 `GuidanceOpsApp`，用于校准和记录，不再走 `CompetitionRuntime`。
 
@@ -41,7 +69,7 @@
 
 ## Build
 
-### Docker (推荐)
+### Docker（推荐）
 
 Docker Hub: [`yukikaze2233/laser-guidance`](https://hub.docker.com/r/yukikaze2233/laser-guidance)
 
@@ -60,7 +88,7 @@ docker compose run --rm shell               # 交互 shell
 Foxglove 可视化（连接 `ws://localhost:8765`）：
 
 ```bash
-docker compose run --rm shell .script/foxglove  # 仅启动桥接
+docker compose run --rm shell foxglove-laser
 ```
 
 ### 宿主机依赖
@@ -74,6 +102,7 @@ docker compose run --rm shell .script/foxglove  # 仅启动桥接
 | **FT4222H** | `libft4222.so` 放 `vendor/ft4222/lib/`、`/opt/libft4222/` 或系统库路径 |
 | **Hik MVS SDK** | submodule 自带 vendor SDK，或 `MVS_SDK_ROOT` 指向系统安装路径 |
 | **ROS2 Jazzy** | rclcpp、visualization_msgs、std_msgs |
+| **ZMQ** | libzmq3-dev、cppzmq-dev |
 
 Docker 镜像已内置所有依赖，推荐使用 Docker 构建和运行。
 
@@ -91,9 +120,7 @@ Docker 构建：
 docker build -t laser-guidance .
 ```
 
-Hik 相机子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 `vendor/hikcamera/src/sdk` vendored SDK，缺失时回退到系统 MVS。可显式指定 `HIKCAMERA_SDK_MODE=system|vendor`，使用系统 MVS 时额外传 `-DMVS_SDK_ROOT=/path/to/MVS`。
-
-CMake 变量：
+### CMake 变量
 
 | 变量 | 说明 |
 |------|------|
@@ -105,11 +132,13 @@ CMake 变量：
 
 ### 构建脚本
 
+容器内任意路径可调用：
+
 ```bash
-.script/build                # 构建
-.script/clean                # 清理
-.script/docker-build         # Docker 构建（--push 推送）
-.script/foxglove             # 启动 Foxglove WebSocket 桥接
+build-laser                 # CMake 配置 + 编译
+clean-laser                 # 清理 build/
+docker-build-laser          # Docker 镜像构建（--push 推送）
+foxglove-laser              # 启动 Foxglove WebSocket 桥接
 ```
 
 ## Tools
@@ -130,12 +159,10 @@ CMake 变量：
 
 ## Config
 
-- `config/default.yaml`
-  - 默认运行配置。
-- `config/capture_hik.yaml`
-  - Hik 工业相机示例配置。
-- `config/geometry_run.yaml`
-  - 比赛/运行配置示例。
+- `config/default.yaml` — 默认运行配置
+- `config/capture_hik.yaml` — Hik 工业相机示例配置
+- `config/geometry_run.yaml` — 比赛/运行配置示例
+- `config/hik_competition.yaml` — Hik 相机比赛配置
 
 ## Repo Layout
 
@@ -145,7 +172,7 @@ src/capture/          capture backend
 src/vision/           inference and adapters
 src/guidance/         solver and galvo control
 src/runtime/          runtime core
-src/bridges/          FIFO / RTP / SHM / UDP bridges
+src/bridges/          FIFO / RTP / SHM / UDP / ZMQ bridges
 tools/                entrypoints
 tests/                automated tests
 config/               yaml configs

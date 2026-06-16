@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Launch Foxglove WebSocket bridge inside the container.
-# Usage: .script/foxglove [port]
+# Usage: foxglove-laser [port]
 # Default port: 8765
 
 PORT="${1:-8765}"

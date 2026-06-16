@@ -291,13 +291,15 @@ RUN useradd -m -u 1000 -o -s /bin/zsh yukikaze \
 USER yukikaze
 RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
   && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
-  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc \
+  && echo 'export PATH="${PATH}:/workspace/laser_guidance/.script"' >> ~/.zshrc
 
 # Root fallback: oh-my-zsh for root too
 USER root
 RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
   && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
-  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc \
+  && echo 'export PATH="${PATH}:/workspace/laser_guidance/.script"' >> ~/.zshrc
 
 WORKDIR /workspace/laser_guidance
 CMD ["/bin/zsh"]

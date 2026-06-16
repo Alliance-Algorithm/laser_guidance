@@ -7,7 +7,7 @@ cmd="${1:-}"
 
 case "$cmd" in
     build)
-        exec "$REPO_ROOT/.script/docker-build" "${@:2}"
+        exec "$REPO_ROOT/.script/docker-build-laser" "${@:2}"
         ;;
     push)
         docker push yukikaze2233/laser-guidance:latest

@@ -121,10 +121,10 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 
 ## 构建脚本
 
-- `.script/build` — CMake 构建
-- `.script/clean` — 清理 `build/`
-- `.script/docker-build` — Docker 镜像构建（`--push` 推送）
-- `.script/foxglove` — 启动 Foxglove WebSocket 桥接
+- `build-laser` — CMake 构建
+- `clean-laser` — 清理 `build/`
+- `docker-build-laser` — Docker 镜像构建（`--push` 推送）
+- `foxglove-laser` — 启动 Foxglove WebSocket 桥接
 
 ## 约束
 

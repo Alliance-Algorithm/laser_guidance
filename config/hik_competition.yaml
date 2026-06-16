@@ -2,7 +2,7 @@
 # HikCamera 比赛配置 (geometry command model)
 #
 # 使用方式:
-#   .script/build && ./build/tool_competition config/hik_competition.yaml
+#   build-laser && ./build/tool_competition config/hik_competition.yaml
 #   make set-config config/hik_competition.yaml && make competition
 # =============================================================================
 

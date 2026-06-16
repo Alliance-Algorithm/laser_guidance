@@ -13,7 +13,7 @@
 - `CompetitionRuntime` + `CompetitionProfile(main / preview)`
 - 独立的 `tool_guidance` / `GuidanceOpsApp`
 - ROS2 bridge 为强制编译依赖（Docker 内置），`ros_bridge.cpp` 始终以完整 ROS2 实现编译；ROS2 类型通过 PIMPL 隔离在 `.cpp` 内部，不泄露到公共头文件。
-- `.script/build` (构建)、`.script/clean` (清理)、`.script/docker-build` (镜像)、`.script/foxglove` (桥接) 为统一构建入口。
+- `build-laser` (构建)、`clean-laser` (清理)、`docker-build-laser` (镜像)、`foxglove-laser` (桥接) 为统一构建入口，容器内任意路径可调用。
 - 调试 overlay 与回放样本
 - 自动测试与工具入口
 - ONNX / TensorRT 推理后端切换

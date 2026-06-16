@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# ---- LLVM toolchain (参照 RMCS build-rmcs) ---------------------------------
+# ---- LLVM toolchain --------------------------------------------------------
 if [[ "$USE_CLANG" == "ON" ]]; then
     missing_tools=()
     for tool in clang clang++ ninja ld.lld llvm-ar llvm-ranlib; do

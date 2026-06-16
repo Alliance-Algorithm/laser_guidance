@@ -7,7 +7,7 @@ set-config:
 	@.script/set-config
 
 preview:
-	@.script/preview
+	@.script/preview-laser
 
 stream:
 	@.script/stream
@@ -19,4 +19,4 @@ stop:
 	@.script/stop
 
 competition:
-	@.script/competition
+	@.script/competition-laser

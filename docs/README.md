@@ -13,7 +13,7 @@
 - `runtime_operations.md` / `runtime-metrics.md`
   - 说明 freshness runtime 的运行约束、日志指标与运行模式。
 
-当前文档默认面向 standalone 使用，不再描述 RMCS / ROS 控制链接入计划。
+当前文档默认面向 standalone 使用。
 
 推荐阅读顺序：
 
