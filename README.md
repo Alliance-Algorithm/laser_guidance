@@ -3,110 +3,105 @@
 [![Docker Publish](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml)
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-yukikaze2233%2Flaser--guidance-blue)](https://github.com/Yukikaze2233/laser_guidance/pkgs/container/laser-guidance)
 
-`laser_guidance` 是一个激光视觉引导系统，当前覆盖：
+视觉引导激光振镜命中移动目标的实时系统。
 
-- `V4L2/UVC` 采集
-- Hik 工业相机采集
-- 原始视频录制与离线抽帧导出
-- YAML 配置加载
-- `CompetitionRuntime` 的 `main` / `preview` profile
-- 独立 `tool_guidance` 引导标定入口
-- ONNX / TensorRT 推理后端切换
-- FT4222H USB-to-SPI 振镜控制
-- Direct voltage 视觉到电压映射
-- 调试 overlay、回放样本与自动测试
+## Features
 
-当前不包含：
-
-- ws30 / lidar 接入
-- ROS 控制总线
-- 通用 planner / planner-like 抽象
+- **多后端采集** — V4L2/UVC 与 Hik 工业相机，由 `CaptureDevice` 统一 dispatch
+- **ONNX / TensorRT 推理** — 运行时切换，敌方颜色过滤，EKF 目标跟踪
+- **几何引导** — 相机标定 + 外参解算 → FT4222H USB-to-SPI 振镜控制
+- **硬件容错** — 相机或 FT4222 缺失时记录错误并继续运行，硬件恢复后自动重连
+- **ZMQ / UDP telemetry** — 二进制协议（0x47 0x4C magic），双通道并行发布
+- **RTP 推流 + 录制** — h264_nvenc 编码，原始视频会话录制与离线抽帧导出
+- **调试桥接** — RosBridge → Foxglove Studio / rviz2 可视化检测框、跟踪轨迹、瞄准点
+- **FIFO 运行时控制** — `/tmp/laser_cmd` 接收 `stream on/off`、`record on/off`、`enemy red/blue` 等命令
+- **独立标定入口** — `tool_guidance` 用于相机标定与命中记录，不经过竞赛 runtime
 
 ## Quick Start
 
 ```bash
 docker pull ghcr.io/yukikaze2233/laser-guidance:latest
 
-# 比赛模式
+# 比赛模式（后台守护）
 docker compose up -d
 
-# 比赛 + ffplay 推流
+# 比赛 + ffplay 拉流
 docker compose --profile stream up
 
-# 交互 shell
+# 交互 shell（开发/调试）
 docker compose run --rm shell
-```
 
-## 镜像标签
-
-| 标签 | 说明 |
-|------|------|
-| `latest` | main 分支最新构建 |
-| `sha-XXXXXX` | 指定 commit 构建 |
-| `vX.Y.Z` | 发行版本 |
-
-由 GitHub Actions 在 push main 或打 tag 时自动构建推送。
-
-## Runtime
-
-- `CompetitionRuntime`
-  - 唯一 public runtime facade。
-  - 只保留 `main` / `preview` 两种 profile。
-- `ControlLoop`
-  - 直接组合 `CaptureDevice`、`PerceptionRunner`、可选 `GuidanceSession`、`RuntimeOutputs`。
-- `CaptureDevice`
-  - 内部按配置选择 `v4l2` 或 `hikcamera` backend。
-- `PerceptionRunner`
-  - 管理 ONNX / TensorRT 推理实例和 runtime backend 切换。
-- `GuidanceSession`
-  - 封装 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
-- `RuntimeOutputs`
-  - 管理 RTP、共享内存、UDP/ZMQ telemetry、录制。
-- `tool_guidance`
-  - 独立的 `GuidanceOpsApp`，用于校准和记录，不再走 `CompetitionRuntime`。
-
-`tool_competition` 和 `tool_preview` 通过 FIFO `/tmp/laser_cmd` 接收运行时命令；`tool_guidance` 不使用这条链路。
-
-## Build
-
-### Docker（推荐）
-
-ghcr.io: [`yukikaze2233/laser-guidance`](https://github.com/Yukikaze2233/laser_guidance/pkgs/container/laser-guidance)
-
-```bash
-docker pull ghcr.io/yukikaze2233/laser-guidance:latest
-```
-
-启动：
-
-```bash
-docker compose up -d                        # 比赛模式
-docker compose --profile stream up          # 比赛 + ffplay
-docker compose run --rm shell               # 交互 shell
-```
-
-Foxglove 可视化（连接 `ws://localhost:8765`）：
-
-```bash
+# Foxglove 可视化 → 浏览器打开 ws://localhost:8765
 docker compose run --rm shell foxglove-laser
 ```
 
-### 宿主机依赖
+## Image Tags
 
-所有后端均为强制依赖，本地编译需要以下 SDK：
+| Tag | 说明 |
+|------|------|
+| `latest` | main 分支最新构建 |
+| `sha-XXXXXX` | 指定 commit |
+| `vX.Y.Z` | 发行版本 |
+
+push main 或打 tag 时由 GitHub Actions 自动构建推送至 ghcr.io。
+
+## Architecture
+
+### 视觉链路
+
+```
+CaptureDevice → PerceptionRunner → TargetTrack → GuidanceSession → RuntimeOutputs
+                                                       │
+                                                RosBridge → Foxglove/rviz2
+```
+
+### 设计原则
+
+**后端统一调度。** `CaptureDevice` 内部按配置选择 `v4l2` 或 `hikcamera` backend，外部只接触 `CaptureFormat`，不感知硬件细节。
+
+**硬件容错。** 相机或 FT4222H 初始化失败只记录错误，不退出进程。相机断开后自动进入重连循环（1s 间隔），恢复后重新打开流、重建 GuidanceSession。
+
+**依赖隐藏。** 重型依赖（ROS2、hikcamera SDK、ZMQ）通过 PIMPL 隔离在 `.cpp` 内部，公共头文件不泄露第三方类型，减少增量编译时间。
+
+**Typed 控制面。** `RuntimeCommand` / `RuntimeSnapshot` 是运行时唯一的 typed 控制面和观测面。新增能力优先扩 typed 接口，再考虑映射到 FIFO 协议。
+
+### 组件
+
+| 组件 | 职责 |
+|------|------|
+| `CaptureDevice` | 采集后端选择：v4l2 / hikcamera |
+| `PerceptionRunner` | ONNX / TensorRT 推理 + 敌方颜色过滤 + EKF 跟踪 |
+| `GuidanceSession` | FT4222H SPI 振镜控制 + 几何解算 + 瞄准执行 |
+| `RuntimeOutputs` | RTP 推流、SHM 共享内存、UDP/ZMQ telemetry、录制 |
+| `RosBridge` | RuntimeSnapshot → ROS2 topic（MarkerArray / Marker / Float64） |
+| `CompetitionRuntime` | main / preview profile，FIFO 命令入口 |
+| `GuidanceOpsApp` | 独立标定应用（tool_guidance），不经过竞赛 runtime |
+
+## Build
+
+### 容器内构建（推荐）
+
+```bash
+build-laser                 # CMake 配置 + 编译
+clean-laser                 # 清理 build/
+docker-build-laser --push   # 构建并推送镜像
+foxglove-laser              # 启动 Foxglove bridge
+```
+
+容器内任意路径可用（`.script/` 已加入 `$PATH`）。
+
+### 本地编译
+
+所有依赖均为强制：
 
 | 依赖 | 说明 |
 |------|------|
-| **ONNX Runtime** | 设置 `ONNXRUNTIME_ROOT` 环境变量或安装到系统路径 |
-| **TensorRT + CUDA** | CUDA Toolkit、TensorRT SDK（`libnvinfer`、`libnvonnxparser`、`libnvinfer_plugin`） |
-| **FT4222H** | `libft4222.so` 放 `vendor/ft4222/lib/`、`/opt/libft4222/` 或系统库路径 |
-| **Hik MVS SDK** | submodule 自带 vendor SDK，或 `MVS_SDK_ROOT` 指向系统安装路径 |
-| **ROS2 Jazzy** | rclcpp、visualization_msgs、std_msgs |
-| **ZMQ** | libzmq3-dev、cppzmq-dev |
-
-Docker 镜像已内置所有依赖，推荐使用 Docker 构建和运行。
-
-### 本地编译
+| ONNX Runtime | `ONNXRUNTIME_ROOT` 或系统路径 |
+| TensorRT + CUDA | `libnvinfer`、`libnvonnxparser`、`libnvinfer_plugin` |
+| FT4222H | `libft4222.so` → `vendor/ft4222/lib/` 或系统库路径 |
+| Hik MVS SDK | submodule 自带 vendored SDK，或 `MVS_SDK_ROOT` |
+| ROS2 Jazzy | rclcpp、visualization_msgs、std_msgs |
+| ZMQ | libzmq3-dev、cppzmq-dev |
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -114,68 +109,52 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-Docker 构建：
-
-```bash
-docker build -t laser-guidance .
-```
-
 ### CMake 变量
 
 | 变量 | 说明 |
 |------|------|
 | `ONNXRUNTIME_ROOT` | ONNX Runtime 安装路径 |
-| `CUDA_LIBRARY` | `libcudart.so` 路径（默认搜 `/opt/cuda/lib64`） |
-| `CUDA_RT_LIBRARY` | `libcuda.so` stub 路径（默认搜 `/opt/cuda/lib64/stubs`） |
-| `HIKCAMERA_SDK_MODE` | `AUTO`（默认）/ `vendor` / `system` |
+| `CUDA_LIBRARY` | `libcudart.so` 路径 |
+| `CUDA_RT_LIBRARY` | `libcuda.so` stub 路径 |
+| `HIKCAMERA_SDK_MODE` | `AUTO` / `vendor` / `system` |
 | `MVS_SDK_ROOT` | system 模式下的 MVS SDK 路径 |
-
-### 构建脚本
-
-容器内任意路径可调用：
-
-```bash
-build-laser                 # CMake 配置 + 编译
-clean-laser                 # 清理 build/
-docker-build-laser          # Docker 镜像构建（--push 推送）
-foxglove-laser              # 启动 Foxglove WebSocket 桥接
-```
 
 ## Tools
 
 ```bash
-./build/tool_competition
-./build/tool_preview
-./build/tool_guidance
-./build/tool_record
-./build/tool_model_infer
-./build/tool_calibrate
-./build/tool_transcode
-./build/tool_export
-./build/tool_dac8568_smoke
-./build/tool_galvo_smoke
-./build/tool_calib_solve
+./build/tool_competition      # 比赛模式
+./build/tool_preview          # 预览模式
+./build/tool_guidance         # 标定工具
+./build/tool_record           # 录制工具
+./build/tool_calibrate        # 相机标定
+./build/tool_model_infer      # 模型推理测试
+./build/tool_calib_solve      # 外参解算
+./build/tool_export           # 录像抽帧导出
+./build/tool_transcode        # 视频转码
 ```
 
 ## Config
 
-- `config/default.yaml` — 默认运行配置
-- `config/capture_hik.yaml` — Hik 工业相机示例配置
-- `config/geometry_run.yaml` — 比赛/运行配置示例
-- `config/hik_competition.yaml` — Hik 相机比赛配置
+| 文件 | 用途 |
+|------|------|
+| `config/default.yaml` | 默认运行配置（v4l2） |
+| `config/capture_hik.yaml` | Hik 工业相机示例 |
+| `config/geometry_run.yaml` | geometry 命令模型比赛配置（v4l2） |
+| `config/hik_competition.yaml` | Hik 相机 + geometry 比赛配置 |
 
 ## Repo Layout
 
 ```text
 include/              public API
-src/capture/          capture backend
-src/vision/           inference and adapters
-src/guidance/         solver and galvo control
-src/runtime/          runtime core
-src/bridges/          FIFO / RTP / SHM / UDP / ZMQ bridges
-tools/                entrypoints
-tests/                automated tests
-config/               yaml configs
-models/               onnx / engine files
-test_data/            sample data
+src/capture/          采集后端（v4l2 / hikcamera）
+src/vision/           推理与模型适配
+src/guidance/         几何解算与振镜控制
+src/runtime/          运行时核心
+src/bridges/          FIFO / RTP / SHM / UDP / ZMQ / ROS2
+src/io/               硬件 I/O（FT4222H SPI）
+tools/                可执行入口
+tests/                自动化测试
+config/               YAML 配置
+models/               ONNX / TensorRT 模型
+vendor/               第三方库（hikcamera SDK、FT4222H）
 ```
