@@ -68,6 +68,12 @@ struct RtpConfig {
 struct UdpConfig {
     bool enabled = false;
     std::string host = "127.0.0.1";
+    int port = 5002;
+};
+
+struct ZmqConfig {
+    bool enabled = false;
+    std::string host = "127.0.0.1";
     int port = 5001;
 };
 
@@ -167,6 +173,7 @@ struct Config {
     InferenceConfig inference{};
     RtpConfig rtp{};
     UdpConfig udp{};
+    ZmqConfig zmq{};
     EkfConfig ekf{};
     GuidanceConfig guidance{};
 };

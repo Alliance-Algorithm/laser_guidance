@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive TZ=Asia/Shanghai
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc-14 g++-14 cmake ninja-build pkg-config \
-    libopencv-dev libyaml-cpp-dev \
+    libopencv-dev libyaml-cpp-dev libzmq3-dev cppzmq-dev \
     libusb-1.0-0-dev \
     libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
     ffmpeg \
@@ -107,7 +107,6 @@ RUN rm -rf build && \
       -DONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT}" \
       -DCUDA_LIBRARY=/usr/local/cuda/lib64/libcudart.so \
       -DCUDA_RT_LIBRARY=/usr/local/cuda/lib64/stubs/libcuda.so \
-      -DWITH_ROS2_BRIDGE=ON \
     && cmake --build build --parallel \
     && mkdir -p /opt/laser_guidance/bin \
     && find build -maxdepth 1 -type f -executable -exec cp {} /opt/laser_guidance/bin/ \;
@@ -292,13 +291,15 @@ RUN useradd -m -u 1000 -o -s /bin/zsh yukikaze \
 USER yukikaze
 RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
   && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
-  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc \
+  && echo 'export PATH="${PATH}:/workspace/laser_guidance/.script"' >> ~/.zshrc
 
 # Root fallback: oh-my-zsh for root too
 USER root
 RUN sh -c "$(wget -qO- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended \
   && sed -i 's/ZSH_THEME="[a-z0-9\-]*"/ZSH_THEME="af-magic"/g' ~/.zshrc \
-  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc
+  && echo 'source /opt/ros/jazzy/setup.zsh' >> ~/.zshrc \
+  && echo 'export PATH="${PATH}:/workspace/laser_guidance/.script"' >> ~/.zshrc
 
 WORKDIR /workspace/laser_guidance
 CMD ["/bin/zsh"]

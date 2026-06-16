@@ -14,7 +14,7 @@
 services:
   competition:
     profiles: [""]
-    image: yukikaze2233/laser-guidance:latest
+    image: ghcr.io/yukikaze2233/laser-guidance:latest
     build:
       context: .
     privileged: true
@@ -56,7 +56,7 @@ services:
     build:
       context: .
       target: develop
-    image: yukikaze2233/laser-guidance:latest
+    image: ghcr.io/yukikaze2233/laser-guidance:latest
     privileged: true
     network_mode: host
     ipc: host
@@ -90,7 +90,7 @@ services:
     build:
       context: .
       target: develop
-    image: yukikaze2233/laser-guidance:latest
+    image: ghcr.io/yukikaze2233/laser-guidance:latest
     user: "1000:1000"
     privileged: true
     network_mode: host

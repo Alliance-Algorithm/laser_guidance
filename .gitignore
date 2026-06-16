@@ -7,6 +7,9 @@ videos/
 label_upload/
 .sisyphus/
 .omo/
+.codex/
+.mimo/
+.mimocode/
 
 # python
 __pycache__/

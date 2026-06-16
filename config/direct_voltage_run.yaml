@@ -48,6 +48,11 @@ udp:
   host: "127.0.0.1"
   port: 5001
 
+zmq:
+  enabled: false
+  host: "127.0.0.1"
+  port: 5001
+
 ekf:
   enabled: true
   process_noise_q: 0.15

@@ -130,26 +130,39 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
 
     auto format = capture_.open();
     if (!format) {
-        return std::unexpected(format.error());
+        std::println(
+            stderr, "camera init failed: {}, will retry...", format.error());
+        negotiated_format_.reset();
+    } else {
+        negotiated_format_ = *format;
     }
-    negotiated_format_ = *format;
 
     if (auto result = perception_.start(); !result) {
         return std::unexpected(result.error());
     }
 
-    if (config_.guidance.enabled && config_.guidance.calib_mode) {
-        auto guidance = GuidanceSession::create_manual(config_, *format, calibration_state_);
-        if (!guidance) {
-            return std::unexpected(guidance.error());
+    if (config_.guidance.enabled && negotiated_format_.has_value()) {
+        if (config_.guidance.calib_mode) {
+            auto guidance = GuidanceSession::create_manual(
+                config_, *negotiated_format_, calibration_state_);
+            if (!guidance) {
+                std::println(
+                    stderr, "guidance init failed: {}, guidance disabled",
+                    guidance.error());
+            } else {
+                guidance_ = std::move(*guidance);
+            }
+        } else {
+            auto guidance = GuidanceSession::create_auto(
+                config_, *negotiated_format_);
+            if (!guidance) {
+                std::println(
+                    stderr, "guidance init failed: {}, guidance disabled",
+                    guidance.error());
+            } else {
+                guidance_ = std::move(*guidance);
+            }
         }
-        guidance_ = std::move(*guidance);
-    } else if (config_.guidance.enabled) {
-        auto guidance = GuidanceSession::create_auto(config_, *format);
-        if (!guidance) {
-            return std::unexpected(guidance.error());
-        }
-        guidance_ = std::move(*guidance);
     }
 
     if (config_.guidance.calib_mode

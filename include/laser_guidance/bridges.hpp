@@ -51,6 +51,18 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+class ZmqTelemetryPublisher {
+public:
+    explicit ZmqTelemetryPublisher(ZmqConfig config);
+    ~ZmqTelemetryPublisher();
+
+    auto publish(const RuntimeSnapshot& snapshot) -> void;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 class ShmFramePublisher {
 public:
     ShmFramePublisher();

@@ -1,3 +1,26 @@
+# =============================================================================
+# HikCamera 比赛配置 (geometry command model)
+#
+# 使用方式:
+#   build-laser && ./build/tool_competition config/hik_competition.yaml
+#   make set-config config/hik_competition.yaml && make competition
+# =============================================================================
+
+capture_backend: hikcamera
+
+# --- HikCamera 工业相机参数 --------------------------------------------------
+hik:
+  device_id: ""
+  timeout_ms: 2000
+  exposure_us: 2000.0
+  framerate: 80.0
+  gain: 16.9807
+  invert_image: false
+  software_sync: false
+  trigger_mode: false
+  fixed_framerate: true
+
+# --- V4L2 参数 (hikcamera 后端时忽略，保留供校验通过) -------------------------
 v4l2:
   device_path: /dev/v4l/by-id/usb-MACROSILICON_Hagibis_20210623-video-index0
   width: 1920
@@ -40,13 +63,13 @@ streaming:
   host: "127.0.0.1"
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
-  encoder: "libx264"
+  encoder: "h264_nvenc"
   bitrate: "50M"
 
 udp:
   enabled: true
   host: "127.0.0.1"
-  port: 5001
+  port: 5002
 
 zmq:
   enabled: false
@@ -84,7 +107,6 @@ guidance:
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0
-  # Rotation extrinsics from 242-point calibration at 18.4m (2026-05-19)
   r_x_deg: 0.31
   r_y_deg: 0.05
   r_z_deg: 1.82

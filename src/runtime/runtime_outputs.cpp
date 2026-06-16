@@ -8,6 +8,7 @@ RuntimeOutputs::RuntimeOutputs(
     , record_options_(std::move(record_options))
     , capabilities_(capabilities)
     , telemetry_(config_.udp)
+    , zmq_telemetry_(config_.zmq)
     , shm_publisher_()
     , rtp_publisher_(config_.rtp) {}
 
@@ -62,6 +63,7 @@ auto RuntimeOutputs::record_current(const cv::Mat& frame) -> void {
 auto RuntimeOutputs::publish_snapshot(const RuntimeSnapshot& snapshot) -> void {
     if (capabilities_.allow_telemetry) {
         telemetry_.publish(snapshot);
+        zmq_telemetry_.publish(snapshot);
     }
 }
 

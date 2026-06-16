@@ -9,7 +9,6 @@ set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
 # All backends are unconditionally required (no compile-time options / #ifdef).
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to ONNX Runtime installation")
-option(WITH_ROS2_BRIDGE "Enable ROS2 visualization bridge for Foxglove/rviz." OFF)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O2 -Wall -Wextra -Wpedantic)
@@ -17,6 +16,17 @@ endif()
 
 find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc videoio)
 find_package(yaml-cpp REQUIRED)
+
+find_library(ZMQ_LIBRARY zmq)
+find_path(ZMQ_INCLUDE_DIR zmq.hpp PATH_SUFFIXES include)
+if(NOT ZMQ_LIBRARY OR NOT ZMQ_INCLUDE_DIR)
+  message(FATAL_ERROR "libzmq is required.")
+endif()
+add_library(zmq::zmq UNKNOWN IMPORTED)
+set_target_properties(zmq::zmq PROPERTIES
+  IMPORTED_LOCATION "${ZMQ_LIBRARY}"
+  INTERFACE_INCLUDE_DIRECTORIES "${ZMQ_INCLUDE_DIR}")
+message(STATUS "ZMQ enabled")
 
 file(GLOB_RECURSE ALL_SOURCES src/*.cpp)
 file(GLOB_RECURSE SUPPORT_SOURCES
@@ -112,14 +122,11 @@ add_library(ft4222::ft4222 SHARED IMPORTED)
 set_target_properties(ft4222::ft4222 PROPERTIES IMPORTED_LOCATION "${FT4222_LIBRARY}")
 message(STATUS "FT4222H enabled (${FT4222_LIBRARY})")
 
-# ---- ROS2 Bridge (optional) ---------------------------------------------------
-if(WITH_ROS2_BRIDGE)
-  find_package(rclcpp REQUIRED)
-  find_package(visualization_msgs REQUIRED)
-  find_package(std_msgs REQUIRED)
-  add_compile_definitions(WITH_ROS2_BRIDGE=1)
-  message(STATUS "ROS2 bridge enabled")
-endif()
+# ---- ROS2 Bridge (always enabled) ----------------------------------------------
+find_package(rclcpp REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+message(STATUS "ROS2 bridge enabled")
 
 # ---- Hikcamera (always enabled) ------------------------------------------------
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/hikcamera/CMakeLists.txt")
@@ -144,7 +151,7 @@ message(STATUS "Hikcamera runtime dir: ${HIKCAMERA_RUNTIME_DIR}")
 message(STATUS "Hikcamera enabled")
 
 # ---- common settings -----------------------------------------------------------
-set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread ft4222::ft4222 hikcamera)
+set(COMMON_LIBS yaml-cpp::yaml-cpp ${OpenCV_LIBS} rt pthread ft4222::ft4222 hikcamera zmq::zmq)
 
 set(COMMON_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -176,15 +183,11 @@ target_include_directories(laser_guidance_guidance PUBLIC ${COMMON_INCLUDES})
 target_link_libraries(laser_guidance_guidance PUBLIC laser_guidance_support ${COMMON_LIBS})
 
 add_library(laser_guidance_bridges ${BRIDGE_SOURCES})
-target_include_directories(laser_guidance_bridges PUBLIC ${COMMON_INCLUDES})
+target_include_directories(laser_guidance_bridges PRIVATE ${COMMON_INCLUDES}
+  ${rclcpp_INCLUDE_DIRS} ${visualization_msgs_INCLUDE_DIRS} ${std_msgs_INCLUDE_DIRS})
 target_link_libraries(laser_guidance_bridges PUBLIC
-  laser_guidance_support laser_guidance_tracking ${COMMON_LIBS})
-if(WITH_ROS2_BRIDGE)
-  target_include_directories(laser_guidance_bridges PUBLIC
-    ${rclcpp_INCLUDE_DIRS} ${visualization_msgs_INCLUDE_DIRS} ${std_msgs_INCLUDE_DIRS})
-  target_link_libraries(laser_guidance_bridges PUBLIC
-    ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES})
-endif()
+  laser_guidance_support laser_guidance_tracking ${COMMON_LIBS}
+  ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES})
 
 add_library(laser_guidance_runtime ${RUNTIME_SOURCES} ${CAPTURE_SOURCES})
 target_include_directories(laser_guidance_runtime PUBLIC ${COMMON_INCLUDES})

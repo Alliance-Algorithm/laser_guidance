@@ -188,6 +188,15 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.udp.port = udp_cfg["port"].as<int>();
     }
 
+    if (const YAML::Node zmq_cfg = yaml["zmq"]) {
+        if (zmq_cfg["enabled"])
+            config.zmq.enabled = zmq_cfg["enabled"].as<bool>();
+        if (zmq_cfg["host"])
+            config.zmq.host = zmq_cfg["host"].as<std::string>();
+        if (zmq_cfg["port"])
+            config.zmq.port = zmq_cfg["port"].as<int>();
+    }
+
     if (const YAML::Node ekf = yaml["ekf"]) {
         if (ekf["enabled"])
             config.ekf.enabled = ekf["enabled"].as<bool>();
