@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-IMAGE="yukikaze2233/laser-guidance:latest"
+IMAGE="ghcr.io/yukikaze2233/laser-guidance:latest"
 PUSH=false
 
 while [[ $# -gt 0 ]]; do

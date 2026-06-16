@@ -1,7 +1,7 @@
 # laser_guidance
 
 [![Docker Publish](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Yukikaze2233/laser_guidance/actions/workflows/docker-publish.yml)
-[![Docker Hub](https://img.shields.io/docker/v/yukikaze2233/laser-guidance/latest?color=blue&label=Docker%20Hub)](https://hub.docker.com/r/yukikaze2233/laser-guidance)
+[![ghcr.io](https://img.shields.io/badge/ghcr.io-yukikaze2233%2Flaser--guidance-blue)](https://github.com/Yukikaze2233/laser_guidance/pkgs/container/laser-guidance)
 
 `laser_guidance` 是一个激光视觉引导系统，当前覆盖：
 
@@ -25,7 +25,7 @@
 ## Quick Start
 
 ```bash
-docker pull yukikaze2233/laser-guidance:latest
+docker pull ghcr.io/yukikaze2233/laser-guidance:latest
 
 # 比赛模式
 docker compose up -d
@@ -71,10 +71,10 @@ docker compose run --rm shell
 
 ### Docker（推荐）
 
-Docker Hub: [`yukikaze2233/laser-guidance`](https://hub.docker.com/r/yukikaze2233/laser-guidance)
+ghcr.io: [`yukikaze2233/laser-guidance`](https://github.com/Yukikaze2233/laser_guidance/pkgs/container/laser-guidance)
 
 ```bash
-docker pull yukikaze2233/laser-guidance:latest
+docker pull ghcr.io/yukikaze2233/laser-guidance:latest
 ```
 
 启动：
