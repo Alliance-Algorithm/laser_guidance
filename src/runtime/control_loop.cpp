@@ -1,6 +1,7 @@
 #include "runtime/control_loop.hpp"
 
 #include <chrono>
+#include <print>
 #include <utility>
 
 #include <opencv2/highgui.hpp>
@@ -224,25 +225,33 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
 
     const auto open_result = capture_.open();
     if (!open_result) {
-        return std::unexpected(open_result.error());
+        std::println(
+            stderr, "camera init failed: {}, will retry...", open_result.error());
+        sync_last_error("Camera open failed: " + open_result.error());
+    } else {
+        negotiated_format_ = *open_result;
     }
-    negotiated_format_ = *open_result;
 
     if (auto result = perception_.start(); !result) {
         return std::unexpected(result.error());
     }
     perception_.set_enemy_color(state_.enemy_color);
 
-    if (guidance_enabled_in_profile()) {
+    if (guidance_enabled_in_profile() && negotiated_format_.has_value()) {
         auto guidance = GuidanceSession::create_auto(config_, *negotiated_format_);
         if (!guidance) {
-            return std::unexpected(guidance.error());
+            std::println(
+                stderr, "guidance init failed: {}, guidance disabled", guidance.error());
+            sync_last_error("Guidance init failed: " + guidance.error());
+        } else {
+            guidance_ = std::move(*guidance);
         }
-        guidance_ = std::move(*guidance);
     }
 
-    outputs_.start(
-        *negotiated_format_, state_.streaming_requested, state_.recording_requested);
+    if (negotiated_format_.has_value()) {
+        outputs_.start(
+            *negotiated_format_, state_.streaming_requested, state_.recording_requested);
+    }
 
     ros_bridge_ = std::make_unique<RosBridge>();
 
@@ -272,10 +281,25 @@ auto ControlLoop::run_loop() -> void {
 
             sync_last_error("Attempting to reconnect camera...");
             if (auto reconnect_result = capture_.reconnect(); reconnect_result) {
-                sync_last_error("Camera reconnected successfully");
+                std::println("camera reconnected");
+                sync_last_error("Camera reconnected");
+                negotiated_format_ = capture_.negotiated_format();
+                if (guidance_enabled_in_profile() && !guidance_ && negotiated_format_.has_value()) {
+                    auto guidance = GuidanceSession::create_auto(
+                        config_, *negotiated_format_);
+                    if (guidance) {
+                        guidance_ = std::move(*guidance);
+                        std::println("guidance re-initialized after camera reconnect");
+                    } else {
+                        std::println(
+                            stderr, "guidance re-init failed: {}", guidance.error());
+                    }
+                }
                 consecutive_errors = 0;
                 next_reconnect_at.reset();
             } else {
+                std::println(
+                    stderr, "reconnect failed: {}", reconnect_result.error());
                 sync_last_error("Reconnect failed: " + reconnect_result.error());
                 consecutive_errors = kMaxConsecutiveErrors;
                 next_reconnect_at = Clock::now() + kReconnectRetryDelay;
@@ -291,6 +315,9 @@ auto ControlLoop::run_loop() -> void {
             if (consecutive_errors >= kMaxConsecutiveErrors) {
                 consecutive_errors = kMaxConsecutiveErrors;
                 next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                std::println(
+                    stderr, "camera read failed repeatedly: {}, entering reconnect state",
+                    frame_result.error());
                 sync_last_error("Camera read failed repeatedly; entering reconnect state");
             } else {
                 std::this_thread::sleep_for(kReadErrorDelay);
