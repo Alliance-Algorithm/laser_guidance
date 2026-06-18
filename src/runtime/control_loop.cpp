@@ -233,12 +233,13 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     }
 
     if (auto result = perception_.start(); !result) {
-        return std::unexpected(result.error());
+        std::println(stderr, "perception init failed: {}, degraded runtime", result.error());
+        sync_last_error("Perception init failed: " + result.error());
     }
     perception_.set_enemy_color(state_.enemy_color);
 
     if (guidance_enabled_in_profile() && negotiated_format_.has_value()) {
-        auto guidance = GuidanceSession::create_auto(config_, *negotiated_format_);
+        auto guidance = try_create_guidance_session(*negotiated_format_);
         if (!guidance) {
             std::println(
                 stderr, "guidance init failed: {}, guidance disabled", guidance.error());
@@ -262,6 +263,11 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     return {};
 }
 
+auto ControlLoop::try_create_guidance_session(const CaptureFormat& format)
+    -> std::expected<GuidanceSession, std::string> {
+    return GuidanceSession::create_auto(config_, format);
+}
+
 auto ControlLoop::run_loop() -> void {
     using Clock = std::chrono::steady_clock;
 
@@ -269,7 +275,9 @@ auto ControlLoop::run_loop() -> void {
     constexpr int kMaxConsecutiveErrors = 3;
     constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
     constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
+    constexpr auto kGuidanceRetryDelay = std::chrono::seconds(1);
     std::optional<Clock::time_point> next_reconnect_at;
+    std::optional<Clock::time_point> next_guidance_retry_at;
 
     while (!stop_requested()) {
         if (next_reconnect_at.has_value()) {
@@ -285,25 +293,15 @@ auto ControlLoop::run_loop() -> void {
                 sync_last_error("Camera reconnected");
 
                 auto new_format = capture_.negotiated_format();
-                std::optional<GuidanceSession> new_guidance;
-                if (guidance_enabled_in_profile() && !guidance_ && new_format.has_value()) {
-                    auto guidance = GuidanceSession::create_auto(
-                        config_, *new_format);
-                    if (guidance) {
-                        new_guidance = std::move(*guidance);
-                    } else {
-                        std::println(
-                            stderr, "guidance re-init failed: {}", guidance.error());
-                    }
-                }
 
                 {
                     std::scoped_lock lock(state_mutex_);
                     negotiated_format_ = std::move(new_format);
-                    if (new_guidance) {
-                        guidance_ = std::move(*new_guidance);
-                        std::println("guidance re-initialized after camera reconnect");
-                    }
+                }
+
+                if (guidance_enabled_in_profile()) {
+                    guidance_.reset();
+                    next_guidance_retry_at = Clock::now();
                 }
 
                 consecutive_errors = 0;
@@ -318,6 +316,21 @@ auto ControlLoop::run_loop() -> void {
             continue;
         }
 
+        if (guidance_enabled_in_profile() && !guidance_ && negotiated_format_.has_value()) {
+            const auto now = Clock::now();
+            if (!next_guidance_retry_at.has_value() || now >= *next_guidance_retry_at) {
+                auto guidance = try_create_guidance_session(*negotiated_format_);
+                if (guidance) {
+                    guidance_ = std::move(*guidance);
+                    next_guidance_retry_at.reset();
+                    std::println("guidance initialized");
+                } else {
+                    std::println(stderr, "guidance retry failed: {}", guidance.error());
+                    next_guidance_retry_at = now + kGuidanceRetryDelay;
+                }
+            }
+        }
+
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             sync_last_error(frame_result.error());
@@ -326,6 +339,11 @@ auto ControlLoop::run_loop() -> void {
             if (consecutive_errors >= kMaxConsecutiveErrors) {
                 consecutive_errors = kMaxConsecutiveErrors;
                 next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                if (guidance_) {
+                    guidance_->shutdown();
+                    guidance_.reset();
+                }
+                next_guidance_retry_at = Clock::now() + kGuidanceRetryDelay;
                 std::println(
                     stderr, "camera read failed repeatedly: {}, entering reconnect state",
                     frame_result.error());
@@ -353,7 +371,10 @@ auto ControlLoop::run_loop() -> void {
             sync_last_error(error);
         }
 
-        if (!perception_.submit(frame.frame)) {
+        if (perception_.degraded()) {
+            frame.detection = {};
+            frame.ekf_state.reset();
+        } else if (!perception_.submit(frame.frame)) {
             sync_last_error(perception_.last_error());
             request_stop();
             break;
