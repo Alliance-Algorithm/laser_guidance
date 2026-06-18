@@ -156,6 +156,7 @@ message(STATUS "Hikcamera SDK mode: ${HIKCAMERA_SDK_MODE}")
 message(STATUS "Hikcamera SDK root: ${HIKCAMERA_SDK_ROOT}")
 message(STATUS "Hikcamera runtime dir: ${HIKCAMERA_RUNTIME_DIR}")
 message(STATUS "Hikcamera enabled")
+set_property(TARGET hikcamera APPEND PROPERTY BUILD_RPATH "$ORIGIN/hik-sdk")
 
 # ---- INTERFACE hub: common deps, flags, includes (replaces COMMON_LIBS) -------
 add_library(laser_guidance_common INTERFACE)
