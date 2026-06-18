@@ -79,10 +79,15 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 
 `GuidanceSession` 负责：
 
-- 打开 FT4222H
+- 通过 `Ft4222Spi` 动态加载 `libft4222.so`（不再为进程级硬依赖）
 - 构建 `AimSolver`
 - 构建 `GalvoExecutor`
 - 在矩形扫描模式下启用 `ScanController`
+
+`Ft4222Spi` 的运行时加载策略：
+- runtime（`GuidanceSession`）默认使用高速 SPI 时钟（`k60MHz / kDiv2` ≈ 30 MHz）
+- smoke 工具（`tool_dac8568_smoke`、`tool_galvo_smoke`）默认使用保守低速（`kDiv64`）
+- 缺 `libft4222.so` 或缺板卡时，guidance 初始化失败但不阻塞主流程
 
 `tool_guidance` 的标定键盘、CSV 记录、purple hit edge 记录都在 `GuidanceOpsApp` 内部处理。
 
@@ -132,4 +137,7 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 - 新控制项先扩 `RuntimeCommand` / `RuntimeSnapshot`。
 - 新输出先扩 `RuntimeOutputs`，不要回塞主循环。
 - 新引导能力优先扩 `GuidanceSession` / `AimSolver` / `GalvoExecutor`。
-- ROS2 bridge 为强制依赖（Docker 内置），ROS2 类型通过 PIMPL 隔离在 `ros_bridge.cpp` 内部。
+- ROS2 bridge 为强制依赖（Docker 内置），ROS2 类型通过 PIMPL 隔离在 `ros_bridge.cpp` 内部；`RosBridge` 构造时自行调用 `rclcpp::init()` 若尚未初始化。
+- FT4222 为主入口工具级运行时依赖，不进 `CompetitionRuntime` 直接链接；指导层通过 `dlopen` 装载。
+- inference backend 遵循"首选 + 必要时降级"策略，ONNX/TensorRT 不再同时无条件初始化。
+- streaming encoder 在无 CUDA 设备时自动回退至 `libx264`。

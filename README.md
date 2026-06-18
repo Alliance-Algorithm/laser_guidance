@@ -9,8 +9,8 @@
 
 - **多后端采集** — V4L2/UVC 与 Hik 工业相机，由 `CaptureDevice` 统一 dispatch
 - **ONNX / TensorRT 推理** — 运行时切换，敌方颜色过滤，EKF 目标跟踪
-- **几何引导** — 相机标定 + 外参解算 → FT4222H USB-to-SPI 振镜控制
-- **硬件容错** — 相机或 FT4222 缺失时记录错误并继续运行，硬件恢复后自动重连
+- **几何引导** — 相机标定 + 外参解算 → FT4222H USB-to-SPI 振镜控制（runtime 默认高速 SPI，smoke 工具默认保守低速）
+- **硬件容错** — 相机或 FT4222 缺失时记录错误并继续运行；FT4222 作为 guidance 级运行时依赖，硬件恢复后自动重连
 - **ZMQ / UDP telemetry** — 二进制协议（0x47 0x4C magic），双通道并行发布
 - **RTP 推流 + 录制** — h264_nvenc 编码，原始视频会话录制与离线抽帧导出
 - **调试桥接** — RosBridge → Foxglove Studio / rviz2 可视化检测框、跟踪轨迹、瞄准点

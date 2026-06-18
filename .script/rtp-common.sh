@@ -23,7 +23,13 @@ laser_wait_for_sdp() {
     done
 
     echo "timed out waiting for RTP SDP at $sdp_path"
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "daemon still running but no SDP yet (no camera frames?)"
+        if [ -n "$log_file" ] && [ -s "$log_file" ]; then
+            echo "--- $log_file (last 20 lines) ---"
+            tail -20 "$log_file"
+        fi
+    else
         if [ -n "$log_file" ] && [ -s "$log_file" ]; then
             echo "--- $log_file ---"
             sed -n '1,120p' "$log_file"

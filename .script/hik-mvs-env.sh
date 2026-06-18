@@ -113,6 +113,7 @@ laser_configure_hik_mvs_env() {
             sdk_root="${sdk_root:-${MVS_SDK_ROOT:-$vendor_sdk_root}}"
             runtime_dir="${runtime_dir:-$sdk_root/lib}"
             common_runenv="$runtime_dir"
+            allusersprofile="$sdk_root/MVFG"
 
             if [ ! -e "$runtime_dir/libMvCameraControl.so" ]; then
                 echo "Missing vendor Hik MVS runtime: $runtime_dir/libMvCameraControl.so" >&2
@@ -123,6 +124,7 @@ laser_configure_hik_mvs_env() {
             export MVS_SDK_ROOT="$sdk_root"
             export MVCAM_SDK_PATH="$sdk_root"
             export MVCAM_COMMON_RUNENV="$common_runenv"
+            export ALLUSERSPROFILE="$allusersprofile"
             if [ -d "$sdk_root/lib/CLProtocol" ]; then
                 export MVCAM_GENICAM_CLPROTOCOL="$sdk_root/lib/CLProtocol"
             fi
