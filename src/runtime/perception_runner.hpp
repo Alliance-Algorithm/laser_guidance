@@ -51,6 +51,7 @@ public:
     [[nodiscard]] auto active_backend_name() const -> std::string;
     [[nodiscard]] auto enabled() const -> bool;
     [[nodiscard]] auto last_error() const -> std::string;
+    [[nodiscard]] auto degraded() const -> bool;
 
 private:
     auto run() -> void;

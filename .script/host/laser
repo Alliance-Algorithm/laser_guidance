@@ -16,14 +16,15 @@ case "$cmd" in
         docker pull ghcr.io/yukikaze2233/laser-guidance:latest
         ;;
     foxglove)
+        exec "$REPO_ROOT/.script/foxglove-laser" "${@:2}"
+        ;;
+    shell)
         cd "$REPO_ROOT"
-        docker compose up -d dev 2>/dev/null || true
-        docker compose exec dev \
-            bash -c "source /opt/ros/jazzy/setup.bash && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765"
+        docker compose --profile dev up -d dev 2>/dev/null || true
+        exec docker compose --profile dev exec -u 1000:1000 dev zsh
         ;;
     *)
         cd "$REPO_ROOT"
-        docker compose up -d dev 2>/dev/null || true
-        exec docker compose exec -u 1000:1000 dev zsh
+        exec zsh
         ;;
 esac

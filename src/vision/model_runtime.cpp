@@ -11,6 +11,8 @@
 
 #include <onnxruntime/core/session/onnxruntime_cxx_api.h>
 
+#include "vision/cuda_check.hpp"
+
 namespace rmcs_laser_guidance {
 
 namespace {
@@ -211,6 +213,11 @@ struct ModelRuntime::Details {
         , session_options() {
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
         try {
+            if (!cuda_device_available()) {
+                execution_provider = "CPU";
+                provider_message = "CUDA EP unavailable, using CPU execution provider";
+                return;
+            }
             OrtCUDAProviderOptions cuda_options;
             cuda_options.device_id = 0;
             session_options.AppendExecutionProvider_CUDA(cuda_options);

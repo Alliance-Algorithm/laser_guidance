@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Launch Foxglove WebSocket bridge inside the container.
-# Usage: foxglove-laser [port]
-# Default port: 8765
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PORT="${1:-8765}"
-echo "=== Launching Foxglove bridge on ws://0.0.0.0:${PORT} ==="
 
-if ! command -v ros2 &>/dev/null; then
-    echo "ERROR: ros2 not found. Is ROS2 sourced?"
-    exit 1
+launch_in_container() {
+    cd "$REPO_ROOT"
+    docker compose --profile dev up -d dev 2>/dev/null || true
+    docker compose --profile dev exec -T dev \
+        bash -c "source /opt/ros/jazzy/setup.bash && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=${PORT}"
+}
+
+if command -v ros2 &>/dev/null; then
+    echo "=== Launching Foxglove bridge on ws://0.0.0.0:${PORT} ==="
+    ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:="${PORT}"
+else
+    echo "=== ros2 not found on host — launching in container ==="
+    launch_in_container
 fi
-
-ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:="${PORT}"

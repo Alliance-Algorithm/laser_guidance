@@ -58,6 +58,8 @@ private:
     auto update_status_locked() -> void;
     auto sync_last_error(std::string error) -> void;
     auto update_hit_progress(const DetectionBatch& detection) -> void;
+    auto try_create_guidance_session(const CaptureFormat& format)
+        -> std::expected<GuidanceSession, std::string>;
     [[nodiscard]] auto show_window() const -> bool;
     [[nodiscard]] auto window_name() const -> const char*;
     [[nodiscard]] auto allows_streaming() const -> bool;

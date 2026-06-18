@@ -1,6 +1,8 @@
 #include <filesystem>
 #include <print>
 
+#include <cstdlib>
+
 #include "config.hpp"
 #include "laser_guidance/support.hpp"
 #include "runtime/guidance_ops_app.hpp"

@@ -27,6 +27,16 @@
 - ws30 / lidar 接入
 - 通用 planner / solver 框架
 
+当前特殊约束：
+
+- ROS2 bridge 为强制编译依赖（Docker 内置），`RosBridge` 构造时自行调用 `rclcpp::init()` 若尚未初始化。
+- FT4222 `libft4222.so` 由 `src/io/ft4222_spi.cpp` 通过 `dlopen` 动态加载，缺库或缺板卡时只影响 guidance，不阻塞主流程。
+- `tools/dac8568_smoke` / `tools/galvo_smoke` 保留硬失败语义。
+- 推理后端初始化遵循"先首选择后降级"策略，不再同时无条件构造 ONNX 和 TensorRT。
+- `PerceptionRunner::degraded()` 反映后端实际可用性。
+- 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
+- 运行时日志写入仓库根目录 `laser_daemon.log`（stream）和 `laser_competition.log`（competition）。
+
 ## 目录职责
 
 - `include/`

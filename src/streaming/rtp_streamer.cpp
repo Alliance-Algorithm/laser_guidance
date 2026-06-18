@@ -1,6 +1,9 @@
 #include "streaming/rtp_streamer.hpp"
 
+#include "vision/cuda_check.hpp"
+
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -38,10 +41,17 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
     if (!details_->config.enabled)
         return false;
 
-    const auto& encoder = details_->config.encoder;
+    std::string encoder = details_->config.encoder;
     const int gop = std::max(1, static_cast<int>(framerate > 0.0F ? framerate : 60.0F));
     const std::string x264_params = std::format(
         "keyint={}:min-keyint={}:scenecut=0:repeat-headers=1", gop, gop);
+
+    if (encoder.find("nvenc") != std::string::npos && !cuda_device_available()) {
+        std::println(stderr,
+                     "RTP streamer: nvenc unavailable (no CUDA device), using libx264");
+        encoder = "libx264";
+    }
+
     std::string encoder_opts;
     if (encoder.find("nvenc") != std::string::npos) {
         encoder_opts = std::format(
@@ -144,7 +154,13 @@ auto RtpStreamer::push(cv::Mat&& bgr_frame) -> void {
 }
 
 auto RtpStreamer::stop() -> void {
-    details_->running = false;
+    if (!details_->running.load() && !details_->writer.joinable() && details_->pipe == nullptr) {
+        return;
+    }
+    const bool was_running = details_->running.exchange(false);
+    if (!was_running && !details_->writer.joinable() && details_->pipe == nullptr) {
+        return;
+    }
     details_->cv.notify_one();
     if (details_->writer.joinable())
         details_->writer.join();
@@ -155,7 +171,9 @@ auto RtpStreamer::stop() -> void {
         }
         details_->pipe = nullptr;
     }
-    std::println("RTP streaming stopped");
+    if (was_running) {
+        std::println("RTP streaming stopped");
+    }
 }
 
 auto RtpStreamer::is_active() const -> bool { return details_->running.load(); }

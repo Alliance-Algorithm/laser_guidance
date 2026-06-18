@@ -60,6 +60,9 @@ auto make_backend_config(const Config& config, const InferenceBackendKind backen
     backend_config.backend = backend;
     if (backend == InferenceBackendKind::tensorrt && !config.runtime.engine_path.empty()) {
         backend_config.model_path = config.runtime.engine_path;
+    } else if (backend == InferenceBackendKind::model
+               && config.inference.model_path.extension() == ".engine") {
+        backend_config.model_path.clear();
     }
     return backend_config;
 }
@@ -199,6 +202,11 @@ auto PerceptionRunner::last_error() const -> std::string {
     return last_error_;
 }
 
+auto PerceptionRunner::degraded() const -> bool {
+    std::scoped_lock lock(state_mutex_);
+    return !enabled() || !active_backend_.has_value();
+}
+
 auto PerceptionRunner::run() -> void {
     try {
         while (true) {
@@ -277,19 +285,34 @@ auto PerceptionRunner::initialize_backends() -> std::expected<void, std::string>
         return {};
     }
 
-    auto onnx = std::make_unique<ModelInfer>(make_backend_config(config_, InferenceBackendKind::model));
-    auto trt = std::make_unique<ModelInfer>(make_backend_config(config_, InferenceBackendKind::tensorrt));
+    const bool prefer_trt = config_.inference.backend == InferenceBackendKind::tensorrt;
+    auto primary = std::make_unique<ModelInfer>(make_backend_config(
+        config_, prefer_trt ? InferenceBackendKind::tensorrt : InferenceBackendKind::model));
+    const std::string primary_error =
+        primary->is_ready() ? std::string{} : primary->startup_message();
 
-    const std::string onnx_error = onnx->is_ready() ? std::string{} : onnx->startup_message();
-    const std::string trt_error = trt->is_ready() ? std::string{} : trt->startup_message();
+    std::unique_ptr<ModelInfer> fallback;
+    std::string fallback_error;
+    if (!primary->is_ready()) {
+        fallback = std::make_unique<ModelInfer>(make_backend_config(
+            config_, prefer_trt ? InferenceBackendKind::model : InferenceBackendKind::tensorrt));
+        fallback_error = fallback->is_ready() ? std::string{} : fallback->startup_message();
+    }
 
     {
         std::scoped_lock lock(state_mutex_);
-        if (onnx->is_ready()) {
-            infer_onnx_ = std::move(onnx);
-        }
-        if (trt->is_ready()) {
-            infer_trt_ = std::move(trt);
+        if (primary->is_ready()) {
+            if (prefer_trt) {
+                infer_trt_ = std::move(primary);
+            } else {
+                infer_onnx_ = std::move(primary);
+            }
+        } else if (fallback && fallback->is_ready()) {
+            if (prefer_trt) {
+                infer_onnx_ = std::move(fallback);
+            } else {
+                infer_trt_ = std::move(fallback);
+            }
         }
 
         const RuntimeBackend preferred =
@@ -305,12 +328,10 @@ auto PerceptionRunner::initialize_backends() -> std::expected<void, std::string>
         }
 
         if (!active_backend_.has_value()) {
-            if (!onnx_error.empty()) {
-                return std::unexpected(onnx_error);
-            }
-            if (!trt_error.empty()) {
-                return std::unexpected(trt_error);
-            }
+            if (!primary_error.empty())
+                return std::unexpected(primary_error);
+            if (!fallback_error.empty())
+                return std::unexpected(fallback_error);
             return std::unexpected("no requested inference backend available");
         }
     }

@@ -1,4 +1,10 @@
-.PHONY: scan-camera set-config preview stream record stop competition
+.PHONY: build clean scan-camera set-config preview stream record stop competition
+
+build:
+	@.script/build-laser
+
+clean:
+	@.script/clean-laser
 
 scan-camera:
 	@.script/scan-camera

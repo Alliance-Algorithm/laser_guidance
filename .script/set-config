@@ -10,19 +10,21 @@ list_configs() {
     i=1
     for f in "$REPO_ROOT"/config/*.yaml; do
         local name="$(basename "$f")"
+        local rel="$(realpath --relative-to="$REPO_ROOT" "$f")"
         local mark=" "
-        if [ -f "$STORE" ] && [ "$(cat "$STORE")" = "$f" ]; then
+        if [ -f "$STORE" ] && [ "$(cat "$STORE")" = "$rel" ]; then
             mark="*"
         fi
         printf "  %s %d) %s\n" "$mark" "$i" "$name"
-        eval "cfg_$i=\"$f\""
+        eval "cfg_$i=\"$rel\""
         ((i++))
     done
 }
 
 if [ $# -gt 0 ]; then
-    echo "$(realpath "$1")" > "$STORE"
-    echo "已选择: $(realpath "$1")"
+    rel="$(realpath --relative-to="$REPO_ROOT" "$(realpath "$1")")"
+    echo "$rel" > "$STORE"
+    echo "已选择: $rel"
     exit 0
 fi
 

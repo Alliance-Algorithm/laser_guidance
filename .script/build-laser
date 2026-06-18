@@ -1,42 +1,118 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
+# ---- ROS2 environment (always source, like RMCS does) -----------------------
+if [[ -f /opt/ros/jazzy/setup.bash ]]; then
+    set +u; source /opt/ros/jazzy/setup.bash; set -u
+fi
+
+# ---- defaults ---------------------------------------------------------------
 BUILD_TYPE="${LASER_BUILD_TYPE:-Release}"
 JOBS="${LASER_JOBS:-$(nproc)}"
 USE_CLANG="${LASER_USE_CLANG:-OFF}"
+ENABLE_CACHE="${LASER_CACHE:-detect}"
+ENABLE_LTO="${LASER_LTO:-OFF}"
+ENABLE_UNITY="${LASER_UNITY:-OFF}"
+VERBOSE=false
 CMAKE_ARGS=()
 EXTRA_ARGS=()
 
+usage() {
+    cat <<EOF
+Usage: build-laser [OPTIONS] [-- CMAKE_EXTRA_ARGS...]
+
+Options:
+  --clang         Build with Clang + LLD (default: GCC)
+  --gcc           Build with GCC (default)
+  --debug         Debug build
+  --release       Release build (default)
+  --lto           Enable link-time optimization
+  --unity         Enable unity (jumbo) builds
+  --cache         Force ccache (detected automatically by default)
+  --no-cache      Disable ccache
+  -j N            Parallel jobs (default: nproc)
+  -v, --verbose   Show full compile commands
+  -h, --help      Show this help
+EOF
+    exit 0
+}
+
+# ---- argument parsing -------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --clang)   USE_CLANG=ON; shift ;;
         --gcc)     USE_CLANG=OFF; shift ;;
         --debug)   BUILD_TYPE=Debug; shift ;;
         --release) BUILD_TYPE=Release; shift ;;
-        -j)        JOBS="$2"; shift 2 ;;
-        -j*)       JOBS="${1#-j}"; shift ;;
-        *)         EXTRA_ARGS+=("$1"); shift ;;
+        --lto)     ENABLE_LTO=ON; shift ;;
+        --unity)   ENABLE_UNITY=ON; shift ;;
+        --cache)   ENABLE_CACHE=on; shift ;;
+        --no-cache) ENABLE_CACHE=off; shift ;;
+        -v|--verbose) VERBOSE=true; shift ;;
+        -h|--help) usage ;;
+        -j)
+            if [[ -z "${2:-}" || ! "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: -j requires a numeric argument (e.g. -j 8)" >&2
+                exit 1
+            fi
+            JOBS="$2"; shift 2 ;;
+        -j*)
+            arg="${1#-j}"
+            if [[ ! "$arg" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: -j requires a numeric argument (e.g. -j8)" >&2
+                exit 1
+            fi
+            JOBS="$arg"; shift ;;
+        --) shift; EXTRA_ARGS+=("$@"); break ;;
+        *)  EXTRA_ARGS+=("$1"); shift ;;
     esac
 done
 
-# ---- LLVM toolchain --------------------------------------------------------
+# ---- ccache detection --------------------------------------------------------
+CACHE_LAUNCHER=""
+if [[ "$ENABLE_CACHE" == "detect" ]]; then
+    if command -v ccache &>/dev/null; then
+        echo "=== ccache detected: $(ccache --version | head -1) ==="
+        ENABLE_CACHE=on
+    fi
+fi
+if [[ "$ENABLE_CACHE" == "on" ]]; then
+    export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
+    mkdir -p "$CCACHE_DIR"
+    export CMAKE_C_COMPILER_LAUNCHER=ccache
+    export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+    CACHE_LAUNCHER="(ccache) "
+fi
+
+# ---- toolchain selection -----------------------------------------------------
+DETECTED_COMPILER=""
+if [[ -f build/CMakeCache.txt ]]; then
+    DETECTED_COMPILER="$(grep 'CMAKE_CXX_COMPILER:STRING=' build/CMakeCache.txt 2>/dev/null | cut -d= -f2 || true)"
+fi
+
 if [[ "$USE_CLANG" == "ON" ]]; then
     missing_tools=()
     for tool in clang clang++ ninja ld.lld llvm-ar llvm-ranlib; do
         command -v "$tool" &>/dev/null || missing_tools+=("$tool")
     done
     if ((${#missing_tools[@]} > 0)); then
-        echo "ERROR: LLVM toolchain required when --clang is set."
-        echo "Missing tools: ${missing_tools[*]}"
-        echo "Install them or use --gcc."
+        echo "ERROR: LLVM toolchain required when --clang is set." >&2
+        echo "Missing tools: ${missing_tools[*]}" >&2
+        echo "Install them or use --gcc." >&2
         exit 1
     fi
 
-    echo "=== Build: Clang $(clang --version | head -1 | awk '{print $NF}') + Ninja + LLD ($BUILD_TYPE, jobs=$JOBS) ==="
+    # Clear cache if switching from GCC → Clang
+    if [[ -n "$DETECTED_COMPILER" && "$DETECTED_COMPILER" != *clang++* ]]; then
+        echo "=== Switching GCC → Clang, clearing CMake cache ==="
+        rm -f build/CMakeCache.txt
+    fi
+
+    echo "=== Build: ${CACHE_LAUNCHER}Clang $(clang --version | head -1 | awk '{print $NF}') + Ninja + LLD ($BUILD_TYPE, jobs=$JOBS) ==="
     export CC=clang
     export CXX=clang++
     CMAKE_ARGS=(
@@ -46,14 +122,29 @@ if [[ "$USE_CLANG" == "ON" ]]; then
         "-DCMAKE_AR=$(command -v llvm-ar)"
         "-DCMAKE_RANLIB=$(command -v llvm-ranlib)"
     )
+    if [[ "$VERBOSE" != "true" ]]; then
+        CMAKE_ARGS+=("-DCMAKE_MESSAGE_LOG_LEVEL=ERROR")
+        export NINJA_STATUS=""
+    fi
 else
-    echo "=== Build: GCC $(gcc --version | head -1 | awk '{print $NF}') + Ninja ($BUILD_TYPE, jobs=$JOBS) ==="
+    if [[ -n "$DETECTED_COMPILER" && "$DETECTED_COMPILER" == *clang++* ]]; then
+        echo "=== Switching Clang → GCC, clearing CMake cache ==="
+        rm -f build/CMakeCache.txt
+    fi
+
+    echo "=== Build: ${CACHE_LAUNCHER}GCC $(gcc --version | head -1 | awk '{print $NF}') + Ninja ($BUILD_TYPE, jobs=$JOBS) ==="
     CMAKE_ARGS=(-GNinja)
 fi
 
+# ---- cmake configure ---------------------------------------------------------
 cmake -S . -B build "${CMAKE_ARGS[@]}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+    -DLASER_LTO="${ENABLE_LTO}" \
+    -DLASER_UNITY="${ENABLE_UNITY}" \
     "${EXTRA_ARGS[@]}"
 
+# ---- build -------------------------------------------------------------------
+START_TIME=$SECONDS
 cmake --build build --parallel "${JOBS}"
-echo "=== Build complete ==="
+ELAPSED=$((SECONDS - START_TIME))
+echo "=== Build complete (${ELAPSED}s) ==="

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <chrono>
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
@@ -36,6 +37,8 @@ private:
     auto handle_key(int key, const ControlLoopFrame& frame) -> void;
     auto maybe_record_calibration(const ControlLoopFrame& frame) -> void;
     auto maybe_record_hit_edge(const ControlLoopFrame& frame) -> void;
+    auto try_create_guidance_session(const CaptureFormat& format)
+        -> std::expected<GuidanceSession, std::string>;
     [[nodiscard]] auto select_target_track(
         const DetectionBatch& batch, const std::optional<EkfState>& ekf_state) const
         -> TargetTrack;
@@ -55,6 +58,8 @@ private:
     std::ofstream voltage_file_{};
     std::ofstream hit_file_{};
     bool stop_requested_ = false;
+    bool window_open_ = false;
+    std::optional<std::chrono::steady_clock::time_point> next_guidance_retry_at_{};
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal

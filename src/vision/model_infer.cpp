@@ -1,5 +1,7 @@
 #include "vision/model_infer.hpp"
 
+#include "vision/cuda_check.hpp"
+
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -124,6 +126,10 @@ struct ModelInfer::Details {
 
     auto initialize() -> void {
         if (config.backend == InferenceBackendKind::tensorrt) {
+            if (!cuda_device_available()) {
+                message = "TensorRT requires CUDA, but no CUDA device available";
+                return;
+            }
             auto engine_result = TensorRTEngine::load(config.model_path.string());
             if (!engine_result) {
                 message = "TensorRT: " + engine_result.error();

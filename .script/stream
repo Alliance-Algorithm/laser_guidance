@@ -14,15 +14,18 @@ fi
 CONFIG="$(realpath "$CONFIG")"
 
 TMP_CONFIG=""
-LOG_FILE="/tmp/laser_daemon.log"
+LOG_FILE="$REPO_ROOT/laser_daemon.log"
 PREVIEW_PID=""
+KEEP_PREVIEW_RUNNING=0
 
 cleanup() {
-    if [ -n "$PREVIEW_PID" ] && kill -0 "$PREVIEW_PID" 2>/dev/null; then
+    if [ "${KEEP_PREVIEW_RUNNING:-0}" != "1" ] \
+        && [ -n "$PREVIEW_PID" ] \
+        && kill -0 "$PREVIEW_PID" 2>/dev/null; then
         kill "$PREVIEW_PID" 2>/dev/null || true
         wait "$PREVIEW_PID" 2>/dev/null || true
     fi
-    rm -f "$TMP_CONFIG" "$SDP"
+    rm -f "$TMP_CONFIG" "$SDP" "/tmp/laser_daemon.log"
 }
 trap cleanup EXIT
 
@@ -50,6 +53,10 @@ if [ "$CAPTURE_BACKEND" = "hikcamera" ]; then
 fi
 
 launch_ffplay() {
+    if ! command -v ffplay >/dev/null 2>&1; then
+        echo "warning: ffplay not found; daemon keeps running, but local playback is skipped"
+        return 0
+    fi
     ffplay -hide_banner -loglevel warning -nostats -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 5000000 -sync ext "$SDP"
 }
 
@@ -86,7 +93,14 @@ rm -f "$SDP" "$LOG_FILE"
 PREVIEW_PID=$!
 
 if [ "$STREAMING_ENABLED" = "True" ]; then
-    laser_wait_for_sdp "$SDP" "$PREVIEW_PID" "tool_preview" "$LOG_FILE" || exit 1
+    if ! laser_wait_for_sdp "$SDP" "$PREVIEW_PID" "tool_preview" "$LOG_FILE"; then
+        if [ -n "$PREVIEW_PID" ] && kill -0 "$PREVIEW_PID" 2>/dev/null; then
+            echo "tool_preview is still running; waiting for camera/frames, daemon left running"
+            KEEP_PREVIEW_RUNNING=1
+            exit 0
+        fi
+        exit 1
+    fi
     launch_ffplay
 else
     wait "$PREVIEW_PID"

@@ -13,6 +13,10 @@ if [ -z "$CONFIG" ]; then
         CONFIG="$REPO_ROOT/config/default.yaml"
     fi
 fi
+if [[ "$CONFIG" != /* ]]; then
+    CONFIG="$REPO_ROOT/$CONFIG"
+fi
+CONFIG="$(realpath "$CONFIG")"
 
 OUTPUT="${2:-$REPO_ROOT/videos}"
 DURATION="${3:-60}"

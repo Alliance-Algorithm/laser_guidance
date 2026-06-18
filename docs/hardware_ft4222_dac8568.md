@@ -289,7 +289,7 @@ DAC 模块还必须额外接电源：
 - 片选使用 `SS0O`
 - 时钟先从约 `1 MHz` 左右开始，再逐步提速
 
-在当前仓库封装里，推荐起步配置是：
+在当前仓库里，**smoke / bring-up 工具**推荐起步配置是：
 
 ```cpp
 Ft4222Config{
@@ -299,6 +299,25 @@ Ft4222Config{
     .cs_channel = 0,
 }
 ```
+
+而 **正式 runtime (`GuidanceSession`)** 当前默认使用更高的 SPI 时钟：
+
+```cpp
+Ft4222Config{
+    .sys_clock = Ft4222SysClock::k60MHz,
+    .clock_div = Ft4222SpiDiv::kDiv2,
+    .cpol = Ft4222Cpol::kIdleLow,
+    .cpha = Ft4222Cpha::kTrailing,
+    .cs_channel = 0,
+}
+```
+
+这意味着 runtime 目标时钟约为 `30 MHz`。当前仓库的策略是：
+
+- `tool_dac8568_smoke` / `tool_galvo_smoke`：默认低速，优先保证 bring-up 稳定性
+- `GuidanceSession`：默认高速，优先保证正式运行时的控制链路带宽
+
+如果后续更换 FT4222 模块、DAC 板、线缆长度或后级板卡，建议先用 smoke 工具在低速模式下确认稳定，再切回 runtime 高速配置。
 
 ## 上电与联调顺序
 

@@ -127,6 +127,7 @@ auto GuidanceOpsApp::run() -> std::expected<void, std::string> {
 
 auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
     stop_requested_ = false;
+    next_guidance_retry_at_.reset();
 
     auto format = capture_.open();
     if (!format) {
@@ -138,30 +139,18 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
     }
 
     if (auto result = perception_.start(); !result) {
-        return std::unexpected(result.error());
+        std::println(stderr, "perception init failed: {}, degraded guidance app", result.error());
     }
 
     if (config_.guidance.enabled && negotiated_format_.has_value()) {
-        if (config_.guidance.calib_mode) {
-            auto guidance = GuidanceSession::create_manual(
-                config_, *negotiated_format_, calibration_state_);
-            if (!guidance) {
-                std::println(
-                    stderr, "guidance init failed: {}, guidance disabled",
-                    guidance.error());
-            } else {
-                guidance_ = std::move(*guidance);
-            }
+        auto guidance = try_create_guidance_session(*negotiated_format_);
+        if (!guidance) {
+            std::println(
+                stderr, "guidance init failed: {}, guidance disabled",
+                guidance.error());
+            next_guidance_retry_at_ = std::chrono::steady_clock::now();
         } else {
-            auto guidance = GuidanceSession::create_auto(
-                config_, *negotiated_format_);
-            if (!guidance) {
-                std::println(
-                    stderr, "guidance init failed: {}, guidance disabled",
-                    guidance.error());
-            } else {
-                guidance_ = std::move(*guidance);
-            }
+            guidance_ = std::move(*guidance);
         }
     }
 
@@ -187,8 +176,19 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
         std::println("HIT-CALIB: saving confirmed purple hits to {}", paths_.hit_path.string());
     }
 
-    cv::namedWindow(kWindowName, cv::WINDOW_NORMAL);
+    if (config_.debug.show_window) {
+        cv::namedWindow(kWindowName, cv::WINDOW_NORMAL);
+        window_open_ = true;
+    }
     return {};
+}
+
+auto GuidanceOpsApp::try_create_guidance_session(const CaptureFormat& format)
+    -> std::expected<GuidanceSession, std::string> {
+    if (config_.guidance.calib_mode) {
+        return GuidanceSession::create_manual(config_, format, calibration_state_);
+    }
+    return GuidanceSession::create_auto(config_, format);
 }
 
 auto GuidanceOpsApp::teardown() -> void {
@@ -197,7 +197,10 @@ auto GuidanceOpsApp::teardown() -> void {
         guidance_->shutdown();
     }
     capture_.close();
-    cv::destroyWindow(kWindowName);
+    if (window_open_ && config_.debug.show_window) {
+        cv::destroyWindow(kWindowName);
+        window_open_ = false;
+    }
     guidance_.reset();
     negotiated_format_.reset();
     calibration_file_.close();
@@ -206,12 +209,70 @@ auto GuidanceOpsApp::teardown() -> void {
 }
 
 auto GuidanceOpsApp::run_loop() -> void {
+    using Clock = std::chrono::steady_clock;
+    constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
+    constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
+    constexpr auto kGuidanceRetryDelay = std::chrono::seconds(1);
+    int consecutive_errors = 0;
+    constexpr int kMaxConsecutiveErrors = 3;
+    std::optional<Clock::time_point> next_reconnect_at;
+
     while (!stop_requested_) {
+        if (next_reconnect_at.has_value()) {
+            const auto now = Clock::now();
+            if (now < *next_reconnect_at) {
+                std::this_thread::sleep_for(kReadErrorDelay);
+                continue;
+            }
+
+            if (auto reconnect_result = capture_.reconnect(); reconnect_result) {
+                std::println("guidance app camera reconnected");
+                negotiated_format_ = capture_.negotiated_format();
+                guidance_.reset();
+                next_guidance_retry_at_ = Clock::now();
+                next_reconnect_at.reset();
+                consecutive_errors = 0;
+            } else {
+                std::println(stderr, "guidance app reconnect failed: {}", reconnect_result.error());
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+            }
+            continue;
+        }
+
+        if (config_.guidance.enabled && !guidance_ && negotiated_format_.has_value()) {
+            const auto now = Clock::now();
+            if (!next_guidance_retry_at_.has_value() || now >= *next_guidance_retry_at_) {
+                auto guidance = try_create_guidance_session(*negotiated_format_);
+                if (guidance) {
+                    guidance_ = std::move(*guidance);
+                    next_guidance_retry_at_.reset();
+                    std::println("guidance app guidance initialized");
+                } else {
+                    std::println(stderr, "guidance app retry failed: {}", guidance.error());
+                    next_guidance_retry_at_ = now + kGuidanceRetryDelay;
+                }
+            }
+        }
+
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             std::println(stderr, "capture read failed: {}", frame_result.error());
+            consecutive_errors++;
+            if (consecutive_errors >= kMaxConsecutiveErrors) {
+                consecutive_errors = kMaxConsecutiveErrors;
+                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                if (guidance_) {
+                    guidance_->shutdown();
+                    guidance_.reset();
+                }
+                next_guidance_retry_at_ = Clock::now() + kGuidanceRetryDelay;
+            } else {
+                std::this_thread::sleep_for(kReadErrorDelay);
+            }
             continue;
         }
+
+        consecutive_errors = 0;
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
@@ -222,7 +283,10 @@ auto GuidanceOpsApp::run_loop() -> void {
         frame.ekf_state = perception_result.ekf_state;
         frame.dropped_frames = perception_.overwrite_count();
 
-        if (!perception_.submit(frame.frame)) {
+        if (perception_.degraded()) {
+            frame.detection = {};
+            frame.ekf_state.reset();
+        } else if (!perception_.submit(frame.frame)) {
             std::println(stderr, "perception submit failed: {}", perception_.last_error());
             break;
         }
@@ -248,12 +312,15 @@ auto GuidanceOpsApp::run_loop() -> void {
                     perception_.active_backend() == RuntimeBackend::tensorrt,
             });
 
-        cv::imshow(kWindowName, frame.display);
-        const int key = cv::waitKey(1);
-        const bool window_visible =
-            cv::getWindowProperty(kWindowName, cv::WND_PROP_VISIBLE) >= 1.0;
-        if (should_exit_from_key(key) || !window_visible) {
-            stop_requested_ = true;
+        int key = -1;
+        if (config_.debug.show_window) {
+            cv::imshow(kWindowName, frame.display);
+            key = cv::waitKey(1);
+            const bool window_visible =
+                cv::getWindowProperty(kWindowName, cv::WND_PROP_VISIBLE) >= 1.0;
+            if (should_exit_from_key(key) || !window_visible) {
+                stop_requested_ = true;
+            }
         }
 
         handle_key(key, frame);

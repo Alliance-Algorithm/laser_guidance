@@ -28,6 +28,7 @@ auto make_marker_header(
 
 struct RosBridge::Impl {
     std::shared_ptr<rclcpp::Node> node;
+    bool owns_ros_init = false;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr detections_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tracks_pub;
@@ -38,6 +39,13 @@ struct RosBridge::Impl {
 
     auto init() -> bool {
         try {
+            if (!rclcpp::ok()) {
+                int argc = 0;
+                char* argv[] = {nullptr};
+                rclcpp::init(argc, argv);
+                owns_ros_init = true;
+            }
+
             node = std::make_shared<rclcpp::Node>(
                 "laser_guidance_ros_bridge",
                 rclcpp::NodeOptions{}
@@ -208,7 +216,11 @@ RosBridge::RosBridge()
     impl_->init();
 }
 
-RosBridge::~RosBridge() = default;
+RosBridge::~RosBridge() {
+    if (impl_->owns_ros_init && rclcpp::ok()) {
+        rclcpp::shutdown();
+    }
+}
 
 auto RosBridge::ready() const noexcept -> bool { return impl_->initialized; }
 

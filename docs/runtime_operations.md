@@ -45,7 +45,24 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 - `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。
 - `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、recording。
 - `GuidanceSession` 负责 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
+- FT4222 为主入口工具级运行时依赖；缺库或缺板卡时只影响 guidance，主流程继续。
 - `tool_guidance` 的校准记录和 hit edge 记录都在独立 app 内完成。
+
+### 推理后端降级
+- `PerceptionRunner::initialize_backends()` 按"先首选择后降级"策略初始化；ONNX/TensorRT 不再同时无条件构造。
+- `PerceptionRunner::degraded()` 返回 true 时（无可用后端或推理未启用），主循环跳过推理，不退出进程。
+- TensorRT 引擎加载前检查 CUDA 设备可用性；无 CUDA 设备时跳过 TensorRT 初始化。
+
+### RTP 推流
+- encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
+- `RtpStreamer::stop()` 为幂等调用。
+
+### ROS2 桥接
+- `RosBridge` 构造时自行调用 `rclcpp::init()` 若尚未初始化。
+- 桥接初始化失败时主流程继续运行，不退出。
+
+### 日志
+- 运行时日志写入仓库根目录：`laser_daemon.log`（stream）、`laser_competition.log`（competition）。
 
 ## Verification
 
