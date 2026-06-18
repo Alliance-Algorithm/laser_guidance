@@ -8,10 +8,16 @@ BUILD_DIR="${REPO_ROOT}/build"
 
 if [[ "${1:-}" == "--cache" ]]; then
     echo "Cleaning CMake cache..."
-    rm -rf "${BUILD_DIR}/CMakeCache.txt" "${BUILD_DIR}/CMakeFiles/"
+    rm -rf "${BUILD_DIR}/CMakeCache.txt" "${BUILD_DIR}/CMakeFiles/" 2>/dev/null || {
+        echo "Permission denied (cache root-owned?) — trying sudo..."
+        sudo rm -rf "${BUILD_DIR}/CMakeCache.txt" "${BUILD_DIR}/CMakeFiles/"
+    }
     echo "Done (cache only, objects preserved)."
 else
     echo "Cleaning build artifacts..."
-    rm -rf "${BUILD_DIR}"
+    rm -rf "${BUILD_DIR}" 2>/dev/null || {
+        echo "Permission denied (build root-owned?) — trying sudo..."
+        sudo rm -rf "${BUILD_DIR}"
+    }
     echo "Done."
 fi

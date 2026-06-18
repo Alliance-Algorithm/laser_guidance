@@ -19,6 +19,18 @@
 
 ## Quick Start
 
+### 日常开发（宿主机）
+
+```bash
+source /opt/ros/jazzy/setup.bash   # 仅 cmake 编译需要
+build-laser                         # CMake 配置 + 编译
+make preview                        # 预览模式
+make stream                         # 推流模式
+foxglove-laser                      # Foxglove 可视化（自动进容器）
+```
+
+### 部署（Docker）
+
 ```bash
 docker pull ghcr.io/yukikaze2233/laser-guidance:latest
 
@@ -28,11 +40,8 @@ docker compose up -d
 # 比赛 + ffplay 拉流
 docker compose --profile stream up
 
-# 交互 shell（开发/调试）
-docker compose run --rm shell
-
-# Foxglove 可视化 → 浏览器打开 ws://localhost:8765
-docker compose run --rm shell foxglove-laser
+# 进入容器 shell
+laser shell
 ```
 
 ## Image Tags
@@ -79,16 +88,21 @@ CaptureDevice → PerceptionRunner → TargetTrack → GuidanceSession → Runti
 
 ## Build
 
-### 容器内构建（推荐）
+### 宿主机构建（推荐）
 
 ```bash
 build-laser                 # CMake 配置 + 编译
 clean-laser                 # 清理 build/
-docker-build-laser --push   # 构建并推送镜像
-foxglove-laser              # 启动 Foxglove bridge
+foxglove-laser              # Foxglove bridge（自动进容器）
 ```
 
-容器内任意路径可用（`.script/` 已加入 `$PATH`）。
+`.script/` 已在 `build-laser` 顶部自动 source ROS2 环境。
+
+### 容器内构建
+
+```bash
+docker-build-laser --push   # 构建并推送镜像
+```
 
 ### 本地编译
 

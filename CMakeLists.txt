@@ -5,16 +5,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
-option(LASER_LTO   "Enable link-time optimization" OFF)
-option(LASER_UNITY "Enable unity (jumbo) builds"  OFF)
+option(LASER_LTO        "Enable link-time optimization" OFF)
+option(LASER_UNITY      "Enable unity (jumbo) builds"  OFF)
+option(LASER_LOOSE_LINK "Allow undefined symbols (for ROS2 tarball installs)" ON)
 if(LASER_LTO)
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 if(LASER_UNITY)
   set(CMAKE_UNITY_BUILD ON)
 endif()
+if(LASER_LOOSE_LINK)
+  foreach(_flag EXE SHARED MODULE)
+    set(CMAKE_${_flag}_LINKER_FLAGS
+        "${CMAKE_${_flag}_LINKER_FLAGS} -Wl,--disable-new-dtags -Wl,--allow-shlib-undefined")
+  endforeach()
+endif()
 
-# All backends are unconditionally required (no compile-time options / #ifdef).
 set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to ONNX Runtime installation")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -27,7 +33,9 @@ find_package(yaml-cpp REQUIRED)
 
 # ZMQ (no cmake config shipped by distro)
 find_library(ZMQ_LIBRARY zmq)
-find_path(ZMQ_INCLUDE_DIR zmq.hpp PATH_SUFFIXES include)
+find_path(ZMQ_INCLUDE_DIR zmq.hpp
+  PATH_SUFFIXES include
+  PATHS ${CMAKE_CURRENT_SOURCE_DIR}/vendor)
 if(NOT ZMQ_LIBRARY OR NOT ZMQ_INCLUDE_DIR)
   message(FATAL_ERROR "libzmq is required.")
 endif()
@@ -55,14 +63,17 @@ message(STATUS "ONNX Runtime enabled")
 find_path(TENSORRT_INCLUDE_DIR NvInfer.h
   PATHS /usr/include /usr/include/x86_64-linux-gnu /usr/local/include)
 find_path(CUDA_INCLUDE_DIR cuda_runtime_api.h
-  PATHS /opt/cuda/include /usr/local/cuda/include)
+  PATHS /usr/local/cuda/include /opt/cuda/include
+        /opt/cuda/targets/x86_64-linux/include)
 find_library(TENSORRT_LIBRARY nvinfer)
 find_library(TENSORRT_ONNX_PARSER nvonnxparser)
 find_library(TENSORRT_PLUGIN nvinfer_plugin)
 find_library(CUDA_LIBRARY cudart
-  PATHS /opt/cuda/lib64 /usr/local/cuda/lib64 /usr/lib/x86_64-linux-gnu)
+  PATHS /opt/cuda/lib64 /opt/cuda/targets/x86_64-linux/lib
+        /usr/local/cuda/lib64 /usr/lib/x86_64-linux-gnu)
 find_library(CUDA_RT_LIBRARY cuda
-  PATHS /opt/cuda/lib64/stubs /usr/local/cuda/lib64/stubs)
+  PATHS /opt/cuda/lib64/stubs /opt/cuda/targets/x86_64-linux/lib/stubs
+        /usr/local/cuda/lib64/stubs /usr/lib)
 if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY OR NOT TENSORRT_ONNX_PARSER OR NOT TENSORRT_PLUGIN)
   message(FATAL_ERROR "TensorRT is required.")
 endif()
@@ -118,6 +129,7 @@ set_target_properties(ft4222::ft4222 PROPERTIES IMPORTED_LOCATION "${FT4222_LIBR
 message(STATUS "FT4222H enabled (${FT4222_LIBRARY})")
 
 # ---- ROS2 Bridge (always enabled) --------------------------------------------
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(rclcpp REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)

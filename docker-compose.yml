@@ -113,10 +113,6 @@ services:
       - ${HOME}/.config/nvim:/home/yukikaze/.config/nvim
       - ${HOME}/.agents/skills:/home/yukikaze/.agents/skills:ro
       - .:/workspace/laser_guidance:cached
-      - laser_guidance_build:/workspace/laser_guidance/build
     command: /bin/sh -c "while sleep 1000; do :; done"
     stdin_open: true
     tty: true
-
-volumes:
-  laser_guidance_build:
