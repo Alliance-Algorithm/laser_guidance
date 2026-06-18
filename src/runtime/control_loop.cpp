@@ -300,7 +300,10 @@ auto ControlLoop::run_loop() -> void {
                 }
 
                 if (guidance_enabled_in_profile()) {
-                    guidance_.reset();
+                    {
+                        std::scoped_lock lock(state_mutex_);
+                        guidance_.reset();
+                    }
                     next_guidance_retry_at = Clock::now();
                 }
 
@@ -321,7 +324,10 @@ auto ControlLoop::run_loop() -> void {
             if (!next_guidance_retry_at.has_value() || now >= *next_guidance_retry_at) {
                 auto guidance = try_create_guidance_session(*negotiated_format_);
                 if (guidance) {
-                    guidance_ = std::move(*guidance);
+                    {
+                        std::scoped_lock lock(state_mutex_);
+                        guidance_ = std::move(*guidance);
+                    }
                     next_guidance_retry_at.reset();
                     std::println("guidance initialized");
                 } else {
@@ -339,9 +345,13 @@ auto ControlLoop::run_loop() -> void {
             if (consecutive_errors >= kMaxConsecutiveErrors) {
                 consecutive_errors = kMaxConsecutiveErrors;
                 next_reconnect_at = Clock::now() + kReconnectRetryDelay;
-                if (guidance_) {
-                    guidance_->shutdown();
-                    guidance_.reset();
+                decltype(guidance_) stale_guidance;
+                {
+                    std::scoped_lock lock(state_mutex_);
+                    stale_guidance = std::move(guidance_);
+                }
+                if (stale_guidance) {
+                    stale_guidance->shutdown();
                 }
                 next_guidance_retry_at = Clock::now() + kGuidanceRetryDelay;
                 std::println(

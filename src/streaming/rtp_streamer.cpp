@@ -171,7 +171,7 @@ auto RtpStreamer::stop() -> void {
         }
         details_->pipe = nullptr;
     }
-    if (was_running || details_->pipe == nullptr) {
+    if (was_running) {
         std::println("RTP streaming stopped");
     }
 }

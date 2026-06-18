@@ -16,9 +16,12 @@ CONFIG="$(realpath "$CONFIG")"
 TMP_CONFIG=""
 LOG_FILE="$REPO_ROOT/laser_daemon.log"
 PREVIEW_PID=""
+KEEP_PREVIEW_RUNNING=0
 
 cleanup() {
-    if [ -n "$PREVIEW_PID" ] && kill -0 "$PREVIEW_PID" 2>/dev/null; then
+    if [ "${KEEP_PREVIEW_RUNNING:-0}" != "1" ] \
+        && [ -n "$PREVIEW_PID" ] \
+        && kill -0 "$PREVIEW_PID" 2>/dev/null; then
         kill "$PREVIEW_PID" 2>/dev/null || true
         wait "$PREVIEW_PID" 2>/dev/null || true
     fi
@@ -93,6 +96,7 @@ if [ "$STREAMING_ENABLED" = "True" ]; then
     if ! laser_wait_for_sdp "$SDP" "$PREVIEW_PID" "tool_preview" "$LOG_FILE"; then
         if [ -n "$PREVIEW_PID" ] && kill -0 "$PREVIEW_PID" 2>/dev/null; then
             echo "tool_preview is still running; waiting for camera/frames, daemon left running"
+            KEEP_PREVIEW_RUNNING=1
             exit 0
         fi
         exit 1
