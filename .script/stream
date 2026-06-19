@@ -14,7 +14,8 @@ fi
 CONFIG="$(realpath "$CONFIG")"
 
 TMP_CONFIG=""
-LOG_FILE="$REPO_ROOT/laser_daemon.log"
+LOG_DIR="$REPO_ROOT/logs/$(date +%Y-%m-%d_%H-%M-%S)"
+LOG_FILE="$LOG_DIR/laser_daemon.log"
 PREVIEW_PID=""
 KEEP_PREVIEW_RUNNING=0
 
@@ -25,9 +26,11 @@ cleanup() {
         kill "$PREVIEW_PID" 2>/dev/null || true
         wait "$PREVIEW_PID" 2>/dev/null || true
     fi
-    rm -f "$TMP_CONFIG" "$SDP" "/tmp/laser_daemon.log"
+    rm -f "$TMP_CONFIG" "$SDP"
 }
 trap cleanup EXIT
+
+mkdir -p "$LOG_DIR"
 
 {
     IFS=$'\n' read -r CAPTURE_BACKEND

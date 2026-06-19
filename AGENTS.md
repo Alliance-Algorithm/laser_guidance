@@ -17,7 +17,7 @@
 - 推理后端初始化采用"先首选择后降级"策略，`PerceptionRunner::degraded()` 反映后端实际可用性；ONNX/TensorRT 初始化不再同时无条件构造。
 - 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
 - `build-laser` (构建)、`clean-laser` (清理)、`docker-build-laser` (镜像)、`foxglove-laser` (桥接) 为统一构建入口，容器内任意路径可调用。
-- 运行时日志写入仓库根目录 `laser_daemon.log` / `laser_competition.log`。
+- 运行时日志写入 `logs/<timestamp>/laser_daemon.log` / `laser_competition.log`。
 
 当仓库结构、架构边界或阶段约束变化时，请同步更新：
 
