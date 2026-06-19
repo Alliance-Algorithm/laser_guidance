@@ -93,10 +93,12 @@ CaptureDevice → PerceptionRunner → TargetTrack → GuidanceSession → Runti
 ```bash
 build-laser                 # CMake 配置 + 编译
 clean-laser                 # 清理 build/
+make preview                # 预览
+make stream                 # 推流
 foxglove-laser              # Foxglove bridge（自动进容器）
 ```
 
-`.script/` 已在 `build-laser` 顶部自动 source ROS2 环境。
+`.script/` 脚本首次运行时会自动创建 `.runtime-compat/lib/` 兼容软链接（处理 ROS2 tarball 安装的 soname 差异），无需手动操作。
 
 ### 容器内构建
 

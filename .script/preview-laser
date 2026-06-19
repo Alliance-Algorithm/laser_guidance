@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STORE="$SCRIPT_DIR/.config-path"
+source "$SCRIPT_DIR/host-runtime-env.sh"
+laser_prepare_host_runtime_env
 
 CONFIG="${1:-}"
 if [ -z "$CONFIG" ]; then
