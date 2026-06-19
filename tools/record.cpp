@@ -78,11 +78,7 @@ auto unix_time_milliseconds(const std::chrono::system_clock::time_point value) -
     return std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
 }
 
-auto handle_stop_signal(int) -> void {
-    g_stop_requested = 1;
-    if (g_ffplay_pipe) pclose(g_ffplay_pipe);
-    g_ffplay_pipe = nullptr;
-}
+auto handle_stop_signal(int) -> void { g_stop_requested = 1; }
 
 auto install_signal_handlers() -> void {
     (void)std::signal(SIGINT, handle_stop_signal);
@@ -93,7 +89,7 @@ auto stop_requested() -> bool { return g_stop_requested != 0; }
 
 auto launch_ffplay_viewer(int width, int height, const std::string& pixel_fmt) -> FILE* {
     std::string cmd = std::format(
-        "ffplay -hide_banner -loglevel warning -nostats "
+        "ffplay -hide_banner -loglevel warning -nostats -autoexit "
         "-f rawvideo -pixel_format {} -video_size {}x{} "
         "-framerate 60 -i pipe:0",
         pixel_fmt, width, height);
