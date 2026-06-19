@@ -40,9 +40,7 @@ struct RosBridge::Impl {
     auto init() -> bool {
         try {
             if (!rclcpp::ok()) {
-                int argc = 0;
-                char* argv[] = {nullptr};
-                rclcpp::init(argc, argv);
+                rclcpp::init(0, nullptr);
                 owns_ros_init = true;
             }
 
