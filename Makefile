@@ -19,7 +19,7 @@ stream:
 	@.script/stream
 
 record:
-	@.script/record
+	@.script/record $(ARGS)
 
 stop:
 	@.script/stop

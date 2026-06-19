@@ -2,9 +2,8 @@
 #include <csignal>
 #include <cstdio>
 #include <filesystem>
+#include <format>
 #include <print>
-
-#include <opencv2/highgui.hpp>
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
@@ -12,8 +11,8 @@
 #include "vision/training_data.hpp"
 
 namespace {
-
 volatile std::sig_atomic_t g_stop_requested = 0;
+FILE* g_ffplay_pipe = nullptr;
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1)
@@ -79,7 +78,11 @@ auto unix_time_milliseconds(const std::chrono::system_clock::time_point value) -
     return std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
 }
 
-auto handle_stop_signal(int) -> void { g_stop_requested = 1; }
+auto handle_stop_signal(int) -> void {
+    g_stop_requested = 1;
+    if (g_ffplay_pipe) pclose(g_ffplay_pipe);
+    g_ffplay_pipe = nullptr;
+}
 
 auto install_signal_handlers() -> void {
     (void)std::signal(SIGINT, handle_stop_signal);
@@ -87,6 +90,22 @@ auto install_signal_handlers() -> void {
 }
 
 auto stop_requested() -> bool { return g_stop_requested != 0; }
+
+auto launch_ffplay_viewer(int width, int height, const std::string& pixel_fmt) -> FILE* {
+    std::string cmd = std::format(
+        "ffplay -hide_banner -loglevel warning -nostats "
+        "-f rawvideo -pixel_format {} -video_size {}x{} "
+        "-framerate 60 -i pipe:0",
+        pixel_fmt, width, height);
+    FILE* pipe = popen(cmd.c_str(), "w");
+    if (!pipe)
+        std::println(stderr, "warning: ffplay not found, recording without preview");
+    return pipe;
+}
+
+auto close_ffplay_viewer(FILE* pipe) -> void {
+    if (pipe) pclose(pipe);
+}
 
 } // namespace
 
@@ -169,6 +188,14 @@ int main(int argc, char** argv) {
                 record_options.duration_seconds);
         }
 
+        const auto pixel_fmt = (open_result->pixel_encoding == "BGR8" ||
+                                open_result->pixel_encoding.find("BGR") != std::string::npos)
+                                   ? "bgr24"
+                                   : "rgb24";
+        g_ffplay_pipe = config.debug.show_window
+                            ? launch_ffplay_viewer(open_result->width, open_result->height, pixel_fmt)
+                            : nullptr;
+
         while (!stop_requested() && std::chrono::steady_clock::now() < deadline) {
             auto frame = capture.read_frame();
             if (!frame) {
@@ -178,12 +205,13 @@ int main(int argc, char** argv) {
 
             recorder.record_frame(frame->image);
 
-            if (config.debug.show_window) {
-                cv::imshow("rmcs_laser_guidance_record_session", frame->image);
-                if (rmcs_laser_guidance::should_exit_from_key(cv::waitKey(1)))
-                    break;
+            if (g_ffplay_pipe) {
+                std::fwrite(frame->image.data, 1, frame->image.total() * frame->image.elemSize(),
+                            g_ffplay_pipe);
             }
         }
+
+        close_ffplay_viewer(g_ffplay_pipe);
 
         capture.close();
         if (stop_requested())
