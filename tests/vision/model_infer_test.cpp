@@ -39,6 +39,14 @@ int main() {
         require_contains(
             missing_model_result.message, "does not exist", "missing model file message");
 
+        config.inference.model_path = "tests/vision/mock/tiny_dynamic_shape.onnx";
+        rmcs_laser_guidance::ModelInfer dynamic_model_infer(config.inference);
+        const auto dynamic_model_result = dynamic_model_infer.infer(frame);
+        require(dynamic_model_result.success, "dynamic-shape ONNX model infer should succeed");
+        require(
+            dynamic_model_result.contract_supported,
+            "dynamic-shape ONNX model should support the current adapter contract");
+
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "model_infer_test failed: {}", e.what());

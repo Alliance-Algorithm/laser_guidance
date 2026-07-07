@@ -1,6 +1,7 @@
 #include "runtime/control_loop.hpp"
 
 #include <chrono>
+#include <iostream>
 #include <print>
 #include <utility>
 
@@ -377,6 +378,31 @@ auto ControlLoop::run_loop() -> void {
         frame.detection = perception_result.detection;
         frame.ekf_state = perception_result.ekf_state;
         frame.dropped_frames = perception_.overwrite_count();
+
+        // Periodic detection log (~1 Hz)
+        {
+            static auto last_log = Clock::now();
+            const auto now = Clock::now();
+            if (now - last_log >= std::chrono::milliseconds(500)) {
+                last_log = now;
+                if (frame.detection.detected && !frame.detection.detections.empty()) {
+                    const auto& top = frame.detection.detections.front();
+                    std::println(
+                        std::clog,
+                        "[DETECT] score={:.3f} class_id={} bbox=[{:.0f}, {:.0f}, {:.0f}, {:.0f}]",
+                        top.score, top.class_id, top.bbox.x, top.bbox.y, top.bbox.width,
+                        top.bbox.height);
+                } else if (!frame.detection.detections.empty()) {
+                    const auto& top = frame.detection.detections.front();
+                    std::println(
+                        std::clog,
+                        "[DETECT] below_threshold top_score={:.4f} candidates={}",
+                        top.score, frame.detection.detections.size());
+                } else {
+                    std::println(std::clog, "[DETECT] no_candidates");
+                }
+            }
+        }
         if (const auto error = perception_.last_error(); !error.empty()) {
             sync_last_error(error);
         }

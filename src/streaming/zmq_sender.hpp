@@ -24,4 +24,6 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+auto serialize_laser_json(const TargetObservation& observation) -> std::string;
+
 } // namespace rmcs_laser_guidance

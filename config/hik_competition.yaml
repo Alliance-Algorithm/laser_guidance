@@ -14,7 +14,7 @@ hik:
   timeout_ms: 2000
   exposure_us: 2000.0
   framerate: 80.0
-  gain: 16.9807
+  gain: 16
   invert_image: false
   software_sync: false
   trigger_mode: false
@@ -74,7 +74,7 @@ udp:
 zmq:
   enabled: false
   host: "127.0.0.1"
-  port: 5001
+  port: 5555
 
 ekf:
   enabled: false

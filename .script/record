@@ -20,7 +20,8 @@ if [[ "$CONFIG" != /* ]]; then
 fi
 CONFIG="$(realpath "$CONFIG")"
 
-CAPTURE_BACKEND="$(python3 - "$CONFIG" <<'PYEOF'
+CAPTURE_BACKEND="$(
+    python3 - "$CONFIG" <<'PYEOF'
 import sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1]))
 print(cfg.get('capture_backend', 'v4l2'))
@@ -33,7 +34,7 @@ if [ "$CAPTURE_BACKEND" = "hikcamera" ]; then
 fi
 
 OUTPUT="${2:-$REPO_ROOT/videos}"
-DURATION="${3:-60}"
+DURATION="${3:-120}"
 
 echo "=== 视频会话录制 ==="
 echo "配置: $CONFIG"

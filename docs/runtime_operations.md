@@ -43,7 +43,7 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 ## Operational Notes
 
 - `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。
-- `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、recording。
+- `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、ZMQ Laser JSON (`cmd_id=0x2003`)、recording。
 - `GuidanceSession` 负责 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
 - FT4222 为主入口工具级运行时依赖；缺库或缺板卡时只影响 guidance，主流程继续。
 - `tool_guidance` 的校准记录和 hit edge 记录都在独立 app 内完成。

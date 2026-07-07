@@ -22,7 +22,7 @@
 - `RuntimeSnapshot`
   - 运行时 typed 观测面。
 - `RuntimeOutputs`
-  - 统一管理 RTP、SHM、UDP telemetry、录制。
+- 统一管理 RTP、SHM、UDP telemetry、ZMQ Laser JSON、录制。
 - `GuidanceSession`
   - 封装 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
 - `GuidanceOpsApp`
