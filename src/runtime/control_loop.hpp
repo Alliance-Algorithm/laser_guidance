@@ -58,16 +58,11 @@ private:
     auto update_status_locked() -> void;
     auto sync_last_error(std::string error) -> void;
     auto update_hit_progress(const DetectionBatch& detection) -> void;
-    auto try_create_guidance_session(const CaptureFormat& format)
-        -> std::expected<GuidanceSession, std::string>;
     [[nodiscard]] auto show_window() const -> bool;
     [[nodiscard]] auto window_name() const -> const char*;
     [[nodiscard]] auto allows_streaming() const -> bool;
     [[nodiscard]] auto allows_recording() const -> bool;
     [[nodiscard]] auto guidance_enabled_in_profile() const -> bool;
-    [[nodiscard]] auto select_target_track(
-        const DetectionBatch& batch, const std::optional<EkfState>& ekf_state, bool ekf_enabled) const
-        -> TargetTrack;
     [[nodiscard]] auto assemble_snapshot(
         const ControlLoopFrame& frame, const RuntimeOutputsStatus& output_status) const
         -> RuntimeSnapshot;

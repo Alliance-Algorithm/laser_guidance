@@ -10,6 +10,7 @@
 #include "capture/capture_device.hpp"
 #include "config.hpp"
 #include "runtime/control_loop_types.hpp"
+#include "runtime/capture_retry_policy.hpp"
 #include "runtime/guidance_calibration.hpp"
 #include "runtime/guidance_session.hpp"
 #include "runtime/overlay_renderer.hpp"
@@ -37,11 +38,6 @@ private:
     auto handle_key(int key, const ControlLoopFrame& frame) -> void;
     auto maybe_record_calibration(const ControlLoopFrame& frame) -> void;
     auto maybe_record_hit_edge(const ControlLoopFrame& frame) -> void;
-    auto try_create_guidance_session(const CaptureFormat& format)
-        -> std::expected<GuidanceSession, std::string>;
-    [[nodiscard]] auto select_target_track(
-        const DetectionBatch& batch, const std::optional<EkfState>& ekf_state) const
-        -> TargetTrack;
     [[nodiscard]] auto calibration_state() -> GuidanceCalibrationState&;
 
     Config config_{};
@@ -59,7 +55,7 @@ private:
     std::ofstream hit_file_{};
     bool stop_requested_ = false;
     bool window_open_ = false;
-    std::optional<std::chrono::steady_clock::time_point> next_guidance_retry_at_{};
+    CaptureRetryPolicy retry_policy_{};
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal

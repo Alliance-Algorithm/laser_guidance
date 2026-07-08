@@ -7,6 +7,7 @@
 #include <opencv2/highgui.hpp>
 
 #include "laser_guidance/support.hpp"
+#include "runtime/capture_retry_policy.hpp"
 
 namespace rmcs_laser_guidance::runtime_internal {
 namespace {
@@ -127,7 +128,7 @@ auto GuidanceOpsApp::run() -> std::expected<void, std::string> {
 
 auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
     stop_requested_ = false;
-    next_guidance_retry_at_.reset();
+    retry_policy_ = CaptureRetryPolicy{};
 
     auto format = capture_.open();
     if (!format) {
@@ -143,12 +144,14 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
     }
 
     if (config_.guidance.enabled && negotiated_format_.has_value()) {
-        auto guidance = try_create_guidance_session(*negotiated_format_);
+        auto guidance = try_create_guidance_session(
+            config_, *negotiated_format_,
+            config_.guidance.calib_mode ? calibration_state_ : nullptr);
         if (!guidance) {
             std::println(
                 stderr, "guidance init failed: {}, guidance disabled",
                 guidance.error());
-            next_guidance_retry_at_ = std::chrono::steady_clock::now();
+            retry_policy_.arm_guidance_retry(std::chrono::steady_clock::now());
         } else {
             guidance_ = std::move(*guidance);
         }
@@ -183,14 +186,6 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
     return {};
 }
 
-auto GuidanceOpsApp::try_create_guidance_session(const CaptureFormat& format)
-    -> std::expected<GuidanceSession, std::string> {
-    if (config_.guidance.calib_mode) {
-        return GuidanceSession::create_manual(config_, format, calibration_state_);
-    }
-    return GuidanceSession::create_auto(config_, format);
-}
-
 auto GuidanceOpsApp::teardown() -> void {
     perception_.stop();
     if (guidance_) {
@@ -211,16 +206,11 @@ auto GuidanceOpsApp::teardown() -> void {
 auto GuidanceOpsApp::run_loop() -> void {
     using Clock = std::chrono::steady_clock;
     constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
-    constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
-    constexpr auto kGuidanceRetryDelay = std::chrono::seconds(1);
-    int consecutive_errors = 0;
-    constexpr int kMaxConsecutiveErrors = 3;
-    std::optional<Clock::time_point> next_reconnect_at;
 
     while (!stop_requested_) {
-        if (next_reconnect_at.has_value()) {
+        if (retry_policy_.reconnect_pending()) {
             const auto now = Clock::now();
-            if (now < *next_reconnect_at) {
+            if (!retry_policy_.reconnect_due(now)) {
                 std::this_thread::sleep_for(kReadErrorDelay);
                 continue;
             }
@@ -229,27 +219,28 @@ auto GuidanceOpsApp::run_loop() -> void {
                 std::println("guidance app camera reconnected");
                 negotiated_format_ = capture_.negotiated_format();
                 guidance_.reset();
-                next_guidance_retry_at_ = Clock::now();
-                next_reconnect_at.reset();
-                consecutive_errors = 0;
+                retry_policy_.arm_guidance_retry(Clock::now());
+                retry_policy_.on_reconnect_succeeded();
             } else {
                 std::println(stderr, "guidance app reconnect failed: {}", reconnect_result.error());
-                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                retry_policy_.on_reconnect_failed(Clock::now());
             }
             continue;
         }
 
         if (config_.guidance.enabled && !guidance_ && negotiated_format_.has_value()) {
             const auto now = Clock::now();
-            if (!next_guidance_retry_at_.has_value() || now >= *next_guidance_retry_at_) {
-                auto guidance = try_create_guidance_session(*negotiated_format_);
+            if (retry_policy_.guidance_retry_due(now)) {
+                auto guidance = try_create_guidance_session(
+                    config_, *negotiated_format_,
+                    config_.guidance.calib_mode ? calibration_state_ : nullptr);
                 if (guidance) {
                     guidance_ = std::move(*guidance);
-                    next_guidance_retry_at_.reset();
+                    retry_policy_.clear_guidance_retry();
                     std::println("guidance app guidance initialized");
                 } else {
                     std::println(stderr, "guidance app retry failed: {}", guidance.error());
-                    next_guidance_retry_at_ = now + kGuidanceRetryDelay;
+                    retry_policy_.defer_guidance_retry(now);
                 }
             }
         }
@@ -257,22 +248,18 @@ auto GuidanceOpsApp::run_loop() -> void {
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             std::println(stderr, "capture read failed: {}", frame_result.error());
-            consecutive_errors++;
-            if (consecutive_errors >= kMaxConsecutiveErrors) {
-                consecutive_errors = kMaxConsecutiveErrors;
-                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+            if (retry_policy_.on_read_error(Clock::now())) {
                 if (guidance_) {
                     guidance_->shutdown();
                     guidance_.reset();
                 }
-                next_guidance_retry_at_ = Clock::now() + kGuidanceRetryDelay;
             } else {
                 std::this_thread::sleep_for(kReadErrorDelay);
             }
             continue;
         }
 
-        consecutive_errors = 0;
+        retry_policy_.on_read_success();
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
@@ -291,7 +278,8 @@ auto GuidanceOpsApp::run_loop() -> void {
             break;
         }
 
-        frame.track = select_target_track(frame.detection, frame.ekf_state);
+        frame.track = select_target_track(
+            frame.detection, frame.ekf_state, config_.ekf.enabled, config_.ekf.lookahead_ms);
         if (guidance_) {
             frame.guidance = guidance_->execute(frame.track);
         }
@@ -403,35 +391,6 @@ auto GuidanceOpsApp::maybe_record_hit_edge(const ControlLoopFrame& frame) -> voi
         hit_file_ << format_geometry_record(hit_angles.x, hit_angles.y, point);
         hit_file_.flush();
     }
-}
-
-auto GuidanceOpsApp::select_target_track(
-    const DetectionBatch& batch, const std::optional<EkfState>& ekf_state) const -> TargetTrack {
-    TargetTrack track;
-    track.detected = batch.detected;
-    track.ekf_enabled = config_.ekf.enabled;
-    track.raw_center = batch.selected_center;
-    track.aim_center = batch.selected_center;
-    if (!batch.detections.empty()) {
-        track.selected_detection = batch.detections.front();
-    }
-    if (ekf_state.has_value()) {
-        track.initialized = ekf_state->initialized;
-        track.lost = ekf_state->lost;
-        track.missed_frames = ekf_state->missed_frames;
-        track.dt_seconds = ekf_state->dt_seconds;
-        track.ekf_position = ekf_state->position;
-        track.velocity = ekf_state->velocity;
-        track.ekf_acceleration = ekf_state->acceleration;
-        if (config_.ekf.enabled && ekf_state->initialized && !ekf_state->lost) {
-            const float latency_s = static_cast<float>(config_.ekf.lookahead_ms * 0.001);
-            track.aim_center = cv::Point2f{
-                ekf_state->position.x + ekf_state->velocity.x * latency_s,
-                ekf_state->position.y + ekf_state->velocity.y * latency_s,
-            };
-        }
-    }
-    return track;
 }
 
 auto GuidanceOpsApp::calibration_state() -> GuidanceCalibrationState& {

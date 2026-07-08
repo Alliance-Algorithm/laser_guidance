@@ -8,6 +8,7 @@
 #include <opencv2/highgui.hpp>
 
 #include "laser_guidance/support.hpp"
+#include "runtime/capture_retry_policy.hpp"
 
 namespace rmcs_laser_guidance::runtime_internal {
 namespace {
@@ -240,7 +241,7 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     perception_.set_enemy_color(state_.enemy_color);
 
     if (guidance_enabled_in_profile() && negotiated_format_.has_value()) {
-        auto guidance = try_create_guidance_session(*negotiated_format_);
+                auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
         if (!guidance) {
             std::println(
                 stderr, "guidance init failed: {}, guidance disabled", guidance.error());
@@ -264,26 +265,16 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     return {};
 }
 
-auto ControlLoop::try_create_guidance_session(const CaptureFormat& format)
-    -> std::expected<GuidanceSession, std::string> {
-    return GuidanceSession::create_auto(config_, format);
-}
-
 auto ControlLoop::run_loop() -> void {
     using Clock = std::chrono::steady_clock;
-
-    int consecutive_errors = 0;
-    constexpr int kMaxConsecutiveErrors = 3;
     constexpr auto kReadErrorDelay = std::chrono::milliseconds(100);
-    constexpr auto kReconnectRetryDelay = std::chrono::seconds(1);
-    constexpr auto kGuidanceRetryDelay = std::chrono::seconds(1);
-    std::optional<Clock::time_point> next_reconnect_at;
-    std::optional<Clock::time_point> next_guidance_retry_at;
+
+    CaptureRetryPolicy retry_policy;
 
     while (!stop_requested()) {
-        if (next_reconnect_at.has_value()) {
+        if (retry_policy.reconnect_pending()) {
             const auto now = Clock::now();
-            if (now < *next_reconnect_at) {
+            if (!retry_policy.reconnect_due(now)) {
                 std::this_thread::sleep_for(kReadErrorDelay);
                 continue;
             }
@@ -305,35 +296,33 @@ auto ControlLoop::run_loop() -> void {
                         std::scoped_lock lock(state_mutex_);
                         guidance_.reset();
                     }
-                    next_guidance_retry_at = Clock::now();
+                    retry_policy.arm_guidance_retry(Clock::now());
                 }
 
-                consecutive_errors = 0;
-                next_reconnect_at.reset();
+                retry_policy.on_reconnect_succeeded();
             } else {
                 std::println(
                     stderr, "reconnect failed: {}", reconnect_result.error());
                 sync_last_error("Reconnect failed: " + reconnect_result.error());
-                consecutive_errors = kMaxConsecutiveErrors;
-                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+                retry_policy.on_reconnect_failed(Clock::now());
             }
             continue;
         }
 
         if (guidance_enabled_in_profile() && !guidance_ && negotiated_format_.has_value()) {
             const auto now = Clock::now();
-            if (!next_guidance_retry_at.has_value() || now >= *next_guidance_retry_at) {
-                auto guidance = try_create_guidance_session(*negotiated_format_);
+            if (retry_policy.guidance_retry_due(now)) {
+        auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
                 if (guidance) {
                     {
                         std::scoped_lock lock(state_mutex_);
                         guidance_ = std::move(*guidance);
                     }
-                    next_guidance_retry_at.reset();
+                    retry_policy.clear_guidance_retry();
                     std::println("guidance initialized");
                 } else {
                     std::println(stderr, "guidance retry failed: {}", guidance.error());
-                    next_guidance_retry_at = now + kGuidanceRetryDelay;
+                    retry_policy.defer_guidance_retry(now);
                 }
             }
         }
@@ -341,11 +330,8 @@ auto ControlLoop::run_loop() -> void {
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
             sync_last_error(frame_result.error());
-            consecutive_errors++;
 
-            if (consecutive_errors >= kMaxConsecutiveErrors) {
-                consecutive_errors = kMaxConsecutiveErrors;
-                next_reconnect_at = Clock::now() + kReconnectRetryDelay;
+            if (retry_policy.on_read_error(Clock::now())) {
                 decltype(guidance_) stale_guidance;
                 {
                     std::scoped_lock lock(state_mutex_);
@@ -354,7 +340,6 @@ auto ControlLoop::run_loop() -> void {
                 if (stale_guidance) {
                     stale_guidance->shutdown();
                 }
-                next_guidance_retry_at = Clock::now() + kGuidanceRetryDelay;
                 std::println(
                     stderr, "camera read failed repeatedly: {}, entering reconnect state",
                     frame_result.error());
@@ -365,8 +350,7 @@ auto ControlLoop::run_loop() -> void {
             continue;
         }
 
-        consecutive_errors = 0;
-        next_reconnect_at.reset();
+        retry_policy.on_read_success();
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
@@ -428,7 +412,8 @@ auto ControlLoop::run_loop() -> void {
             recording_requested = state_.recording_requested;
         }
 
-        frame.track = select_target_track(frame.detection, frame.ekf_state, ekf_enabled);
+        frame.track = select_target_track(
+            frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms);
         if (guidance_) {
             frame.guidance = guidance_->execute(frame.track);
         }
@@ -576,36 +561,6 @@ auto ControlLoop::allows_recording() const -> bool {
 auto ControlLoop::guidance_enabled_in_profile() const -> bool {
     return options_.profile == CompetitionProfile::main && config_.guidance.enabled
         && !config_.guidance.calib_mode;
-}
-
-auto ControlLoop::select_target_track(
-    const DetectionBatch& batch, const std::optional<EkfState>& ekf_state, const bool ekf_enabled) const
-    -> TargetTrack {
-    TargetTrack track;
-    track.detected = batch.detected;
-    track.ekf_enabled = ekf_enabled;
-    track.raw_center = batch.selected_center;
-    track.aim_center = batch.selected_center;
-    if (!batch.detections.empty()) {
-        track.selected_detection = batch.detections.front();
-    }
-    if (ekf_state.has_value()) {
-        track.initialized = ekf_state->initialized;
-        track.lost = ekf_state->lost;
-        track.missed_frames = ekf_state->missed_frames;
-        track.dt_seconds = ekf_state->dt_seconds;
-        track.ekf_position = ekf_state->position;
-        track.velocity = ekf_state->velocity;
-        track.ekf_acceleration = ekf_state->acceleration;
-        if (ekf_enabled && ekf_state->initialized && !ekf_state->lost) {
-            const float latency_s = static_cast<float>(config_.ekf.lookahead_ms * 0.001);
-            track.aim_center = cv::Point2f{
-                ekf_state->position.x + ekf_state->velocity.x * latency_s,
-                ekf_state->position.y + ekf_state->velocity.y * latency_s,
-            };
-        }
-    }
-    return track;
 }
 
 auto ControlLoop::assemble_snapshot(
