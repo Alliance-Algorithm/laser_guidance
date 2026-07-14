@@ -55,7 +55,7 @@ ZmqSender::ZmqSender(ZmqConfig config)
         return;
     impl_->pub.bind(std::format("tcp://*:{}", config.port));
     impl_->enabled = true;
-    std::println("ZMQ sender: tcp://*:{}", config.port);
+    std::println(stderr, "ZMQ sender: tcp://*:{}", config.port);
 }
 
 ZmqSender::~ZmqSender() = default;

@@ -142,8 +142,8 @@ auto retime_video_in_place(const std::filesystem::path& video_path, const double
     remove_file_if_exists(temp_path);
 
     const std::string command = std::format(
-        "ffmpeg -y -loglevel error -itsscale {:.6f} -i {} -c copy -f mp4 {}", itsscale,
-        shell_quote(video_path.string()), shell_quote(temp_path.string()));
+        "ffmpeg -y -loglevel error -itsscale {:.6f} -i {} -c copy -movflags +faststart -f mp4 {}",
+        itsscale, shell_quote(video_path.string()), shell_quote(temp_path.string()));
 
     const int status = std::system(command.c_str());
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {

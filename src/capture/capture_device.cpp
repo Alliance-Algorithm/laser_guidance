@@ -121,6 +121,9 @@ CaptureDevice::CaptureDevice(Config config)
 CaptureDevice::~CaptureDevice() noexcept { close(); }
 
 auto CaptureDevice::open() -> std::expected<CaptureFormat, std::string> {
+    if (is_open() || capture_thread_.joinable()) {
+        return std::unexpected("capture device is already open");
+    }
     negotiated_.reset();
 
     if (!backend_) {

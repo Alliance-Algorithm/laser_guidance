@@ -88,12 +88,12 @@ auto install_signal_handlers() -> void {
 
 auto stop_requested() -> bool { return g_stop_requested != 0; }
 
-auto launch_ffplay_viewer(int width, int height, const std::string& pixel_fmt) -> FILE* {
+auto launch_ffplay_viewer(int width, int height, double framerate, const std::string& pixel_fmt) -> FILE* {
     std::string cmd = std::format(
         "ffplay -hide_banner -loglevel warning -nostats -autoexit "
         "-f rawvideo -pixel_format {} -video_size {}x{} "
-        "-framerate 60 -i pipe:0",
-        pixel_fmt, width, height);
+        "-framerate {:.3f} -i pipe:0",
+        pixel_fmt, width, height, framerate);
     FILE* pipe = popen(cmd.c_str(), "w");
     if (!pipe)
         std::println(stderr, "warning: ffplay not found, recording without preview");
@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
                                    ? "bgr24"
                                    : "rgb24";
         g_ffplay_pipe = preview_enabled
-                            ? launch_ffplay_viewer(open_result->width, open_result->height, pixel_fmt)
+                            ? launch_ffplay_viewer(open_result->width, open_result->height, fps, pixel_fmt)
                             : nullptr;
 
         while (!stop_requested() && std::chrono::steady_clock::now() < deadline) {
