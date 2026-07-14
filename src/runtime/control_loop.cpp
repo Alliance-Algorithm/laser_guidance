@@ -33,6 +33,7 @@ auto make_hit_progress_snapshot(const HitProgress& progress) -> HitProgressSnaps
         .lock_remaining_s = progress.lock_remaining_s(),
         .lock_count = progress.lock_count(),
         .stage = progress.stage(),
+        .difficulty = progress.difficulty(),
         .p0 = progress.p0(),
         .is_exhausted = progress.is_exhausted(),
     };

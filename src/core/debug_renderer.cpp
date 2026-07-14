@@ -159,13 +159,13 @@ auto draw_hit_progress(cv::Mat& image, const HitProgress& hp) -> void {
 
     std::string status_text;
     if (hp.is_exhausted()) {
-        status_text = "LOCK EXHAUSTED (3/3)";
+        status_text = "LOCK EXHAUSTED (5/5)";
     } else if (hp.is_locked()) {
-        status_text = std::format("LOCKED {:.0f}s  [{}/3]", hp.lock_remaining_s(), hp.lock_count());
+        status_text = std::format("LOCKED {:.0f}s  [{}/5]", hp.lock_remaining_s(), hp.lock_count());
     } else {
         status_text = std::format(
-            "P={:.0f}/{:.0f}  stage={}  locks={}", hp.progress(), hp.p0(), hp.stage(),
-            hp.lock_count());
+            "P={:.0f}/{:.0f}  stage={}  diff={}  locks={}", hp.progress(), hp.p0(),
+            hp.stage(), hp.difficulty(), hp.lock_count());
     }
     cv::putText(
         image, status_text, {bar_x, bar_y - 8}, cv::FONT_HERSHEY_SIMPLEX, 0.5, {200, 200, 200}, 1);

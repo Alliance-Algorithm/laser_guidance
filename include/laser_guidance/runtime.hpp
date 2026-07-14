@@ -110,6 +110,7 @@ struct HitProgressSnapshot {
     float lock_remaining_s = 0.0F;
     int lock_count = 0;
     int stage = 0;
+    int difficulty = 1;
     float p0 = 0.0F;
     bool is_exhausted = false;
 };
