@@ -24,7 +24,16 @@ auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::opt
         }
     }
 
-    const float pixel_size = std::max(candidate.bbox.width, candidate.bbox.height);
+    // The laser detection module is an octagonal prism mounted coaxially on a
+    // vertical rigid pole (RM2026 rulebook S189/S191/S192: cannot move relative
+    // to the airframe, cannot be inverted). Its axis stays vertical in world
+    // space, so the horizontal pixel extent (bbox.width) tracks the module's
+    // ~50mm outer diameter and is only affected by yaw/azimuth (±~19% across
+    // the 8 faces). The vertical extent (bbox.height, module's 72mm height)
+    // shortens with camera pitch/elevation via standard foreshortening, so
+    // using it (or max(w,h), which picks height at low pitch) as the depth
+    // divisor overestimates depth as pitch increases. Always use bbox.width.
+    const float pixel_size = candidate.bbox.width;
     if (pixel_size <= 0.0F)
         return std::nullopt;
 
