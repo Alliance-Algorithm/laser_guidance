@@ -69,4 +69,17 @@ private:
     bool ekf_was_lost_ = false;
 };
 
+// Shared by ControlLoop and GuidanceOpsApp: picks create_manual() when a
+// calibration state is supplied (tool_guidance's calib mode), otherwise
+// create_auto(). ControlLoop always passes nullptr.
+inline auto try_create_guidance_session(
+    const Config& config, const CaptureFormat& format,
+    const std::shared_ptr<GuidanceCalibrationState>& calibration_state)
+    -> std::expected<GuidanceSession, std::string> {
+    if (calibration_state) {
+        return GuidanceSession::create_manual(config, format, calibration_state);
+    }
+    return GuidanceSession::create_auto(config, format);
+}
+
 } // namespace rmcs_laser_guidance::runtime_internal

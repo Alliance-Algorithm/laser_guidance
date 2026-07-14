@@ -1,13 +1,17 @@
 #pragma once
 
+#include <atomic>
 #include <expected>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 
 #include "capture/capture_backend.hpp"
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
+#include "tracking/freshness_queue.hpp"
 #include "types.hpp"
 
 #include <hikcamera/capturer.hpp>
@@ -61,6 +65,10 @@ struct HikBackend : public CaptureBackend {
 class CaptureDevice {
 public:
     explicit CaptureDevice(Config config);
+    ~CaptureDevice() noexcept;
+
+    CaptureDevice(const CaptureDevice&) = delete;
+    auto operator=(const CaptureDevice&) -> CaptureDevice& = delete;
 
     auto open() -> std::expected<CaptureFormat, std::string>;
     auto read_frame() -> std::expected<Frame, std::string>;
@@ -72,10 +80,21 @@ public:
 
 private:
     [[nodiscard]] auto make_backend() const -> std::unique_ptr<CaptureBackend>;
+    auto start_capture_thread() -> void;
+    auto stop_capture_thread() noexcept -> void;
+    auto capture_loop() -> void;
 
     Config config_{};
     std::unique_ptr<CaptureBackend> backend_{};
     std::optional<CaptureFormat> negotiated_{};
+
+    // Dedicated capture thread: runs backend_->read_frame() (which blocks on the
+    // SDK's demosaic/convert step) independently of the consumer, so the consumer
+    // can overlap its own processing with the next frame's capture instead of
+    // paying for both serially. LatestValue gives "newest frame wins" semantics.
+    std::unique_ptr<LatestValue<std::expected<Frame, std::string>>> frame_queue_{};
+    std::thread capture_thread_{};
+    std::atomic<bool> capture_stop_{false};
 };
 
 } // namespace rmcs_laser_guidance

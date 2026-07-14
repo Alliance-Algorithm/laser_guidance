@@ -15,6 +15,7 @@
 - ROS2 bridge 为强制编译依赖（Docker 内置），`ros_bridge.cpp` 始终以完整 ROS2 实现编译；ROS2 类型通过 PIMPL 隔离在 `.cpp` 内部，不泄露到公共头文件；`RosBridge` 构造时自行调用 `rclcpp::init()` 若尚未初始化。
 - FT4222 为主入口工具级运行时依赖，`src/io/ft4222_spi.cpp` 通过 `dlopen` 动态加载 `libft4222.so`；缺库或缺板卡时只影响 guidance，不影响主流程；`tools/dac8568_smoke` / `tools/galvo_smoke` 保留硬失败语义。
 - 推理后端初始化采用"先首选择后降级"策略，`PerceptionRunner::degraded()` 反映后端实际可用性；ONNX/TensorRT 初始化不再同时无条件构造。
+- `HitProgress` 按 RoboMaster 2026 空中机器人反制规则计算 5 次锁定与 1/2/3 难度阶段。
 - 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
 - `build-laser` (构建)、`clean-laser` (清理)、`docker-build-laser` (镜像)、`foxglove-laser` (桥接) 为统一构建入口，容器内任意路径可调用。
 - 运行时日志写入 `logs/<timestamp>/laser_daemon.log` / `laser_competition.log`。

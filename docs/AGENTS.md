@@ -34,8 +34,9 @@
 - `tools/dac8568_smoke` / `tools/galvo_smoke` 保留硬失败语义。
 - 推理后端初始化遵循"先首选择后降级"策略，不再同时无条件构造 ONNX 和 TensorRT。
 - `PerceptionRunner::degraded()` 反映后端实际可用性。
+- `HitProgress` 按 RoboMaster 2026 空中机器人反制规则计算 5 次锁定与 1/2/3 难度阶段。
 - 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
-- 运行时日志写入仓库根目录 `laser_daemon.log`（stream）和 `laser_competition.log`（competition）。
+- 运行时日志写入 `logs/<timestamp>/laser_daemon.log`（stream）和 `logs/<timestamp>/laser_competition.log`（competition）。
 
 ## 目录职责
 

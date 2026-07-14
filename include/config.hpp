@@ -74,7 +74,7 @@ struct UdpConfig {
 struct ZmqConfig {
     bool enabled = false;
     std::string host = "127.0.0.1";
-    int port = 5001;
+    int port = 5555;
 };
 
 struct EkfConfig {

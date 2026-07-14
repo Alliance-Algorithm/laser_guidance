@@ -48,6 +48,7 @@ int main() {
         require(
             default_config.inference.model_path == std::filesystem::path("models/exp.onnx"),
             "default model path mismatch");
+        require(default_config.zmq.port == 5555, "default zmq port mismatch");
         require(
             default_config.guidance.command_model
                 == rmcs_laser_guidance::GuidanceCommandModelKind::geometry,
@@ -167,12 +168,16 @@ int main() {
                            "  debug_max_fps: 15\n"
                            "  record_enabled: true\n"
                            "  record_queue_size: 8\n"
-                           "inference:\n"
-                           "  backend: model\n"
-                           "  model_path: models/mock_detector.onnx\n"
-                           "guidance:\n"
-                           "  command_model: direct_voltage\n"
-                           "  voltage_model_path: models/mock_voltage.yaml\n"
+                            "inference:\n"
+                            "  backend: model\n"
+                            "  model_path: models/mock_detector.onnx\n"
+                            "zmq:\n"
+                            "  enabled: true\n"
+                            "  host: 127.0.0.1\n"
+                            "  port: 6001\n"
+                            "guidance:\n"
+                            "  command_model: direct_voltage\n"
+                            "  voltage_model_path: models/mock_voltage.yaml\n"
                            "  voltage_use_ekf_center: false\n"
                            "  voltage_limit_v: 3.5\n");
         const auto override_config = rmcs_laser_guidance::load_config(override_path);
@@ -216,6 +221,9 @@ int main() {
             override_config.inference.model_path
                 == std::filesystem::path("models/mock_detector.onnx"),
             "override model path mismatch");
+        require(override_config.zmq.enabled, "override zmq enabled mismatch");
+        require(override_config.zmq.host == "127.0.0.1", "override zmq host mismatch");
+        require(override_config.zmq.port == 6001, "override zmq port mismatch");
         require(
             override_config.guidance.command_model
                 == rmcs_laser_guidance::GuidanceCommandModelKind::direct_voltage,

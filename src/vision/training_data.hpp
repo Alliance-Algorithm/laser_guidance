@@ -8,8 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include <cstdio>
 #include <opencv2/core/mat.hpp>
-#include <opencv2/videoio.hpp>
 
 namespace rmcs_laser_guidance {
 
@@ -53,6 +53,12 @@ struct VideoEncodingInfo {
 class VideoSessionRecorder {
 public:
     VideoSessionRecorder(std::filesystem::path output_root, VideoSessionMetadata metadata);
+    ~VideoSessionRecorder();
+
+    VideoSessionRecorder(const VideoSessionRecorder&) = delete;
+    auto operator=(const VideoSessionRecorder&) -> VideoSessionRecorder& = delete;
+    VideoSessionRecorder(VideoSessionRecorder&&) = delete;
+    auto operator=(VideoSessionRecorder&&) -> VideoSessionRecorder& = delete;
 
     auto record_frame(const cv::Mat& image) -> void;
     auto flush(std::int64_t duration_ms) -> void;
@@ -77,7 +83,7 @@ private:
     std::filesystem::path metadata_path_{};
     std::filesystem::path notes_path_{};
     VideoSessionMetadata metadata_{};
-    cv::VideoWriter writer_{};
+    std::FILE* pipe_ = nullptr;
     std::size_t recorded_frames_ = 0;
     bool flushed_ = false;
 };

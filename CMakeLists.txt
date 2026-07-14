@@ -28,7 +28,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ---- dependencies -----------------------------------------------------------
-find_package(OpenCV REQUIRED COMPONENTS calib3d core highgui imgcodecs imgproc videoio)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio)
+if(OpenCV_VERSION VERSION_GREATER_EQUAL "5.0")
+  find_package(OpenCV REQUIRED COMPONENTS calib geometry)
+else()
+  find_package(OpenCV REQUIRED COMPONENTS calib3d)
+endif()
 find_package(yaml-cpp REQUIRED)
 
 # ZMQ (no cmake config shipped by distro)
@@ -170,6 +175,7 @@ target_compile_features(laser_guidance_common INTERFACE cxx_std_23)
 
 # RPATH helper + library macro
 function(add_runtime_rpaths target)
+  set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "${CMAKE_CURRENT_SOURCE_DIR}/.runtime-compat/lib")
   set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "${FT4222_RUNTIME_DIR}")
   add_dependencies(${target} ft4222_runtime_link)
   set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "${HIKCAMERA_RUNTIME_DIR}")

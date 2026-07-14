@@ -2,10 +2,12 @@
 set -euo pipefail
 FIFO="/tmp/laser_cmd"
 SDP="/tmp/laser_guidance.sdp"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STORE="$SCRIPT_DIR/.config-path"
 source "$SCRIPT_DIR/rtp-common.sh"
+source "$SCRIPT_DIR/host-runtime-env.sh"
+laser_prepare_host_runtime_env
 CONFIG="${1:-}"
 [ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/default.yaml")"
 if [[ "$CONFIG" != /* ]]; then

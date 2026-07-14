@@ -58,20 +58,25 @@ auto extract_value_info(
     return values;
 }
 
-auto input_dimensions(const ModelValueInfo& input) -> std::pair<int, int> {
+auto input_dimensions(const ModelValueInfo& input, const cv::Mat& image) -> std::pair<int, int> {
     if (input.shape.size() != 4)
         throw std::runtime_error("model input must be a 4D tensor");
     if (input.shape[1] != 3)
         throw std::runtime_error("model input must use NCHW with 3 channels");
-    if (input.shape[2] <= 0 || input.shape[3] <= 0) {
-        throw std::runtime_error(
-            "model input height/width must be statically known and "
-            "positive");
-    }
+
+    constexpr int kYoloStride = 32;
+    const int input_height =
+        input.shape[2] > 0 ? static_cast<int>(input.shape[2])
+                           : ((image.rows + kYoloStride - 1) / kYoloStride * kYoloStride);
+    const int input_width =
+        input.shape[3] > 0 ? static_cast<int>(input.shape[3])
+                           : ((image.cols + kYoloStride - 1) / kYoloStride * kYoloStride);
+    if (input_height <= 0 || input_width <= 0)
+        throw std::runtime_error("model input height/width must resolve to positive values");
 
     return {
-        static_cast<int>(input.shape[2]),
-        static_cast<int>(input.shape[3]),
+        input_height,
+        input_width,
     };
 }
 
@@ -102,8 +107,8 @@ auto ensure_bgr_image(const cv::Mat& image) -> cv::Mat {
 }
 
 auto prepare_input_tensor(const cv::Mat& image, const ModelValueInfo& input) -> PreparedInput {
-    const auto [input_height, input_width] = input_dimensions(input);
     const cv::Mat bgr = ensure_bgr_image(image);
+    const auto [input_height, input_width] = input_dimensions(input, bgr);
 
     const float scale_x = static_cast<float>(input_width) / static_cast<float>(bgr.cols);
     const float scale_y = static_cast<float>(input_height) / static_cast<float>(bgr.rows);

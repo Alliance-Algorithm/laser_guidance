@@ -38,6 +38,7 @@ struct VideoInspection {
     std::size_t frame_count = 0;
     int width = 0;
     int height = 0;
+    double fps = 0.0;
 };
 
 auto inspect_video(const std::filesystem::path& path) -> VideoInspection {
@@ -49,6 +50,7 @@ auto inspect_video(const std::filesystem::path& path) -> VideoInspection {
         .frame_count = 0,
         .width = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_WIDTH)),
         .height = static_cast<int>(capture.get(cv::CAP_PROP_FRAME_HEIGHT)),
+        .fps = capture.get(cv::CAP_PROP_FPS),
     };
     cv::Mat frame;
     while (capture.read(frame)) {
@@ -57,6 +59,12 @@ auto inspect_video(const std::filesystem::path& path) -> VideoInspection {
     }
 
     return inspection;
+}
+
+auto duration_seconds(const VideoInspection& inspection) -> double {
+    if (inspection.fps <= 0.0)
+        throw std::runtime_error("recorded test video fps must be positive");
+    return static_cast<double>(inspection.frame_count) / inspection.fps;
 }
 
 } // namespace
@@ -148,6 +156,59 @@ int main() {
         require(inspection.width == metadata.width, "recorded session video width mismatch");
         require(inspection.height == metadata.height, "recorded session video height mismatch");
         require(inspection.frame_count == 5, "recorded session video frame count mismatch");
+
+        const rmcs_laser_guidance::VideoSessionMetadata slow_capture_metadata{
+            .session_id = "20260423T123100",
+            .relative_video_path = "raw.mp4",
+            .device_path = "/dev/video2",
+            .width = 160,
+            .height = 120,
+            .framerate = 80.0,
+            .fourcc = "MJPG",
+            .capture_start_unix_ms = 123456999,
+            .duration_ms = 10000,
+            .lighting_tag = "lab",
+            .background_tag = "plain",
+            .distance_tag = "20m",
+            .target_color = "red",
+            .operator_note_present = false,
+        };
+        rmcs_laser_guidance::VideoSessionRecorder slow_capture_recorder(
+            temp_root / "slow_sessions", slow_capture_metadata);
+        for (int i = 0; i < 80; ++i)
+            slow_capture_recorder.record_frame(make_frame({0, 0, 0}, i % 2 == 0));
+        slow_capture_recorder.flush(slow_capture_metadata.duration_ms);
+
+        const auto slow_capture_inspection = inspect_video(slow_capture_recorder.video_path());
+        require(
+            slow_capture_inspection.frame_count == 80,
+            "slow captured session video frame count mismatch");
+        require_near(
+            static_cast<float>(duration_seconds(slow_capture_inspection)), 10.0F, 0.2F,
+            "slow captured session video duration mismatch");
+
+        const auto slow_capture_recorded_metadata =
+            rmcs_laser_guidance::load_video_session_metadata(slow_capture_recorder.metadata_path());
+        require_near(
+            static_cast<float>(slow_capture_recorded_metadata.framerate), 8.0F, 0.1F,
+            "slow captured session metadata framerate mismatch");
+
+        const auto slow_capture_exported = rmcs_laser_guidance::export_training_frames(
+            slow_capture_recorder.video_path(), slow_capture_metadata.session_id,
+            temp_root / "slow_dataset", "train", 2500);
+        require(slow_capture_exported.size() == 4, "slow captured export count mismatch");
+        require(
+            slow_capture_exported.at(0).source_timestamp_ms == 0,
+            "slow captured first export timestamp mismatch");
+        require_near(
+            static_cast<float>(slow_capture_exported.at(1).source_timestamp_ms), 2500.0F, 250.0F,
+            "slow captured second export timestamp mismatch");
+        require_near(
+            static_cast<float>(slow_capture_exported.at(2).source_timestamp_ms), 5000.0F, 250.0F,
+            "slow captured third export timestamp mismatch");
+        require_near(
+            static_cast<float>(slow_capture_exported.at(3).source_timestamp_ms), 7500.0F, 250.0F,
+            "slow captured fourth export timestamp mismatch");
 
         cv::Mat sharp = make_frame({0, 0, 0}, true);
         cv::Mat blurred;

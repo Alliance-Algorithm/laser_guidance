@@ -29,6 +29,7 @@ runtime:
 - `record_enabled` 只在 `main` profile 下生效。
 - `streaming`、`recording`、`enemy`、`backend`、`ekf` 都通过 `RuntimeCommand` 动态控制。
 - `guidance.depth_source`、`guidance.lidar_*`、`ws30` 已删除。
+- `HitProgress` 使用 RoboMaster 2026 空中机器人反制规则：未照射按 `0.5/s` 衰减，连续照射每 `0.1s` 增加 `0.6*n`，最多 5 次锁定。
 
 ## Build
 
@@ -43,7 +44,7 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 ## Operational Notes
 
 - `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。
-- `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、recording。
+- `RuntimeOutputs` 负责 RTP、SHM、UDP telemetry、ZMQ Laser JSON (`cmd_id=0x2003`)、recording。
 - `GuidanceSession` 负责 FT4222、`AimSolver`、`GalvoExecutor`、`ScanController`。
 - FT4222 为主入口工具级运行时依赖；缺库或缺板卡时只影响 guidance，主流程继续。
 - `tool_guidance` 的校准记录和 hit edge 记录都在独立 app 内完成。
@@ -62,7 +63,7 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 - 桥接初始化失败时主流程继续运行，不退出。
 
 ### 日志
-- 运行时日志写入仓库根目录：`laser_daemon.log`（stream）、`laser_competition.log`（competition）。
+- 运行时日志由启动脚本重定向 `stderr` 写入仓库根目录下的时间戳目录：`logs/<timestamp>/laser_daemon.log`（stream）、`logs/<timestamp>/laser_competition.log`（competition）。
 
 ## Verification
 

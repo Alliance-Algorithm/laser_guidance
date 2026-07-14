@@ -1,10 +1,10 @@
 #include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <print>
-
-#include <opencv2/highgui.hpp>
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
@@ -12,8 +12,8 @@
 #include "vision/training_data.hpp"
 
 namespace {
-
 volatile std::sig_atomic_t g_stop_requested = 0;
+FILE* g_ffplay_pipe = nullptr;
 
 auto resolve_config_path(int argc, char** argv) -> std::filesystem::path {
     if (argc > 1)
@@ -87,6 +87,26 @@ auto install_signal_handlers() -> void {
 }
 
 auto stop_requested() -> bool { return g_stop_requested != 0; }
+
+auto launch_ffplay_viewer(int width, int height, double framerate, const std::string& pixel_fmt) -> FILE* {
+    std::string cmd = std::format(
+        "ffplay -hide_banner -loglevel warning -nostats -autoexit "
+        "-f rawvideo -pixel_format {} -video_size {}x{} "
+        "-framerate {:.3f} -i pipe:0",
+        pixel_fmt, width, height, framerate);
+    FILE* pipe = popen(cmd.c_str(), "w");
+    if (!pipe)
+        std::println(stderr, "warning: ffplay not found, recording without preview");
+    return pipe;
+}
+
+auto close_ffplay_viewer(FILE* pipe) -> void {
+    if (pipe) pclose(pipe);
+}
+
+auto record_preview_enabled(const rmcs_laser_guidance::Config& config) -> bool {
+    return config.debug.show_window && std::getenv("LASER_RECORD_PREVIEW") != nullptr;
+}
 
 } // namespace
 
@@ -162,12 +182,21 @@ int main(int argc, char** argv) {
         const auto monotonic_start = std::chrono::steady_clock::now();
         const auto deadline =
             monotonic_start + std::chrono::duration<double>(record_options.duration_seconds);
-        if (!config.debug.show_window) {
+        const bool preview_enabled = record_preview_enabled(config);
+        if (!preview_enabled) {
             std::println(
                 "recording without preview window; wait {:.1f}s or press Ctrl+C to "
-                "finalize",
+                "finalize (set LASER_RECORD_PREVIEW=1 to enable raw preview)",
                 record_options.duration_seconds);
         }
+
+        const auto pixel_fmt = (open_result->pixel_encoding == "BGR8" ||
+                                open_result->pixel_encoding.find("BGR") != std::string::npos)
+                                   ? "bgr24"
+                                   : "rgb24";
+        g_ffplay_pipe = preview_enabled
+                            ? launch_ffplay_viewer(open_result->width, open_result->height, fps, pixel_fmt)
+                            : nullptr;
 
         while (!stop_requested() && std::chrono::steady_clock::now() < deadline) {
             auto frame = capture.read_frame();
@@ -178,12 +207,13 @@ int main(int argc, char** argv) {
 
             recorder.record_frame(frame->image);
 
-            if (config.debug.show_window) {
-                cv::imshow("rmcs_laser_guidance_record_session", frame->image);
-                if (rmcs_laser_guidance::should_exit_from_key(cv::waitKey(1)))
-                    break;
+            if (g_ffplay_pipe) {
+                std::fwrite(frame->image.data, 1, frame->image.total() * frame->image.elemSize(),
+                            g_ffplay_pipe);
             }
         }
+
+        close_ffplay_viewer(g_ffplay_pipe);
 
         capture.close();
         if (stop_requested())

@@ -10,8 +10,9 @@
 - **多后端采集** — V4L2/UVC 与 Hik 工业相机，由 `CaptureDevice` 统一 dispatch
 - **ONNX / TensorRT 推理** — 运行时切换，敌方颜色过滤，EKF 目标跟踪
 - **几何引导** — 相机标定 + 外参解算 → FT4222H USB-to-SPI 振镜控制（runtime 默认高速 SPI，smoke 工具默认保守低速）
+- **空中机器人反制进度** — `HitProgress` 按 2026 规则计算 0.1s 阶梯增量、5 次锁定与 1/2/3 难度阶段
 - **硬件容错** — 相机或 FT4222 缺失时记录错误并继续运行；FT4222 作为 guidance 级运行时依赖，硬件恢复后自动重连
-- **ZMQ / UDP telemetry** — 二进制协议（0x47 0x4C magic），双通道并行发布
+- **ZMQ / UDP telemetry** — UDP 维持二进制 telemetry；ZMQ 发布 `cmd_id=0x2003` 的 Laser JSON 到 `tcp://*:5555`
 - **RTP 推流 + 录制** — h264_nvenc 编码，原始视频会话录制与离线抽帧导出
 - **调试桥接** — RosBridge → Foxglove Studio / rviz2 可视化检测框、跟踪轨迹、瞄准点
 - **FIFO 运行时控制** — `/tmp/laser_cmd` 接收 `stream on/off`、`record on/off`、`enemy red/blue` 等命令
@@ -93,10 +94,12 @@ CaptureDevice → PerceptionRunner → TargetTrack → GuidanceSession → Runti
 ```bash
 build-laser                 # CMake 配置 + 编译
 clean-laser                 # 清理 build/
+make preview                # 预览
+make stream                 # 推流
 foxglove-laser              # Foxglove bridge（自动进容器）
 ```
 
-`.script/` 已在 `build-laser` 顶部自动 source ROS2 环境。
+`.script/` 脚本首次运行时会自动创建 `.runtime-compat/lib/` 兼容软链接（处理 ROS2 tarball 安装的 soname 差异），无需手动操作。
 
 ### 容器内构建
 
