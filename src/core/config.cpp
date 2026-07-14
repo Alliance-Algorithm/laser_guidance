@@ -256,6 +256,20 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.voltage_offset_vy = guidance["voltage_offset_vy"].as<float>();
         if (guidance["depth_scale"])
             config.guidance.depth_scale = guidance["depth_scale"].as<float>();
+        if (guidance["depth_filter_enabled"])
+            config.guidance.depth_filter_enabled = guidance["depth_filter_enabled"].as<bool>();
+        if (guidance["depth_process_noise_q"])
+            config.guidance.depth_process_noise_q = guidance["depth_process_noise_q"].as<double>();
+        if (guidance["depth_measurement_noise_r"])
+            config.guidance.depth_measurement_noise_r =
+                guidance["depth_measurement_noise_r"].as<double>();
+        if (guidance["depth_initial_pos_std"])
+            config.guidance.depth_initial_pos_std = guidance["depth_initial_pos_std"].as<double>();
+        if (guidance["depth_initial_vel_std"])
+            config.guidance.depth_initial_vel_std = guidance["depth_initial_vel_std"].as<double>();
+        if (guidance["depth_max_missed_frames"])
+            config.guidance.depth_max_missed_frames =
+                guidance["depth_max_missed_frames"].as<int>();
         if (guidance["voltage_gain_x"])
             config.guidance.voltage_gain_x = guidance["voltage_gain_x"].as<float>();
         if (guidance["voltage_gain_y"])

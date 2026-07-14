@@ -1,4 +1,3 @@
-#include <cassert>
 #include <cmath>
 #include <print>
 
@@ -6,11 +5,14 @@
 
 #include "config.hpp"
 #include "guidance/depth_estimator.hpp"
+#include "test_utils.hpp"
 #include "types.hpp"
 
 namespace {
 
 using namespace rmcs_laser_guidance;
+using rmcs_laser_guidance::tests::require;
+using rmcs_laser_guidance::tests::require_near;
 
 auto make_test_config(float target_width_mm = 150.0F) -> GuidanceConfig {
     GuidanceConfig cfg;
@@ -41,14 +43,17 @@ void test_depth_basic() {
     candidate.score = 0.9F;
 
     auto depth = estimator.estimate(candidate);
-    assert(depth.has_value());
+    require(depth.has_value(), "depth_basic: expected a value");
     float expected = 2000.0F * 150.0F / 15.0F;
-    assert(std::abs(*depth - expected) < 1.0F);
+    require_near(*depth, expected, 1.0F, "depth_basic");
 
     std::println("  depth_basic: {}mm (expected ~{}mm)", *depth, expected);
 }
 
-void test_depth_uses_max_dim() {
+void test_depth_uses_bbox_width() {
+    // The laser detection module's axis stays vertical in world space, so
+    // bbox.width (not height) tracks its ~50mm horizontal extent regardless
+    // of bbox.height. See depth_estimator.cpp for the full rationale.
     auto cfg = make_test_config(150.0F);
     auto K = make_k_matrix(2000.0, 2000.0);
     DepthEstimator estimator(cfg, K);
@@ -56,13 +61,13 @@ void test_depth_uses_max_dim() {
     ModelCandidate candidate;
     candidate.class_id = 0;
     candidate.bbox = cv::Rect2f{0, 0, 10.0F, 30.0F};
-    float expected = 2000.0F * 150.0F / 30.0F;
+    float expected = 2000.0F * 150.0F / 10.0F;
 
     auto depth = estimator.estimate(candidate);
-    assert(depth.has_value());
-    assert(std::abs(*depth - expected) < 1.0F);
+    require(depth.has_value(), "depth_uses_bbox_width: expected a value");
+    require_near(*depth, expected, 1.0F, "depth_uses_bbox_width");
 
-    std::println("  depth_uses_max_dim: OK");
+    std::println("  depth_uses_bbox_width: OK");
 }
 
 void test_depth_unknown_class() {
@@ -75,9 +80,9 @@ void test_depth_unknown_class() {
     candidate.bbox = cv::Rect2f{0, 0, 10.0F, 10.0F};
 
     auto depth = estimator.estimate(candidate);
-    assert(depth.has_value());
+    require(depth.has_value(), "depth_unknown_class: expected a value");
     float expected = 2000.0F * 150.0F / 10.0F;
-    assert(std::abs(*depth - expected) < 1.0F);
+    require_near(*depth, expected, 1.0F, "depth_unknown_class");
 
     std::println("  depth_unknown_class: OK (falls back to default)");
 }
@@ -92,7 +97,7 @@ void test_depth_zero_size() {
     candidate.bbox = cv::Rect2f{0, 0, 0.0F, 0.0F};
 
     auto depth = estimator.estimate(candidate);
-    assert(!depth.has_value());
+    require(!depth.has_value(), "depth_zero_size: expected no value");
 
     std::println("  depth_zero_size: OK");
 }
@@ -110,7 +115,7 @@ void test_depth_invalid_fx() {
     candidate.bbox = cv::Rect2f{0, 0, 10.0F, 10.0F};
 
     auto depth = estimator.estimate(candidate);
-    assert(!depth.has_value());
+    require(!depth.has_value(), "depth_invalid_fx: expected no value");
 
     std::println("  depth_invalid_fx: OK");
 }
@@ -125,10 +130,10 @@ void test_depth_large_distance() {
     candidate.bbox = cv::Rect2f{0, 0, 3.0F, 3.0F};
 
     auto depth = estimator.estimate(candidate);
-    assert(depth.has_value());
+    require(depth.has_value(), "depth_large_distance: expected a value");
     float expected = 3000.0F * 200.0F / 3.0F;
-    assert(std::abs(*depth - expected) < 1.0F);
-    assert(*depth > 100000.0F);
+    require_near(*depth, expected, 1.0F, "depth_large_distance");
+    require(*depth > 100000.0F, "depth_large_distance: expected depth > 100000mm");
 
     std::println("  depth_large_distance: {}mm", *depth);
 }
@@ -138,7 +143,7 @@ void test_depth_large_distance() {
 int main() {
     std::println("depth_estimator_test:");
     test_depth_basic();
-    test_depth_uses_max_dim();
+    test_depth_uses_bbox_width();
     test_depth_unknown_class();
     test_depth_zero_size();
     test_depth_invalid_fx();

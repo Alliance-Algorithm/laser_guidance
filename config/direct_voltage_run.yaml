@@ -69,20 +69,26 @@ guidance:
   calib_mode: false
   target_geometry:
     - class_id: 0
-      width_mm: 72.0
-      height_mm: 50.0
+      width_mm: 50.0
+      height_mm: 72.0
     - class_id: 1
-      width_mm: 72.0
-      height_mm: 50.0
+      width_mm: 50.0
+      height_mm: 72.0
     - class_id: 2
-      width_mm: 72.0
-      height_mm: 50.0
+      width_mm: 50.0
+      height_mm: 72.0
   voltage_model_path: "models/vision_voltage_poly_v4.yaml"
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   voltage_offset_vx: 0.0
   voltage_offset_vy: 0.0
   camera_calib_path: "config/camera_calib.yaml"
+  depth_filter_enabled: true
+  depth_process_noise_q: 400.0
+  depth_measurement_noise_r: 4000000.0
+  depth_initial_pos_std: 5000.0
+  depth_initial_vel_std: 2000.0
+  depth_max_missed_frames: 5
   t_x_mm: -97.0
   t_y_mm: 15.1
   t_z_mm: 146.0

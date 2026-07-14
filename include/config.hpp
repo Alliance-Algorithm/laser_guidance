@@ -138,6 +138,12 @@ struct GuidanceConfig {
     float voltage_offset_vx = 0.0F;
     float voltage_offset_vy = 0.0F;
     float depth_scale = 1.0F;
+    bool depth_filter_enabled = true;
+    double depth_process_noise_q = 400.0;
+    double depth_measurement_noise_r = 4000000.0;
+    double depth_initial_pos_std = 5000.0;
+    double depth_initial_vel_std = 2000.0;
+    int depth_max_missed_frames = 5;
     float voltage_gain_x = 1.0F;
     float voltage_gain_y = 1.0F;
     float angle_offset_x_deg = 0.0F;

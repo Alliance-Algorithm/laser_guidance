@@ -146,7 +146,7 @@ auto GuidanceSession::execute(const TargetTrack& track) -> GuidanceFrameResult {
             return result;
         }
 
-        const auto telemetry = solver_->observe_target(selected);
+        const auto telemetry = solver_->observe_target(selected, track.dt_seconds);
         result.telemetry = GuidanceTelemetry{
             .measured_depth_mm = telemetry.measured_depth_mm,
             .active_depth_mm = telemetry.active_depth_mm,
