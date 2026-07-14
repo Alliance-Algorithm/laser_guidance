@@ -52,6 +52,8 @@ CaptureDevice
 
 通过 Foxglove Studio（WebSocket `ws://localhost:8765`）或 rviz2 可视化。
 
+`HitProgress` 按 RoboMaster 2026 空中机器人反制规则本地估算“被瞄准进度”：P 限制在 `[0,100]`，未照射时以 `0.5/s` 衰减并重置连续计数；连续照射时每满 `0.1s` 增加 `0.6*n`。第一次反制前 `P0=50`，之后 `P0=100`；每局最多 5 次锁定，难度序列为 `1,2,2,3,3`。
+
 ## 采集层
 
 `CaptureDevice` 在内部按配置选择 backend：
