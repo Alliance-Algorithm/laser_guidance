@@ -1,6 +1,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <print>
@@ -103,6 +104,10 @@ auto close_ffplay_viewer(FILE* pipe) -> void {
     if (pipe) pclose(pipe);
 }
 
+auto record_preview_enabled(const rmcs_laser_guidance::Config& config) -> bool {
+    return config.debug.show_window && std::getenv("LASER_RECORD_PREVIEW") != nullptr;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -177,10 +182,11 @@ int main(int argc, char** argv) {
         const auto monotonic_start = std::chrono::steady_clock::now();
         const auto deadline =
             monotonic_start + std::chrono::duration<double>(record_options.duration_seconds);
-        if (!config.debug.show_window) {
+        const bool preview_enabled = record_preview_enabled(config);
+        if (!preview_enabled) {
             std::println(
                 "recording without preview window; wait {:.1f}s or press Ctrl+C to "
-                "finalize",
+                "finalize (set LASER_RECORD_PREVIEW=1 to enable raw preview)",
                 record_options.duration_seconds);
         }
 
@@ -188,7 +194,7 @@ int main(int argc, char** argv) {
                                 open_result->pixel_encoding.find("BGR") != std::string::npos)
                                    ? "bgr24"
                                    : "rgb24";
-        g_ffplay_pipe = config.debug.show_window
+        g_ffplay_pipe = preview_enabled
                             ? launch_ffplay_viewer(open_result->width, open_result->height, pixel_fmt)
                             : nullptr;
 

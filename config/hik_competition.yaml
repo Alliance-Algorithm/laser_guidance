@@ -11,10 +11,10 @@ capture_backend: hikcamera
 # --- HikCamera 工业相机参数 --------------------------------------------------
 hik:
   device_id: ""
-  timeout_ms: 2000
-  exposure_us: 2000.0
+  timeout_ms: 1000
+  exposure_us: 500
   framerate: 80.0
-  gain: 16
+  gain: 10
   invert_image: false
   software_sync: false
   trigger_mode: false
@@ -36,7 +36,7 @@ debug:
 runtime:
   max_input_age_ms: 25
   max_observation_age_ms: 35
-  max_infer_fps: 60
+  max_infer_fps: 80
   warmup_frames: 30
   engine_path: "models/exp.engine"
   hit_confirm_frames: 3
@@ -64,7 +64,7 @@ streaming:
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "h264_nvenc"
-  bitrate: "50M"
+  bitrate: "100M"
 
 udp:
   enabled: true
