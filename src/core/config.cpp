@@ -111,6 +111,25 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         read_opt(hik, "software_sync", config.hik.software_sync);
         read_opt(hik, "trigger_mode", config.hik.trigger_mode);
         read_opt(hik, "fixed_framerate", config.hik.fixed_framerate);
+
+        if (const YAML::Node unlit = hik["profile_unlit"]) {
+            config.hik.has_unlit_profile = true;
+            config.hik.unlit.exposure_us = config.hik.exposure_us;
+            config.hik.unlit.gain = config.hik.gain;
+            config.hik.unlit.framerate = config.hik.framerate;
+            read_opt(unlit, "exposure_us", config.hik.unlit.exposure_us);
+            read_opt(unlit, "gain", config.hik.unlit.gain);
+            read_opt(unlit, "framerate", config.hik.unlit.framerate);
+            if (unlit["white_balance_ratio_red"] || unlit["white_balance_ratio_green"]
+                || unlit["white_balance_ratio_blue"] || unlit["white_balance_auto"]) {
+                config.hik.unlit.set_white_balance = true;
+                read_opt(unlit, "white_balance_ratio_red", config.hik.unlit.white_balance_ratio_red);
+                read_opt(
+                    unlit, "white_balance_ratio_green", config.hik.unlit.white_balance_ratio_green);
+                read_opt(
+                    unlit, "white_balance_ratio_blue", config.hik.unlit.white_balance_ratio_blue);
+            }
+        }
     }
 
     if (const YAML::Node debug = yaml["debug"]) {

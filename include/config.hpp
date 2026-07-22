@@ -62,7 +62,7 @@ struct RtpConfig {
     int port = 5002;
     std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
     std::string encoder = "h264_nvenc";
-    std::string bitrate = "50M";
+    std::string bitrate = "12M";
 };
 
 struct UdpConfig {
@@ -158,6 +158,16 @@ struct GuidanceConfig {
     float calib_angle_y_deg = 0.0F;
 };
 
+struct HikRuntimeProfile {
+    float exposure_us = 2000.0F;
+    float gain = 16.9807F;
+    float framerate = 80.0F;
+    bool set_white_balance = false;
+    int white_balance_ratio_red = 1024;
+    int white_balance_ratio_green = 1024;
+    int white_balance_ratio_blue = 1024;
+};
+
 struct HikCameraConfig {
     std::string device_id{};
     unsigned int timeout_ms = 2000;
@@ -168,6 +178,20 @@ struct HikCameraConfig {
     bool software_sync = false;
     bool trigger_mode = false;
     bool fixed_framerate = true;
+    bool has_unlit_profile = false;
+    HikRuntimeProfile unlit{};
+
+    [[nodiscard]] auto lit_profile() const -> HikRuntimeProfile {
+        return HikRuntimeProfile{
+            .exposure_us = exposure_us,
+            .gain = gain,
+            .framerate = framerate,
+            .set_white_balance = false,
+            .white_balance_ratio_red = 1024,
+            .white_balance_ratio_green = 1024,
+            .white_balance_ratio_blue = 1024,
+        };
+    }
 };
 
 struct Config {
