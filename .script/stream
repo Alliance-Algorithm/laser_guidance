@@ -62,7 +62,14 @@ launch_ffplay() {
         echo "warning: ffplay not found; daemon keeps running, but local playback is skipped"
         return 0
     fi
-    ffplay -hide_banner -loglevel warning -nostats -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 5000000 -sync ext "$SDP"
+    ffplay -hide_banner -loglevel warning -nostats \
+        -protocol_whitelist file,rtp,udp \
+        -fflags discardcorrupt \
+        -flags low_delay \
+        -probesize 2000000 \
+        -analyzeduration 2000000 \
+        -sync ext \
+        "$SDP"
 }
 
 # Daemon already running: just launch ffplay if streaming enabled
