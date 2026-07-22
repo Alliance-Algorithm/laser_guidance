@@ -3,6 +3,7 @@
 #include <expected>
 #include <string>
 
+#include "config.hpp"
 #include "types.hpp"
 
 namespace rmcs_laser_guidance {
@@ -20,6 +21,10 @@ public:
     virtual auto close() noexcept -> void = 0;
     [[nodiscard]] virtual auto is_open() const noexcept -> bool = 0;
     virtual auto reconnect() -> std::expected<CaptureFormat, std::string> = 0;
+    virtual auto apply_runtime_profile(const HikRuntimeProfile& /*profile*/)
+        -> std::expected<void, std::string> {
+        return std::unexpected("runtime camera profile switch is not supported on this backend");
+    }
 };
 
 } // namespace rmcs_laser_guidance

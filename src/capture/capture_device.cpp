@@ -2,8 +2,11 @@
 
 #include <chrono>
 #include <memory>
+#include <print>
 #include <thread>
 #include <utility>
+
+#include <hikcamera/parameters.hpp>
 
 namespace rmcs_laser_guidance {
 namespace {
@@ -20,6 +23,46 @@ auto to_hik_config(const HikCameraConfig& config) -> hikcamera::Config {
         .trigger_mode = config.trigger_mode,
         .fixed_framerate = config.fixed_framerate,
     };
+}
+
+auto apply_hik_runtime_profile(hikcamera::Camera& camera, const HikRuntimeProfile& profile)
+    -> std::expected<void, std::string> {
+    using hikcamera::auto_mode;
+
+    if (auto ret = camera.parameter<hikcamera::param::exposure_auto>().set(auto_mode::off); !ret)
+        return std::unexpected(ret.error());
+    if (auto ret = camera.parameter<hikcamera::param::gain_auto>().set(auto_mode::off); !ret)
+        return std::unexpected(ret.error());
+    if (auto ret = camera.parameter<hikcamera::param::exposure_time_us>().set(profile.exposure_us);
+        !ret)
+        return std::unexpected(ret.error());
+    if (auto ret = camera.parameter<hikcamera::param::gain>().set(profile.gain); !ret)
+        return std::unexpected(ret.error());
+    if (profile.framerate > 0.0F) {
+        if (auto ret =
+                camera.parameter<hikcamera::param::frame_rate_fps>().set(profile.framerate);
+            !ret)
+            return std::unexpected(ret.error());
+    }
+    if (profile.set_white_balance) {
+        if (auto ret =
+                camera.parameter<hikcamera::param::white_balance_auto>().set(auto_mode::off);
+            !ret)
+            return std::unexpected(ret.error());
+        if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_red>().set(
+                profile.white_balance_ratio_red);
+            !ret)
+            return std::unexpected(ret.error());
+        if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_green>().set(
+                profile.white_balance_ratio_green);
+            !ret)
+            return std::unexpected(ret.error());
+        if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_blue>().set(
+                profile.white_balance_ratio_blue);
+            !ret)
+            return std::unexpected(ret.error());
+    }
+    return {};
 }
 
 } // namespace
@@ -89,7 +132,18 @@ auto HikBackend::open() -> std::expected<CaptureFormat, std::string> {
     if (!camera.stream_format().has_value()) {
         return std::unexpected("Hik camera connected but stream format is unavailable");
     }
+    if (auto applied = apply_hik_runtime_profile(camera, config.lit_profile()); !applied) {
+        std::println(stderr, "Hik lit profile apply: {}", applied.error());
+    }
     return to_capture_format(*camera.device_info(), *camera.stream_format());
+}
+
+auto HikBackend::apply_runtime_profile(const HikRuntimeProfile& profile)
+    -> std::expected<void, std::string> {
+    if (!camera.connected()) {
+        return std::unexpected("Hik camera is not connected");
+    }
+    return apply_hik_runtime_profile(camera, profile);
 }
 
 auto HikBackend::read_frame() -> std::expected<Frame, std::string> {
@@ -180,6 +234,14 @@ auto CaptureDevice::reconnect() -> std::expected<void, std::string> {
     negotiated_ = *format;
     start_capture_thread();
     return {};
+}
+
+auto CaptureDevice::apply_runtime_profile(const HikRuntimeProfile& profile)
+    -> std::expected<void, std::string> {
+    if (!backend_) {
+        return std::unexpected("capture backend is unavailable");
+    }
+    return backend_->apply_runtime_profile(profile);
 }
 
 auto CaptureDevice::start_capture_thread() -> void {

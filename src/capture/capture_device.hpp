@@ -57,6 +57,8 @@ struct HikBackend : public CaptureBackend {
     auto close() noexcept -> void override;
     [[nodiscard]] auto is_open() const noexcept -> bool override;
     auto reconnect() -> std::expected<CaptureFormat, std::string> override;
+    auto apply_runtime_profile(const HikRuntimeProfile& profile)
+        -> std::expected<void, std::string> override;
 
     hikcamera::Camera camera{};
     HikCameraConfig config{};
@@ -77,6 +79,7 @@ public:
     [[nodiscard]] auto negotiated_format() const noexcept -> const std::optional<CaptureFormat>&;
 
     auto reconnect() -> std::expected<void, std::string>;
+    auto apply_runtime_profile(const HikRuntimeProfile& profile) -> std::expected<void, std::string>;
 
 private:
     [[nodiscard]] auto make_backend() const -> std::unique_ptr<CaptureBackend>;
