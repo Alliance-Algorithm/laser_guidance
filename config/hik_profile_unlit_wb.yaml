@@ -1,0 +1,8 @@
+exposure_us: 20000
+gain: 16.9
+framerate: 50.0
+white_balance_auto: 'off'
+white_balance_ratio_red: 1450
+white_balance_ratio_green: 900
+white_balance_ratio_blue: 2300
+note: stage3 unlit for YOLO training capture; 20ms => max ~50fps

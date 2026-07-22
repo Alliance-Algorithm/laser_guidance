@@ -2,9 +2,9 @@ capture_backend: hikcamera
 hik:
   device_id: ''
   timeout_ms: 1000
-  exposure_us: 1000
-  framerate: 80.0
-  gain: 10
+  exposure_us: 20000
+  framerate: 50.0
+  gain: 16.9
   invert_image: false
   software_sync: false
   trigger_mode: false
