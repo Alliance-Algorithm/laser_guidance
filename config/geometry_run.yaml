@@ -41,7 +41,7 @@ streaming:
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "libx264"
-  bitrate: "50M"
+  bitrate: "12M"
 
 udp:
   enabled: true
