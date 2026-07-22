@@ -420,6 +420,7 @@ auto ControlLoop::run_loop() -> void {
         }
 
         update_hit_progress(frame.detection);
+        maybe_switch_hik_profile();
         const auto pre_output_status = outputs_.status();
         overlay_.render(
             frame,
@@ -545,6 +546,44 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
                                ? 1.0F / static_cast<float>(negotiated_format_->framerate)
                                : 1.0F / 60.0F;
     hit_progress_.update(is_purple, frame_dt_s);
+}
+
+auto ControlLoop::maybe_switch_hik_profile() -> void {
+    if (config_.capture_backend != CaptureBackendKind::hikcamera) {
+        return;
+    }
+    if (!config_.hik.has_unlit_profile) {
+        return;
+    }
+    if (!capture_.is_open()) {
+        return;
+    }
+
+    const int difficulty = hit_progress_.difficulty();
+    const bool want_unlit = difficulty >= 3;
+    const int target = want_unlit ? 3 : 1;
+    if (target == active_hik_profile_difficulty_) {
+        return;
+    }
+
+    const HikRuntimeProfile profile =
+        want_unlit ? config_.hik.unlit : config_.hik.lit_profile();
+    if (auto applied = capture_.apply_runtime_profile(profile); !applied) {
+        std::println(
+            stderr, "Hik profile switch to {} failed: {}", want_unlit ? "unlit" : "lit",
+            applied.error());
+        return;
+    }
+
+    active_hik_profile_difficulty_ = target;
+    if (negotiated_format_ && profile.framerate > 0.0F) {
+        negotiated_format_->framerate = static_cast<double>(profile.framerate);
+    }
+    std::println(
+        stderr,
+        "Hik profile -> {} (difficulty={}) exposure_us={} gain={} fps={} wb={}",
+        want_unlit ? "unlit" : "lit", difficulty, profile.exposure_us, profile.gain,
+        profile.framerate, profile.set_white_balance);
 }
 
 auto ControlLoop::show_window() const -> bool { return config_.debug.show_window; }
