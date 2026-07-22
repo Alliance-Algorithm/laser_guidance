@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #include <yaml-cpp/yaml.h>
 
@@ -17,6 +18,10 @@ struct RecordSessionOptions {
     std::string background_tag{"unspecified"};
     std::string distance_tag{"unspecified"};
     std::string target_color{"red"};
+    std::string frame_format{"h264"};
+    int jpeg_quality = 85;
+    int sample_rate = 10;
+    int h264_qp = 5;
 };
 
 auto default_config_path() -> std::filesystem::path;

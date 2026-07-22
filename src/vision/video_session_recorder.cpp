@@ -62,7 +62,7 @@ auto h264_nvenc_available() -> bool {
 
 auto build_recording_ffmpeg_command(
     const int width, const int height, const double framerate,
-    const std::filesystem::path& output_path) -> std::string {
+    const std::filesystem::path& output_path, const int h264_qp = 5) -> std::string {
     const int gop = std::max(1, static_cast<int>(framerate > 0.0 ? framerate : 80.0));
     const std::string quoted_output_path = shell_quote(output_path.string());
 
@@ -72,12 +72,12 @@ auto build_recording_ffmpeg_command(
             "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
             "-framerate {} -i pipe:0 "
             "-c:v h264_nvenc "
-            "-preset p1 -tune hq -rc constqp -qp 18 "
+            "-preset p1 -tune hq -rc constqp -qp {} "
             "-g {} -bf 0 -rc-lookahead 0 "
             "-spatial_aq 1 -temporal_aq 1 "
             "-profile:v high -pix_fmt yuv420p -movflags +faststart "
             "-f mp4 {}",
-            width, height, framerate, gop, quoted_output_path);
+            width, height, framerate, h264_qp, gop, quoted_output_path);
     }
 
     std::println(
@@ -87,10 +87,10 @@ auto build_recording_ffmpeg_command(
         "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
         "-framerate {} -i pipe:0 "
         "-c:v libx264 "
-        "-preset ultrafast -crf 18 "
+        "-preset ultrafast -crf {} "
         "-g {} -pix_fmt yuv420p -movflags +faststart "
         "-f mp4 {}",
-        width, height, framerate, gop, quoted_output_path);
+        width, height, framerate, h264_qp, gop, quoted_output_path);
 }
 
 auto validate_video_session_metadata(const VideoSessionMetadata& metadata) -> void {

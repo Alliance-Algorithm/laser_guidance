@@ -1,9 +1,21 @@
 #include "laser_guidance/support.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <string>
 
 namespace rmcs_laser_guidance {
+namespace {
+
+auto normalize_lower(std::string_view s) -> std::string {
+    std::string result(s);
+    std::transform(result.begin(), result.end(), result.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return result;
+}
+
+} // namespace
 
 auto default_config_path() -> std::filesystem::path {
     return "config/default.yaml";
@@ -36,6 +48,10 @@ auto default_record_session_options() -> RecordSessionOptions {
         .background_tag = "unspecified",
         .distance_tag = "unspecified",
         .target_color = "red",
+        .frame_format = "h264",
+        .jpeg_quality = 85,
+        .sample_rate = 10,
+        .h264_qp = 5,
     };
 }
 
@@ -66,12 +82,36 @@ auto load_record_session_options(const std::filesystem::path& config_path) -> Re
     if (record["target_color"]) {
         options.target_color = record["target_color"].as<std::string>();
     }
+    if (record["frame_format"]) {
+        options.frame_format = normalize_lower(record["frame_format"].as<std::string>());
+    }
+    if (record["jpeg_quality"]) {
+        options.jpeg_quality = record["jpeg_quality"].as<int>();
+    }
+    if (record["sample_rate"]) {
+        options.sample_rate = record["sample_rate"].as<int>();
+    }
+    if (record["h264_qp"]) {
+        options.h264_qp = record["h264_qp"].as<int>();
+    }
 
     if (options.output_root.empty()) {
         throw std::runtime_error("record.output_root must not be empty");
     }
     if (options.duration_seconds <= 0.0) {
         throw std::runtime_error("record.duration_seconds must be positive");
+    }
+    if (options.frame_format != "h264" && options.frame_format != "jpeg" && options.frame_format != "png") {
+        throw std::runtime_error("record.frame_format must be 'h264', 'jpeg', or 'png'");
+    }
+    if (options.jpeg_quality < 1 || options.jpeg_quality > 100) {
+        throw std::runtime_error("record.jpeg_quality must be 1-100");
+    }
+    if (options.sample_rate < 1) {
+        throw std::runtime_error("record.sample_rate must be >= 1");
+    }
+    if (options.h264_qp < 0 || options.h264_qp > 51) {
+        throw std::runtime_error("record.h264_qp must be 0-51 (0=lossless)");
     }
 
     return options;

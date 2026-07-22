@@ -86,6 +86,10 @@ int main() {
             "default record distance tag mismatch");
         require(
             default_record_options.target_color == "red", "default record target color mismatch");
+        require(
+            default_record_options.frame_format == "jpeg", "default record frame_format mismatch");
+        require(default_record_options.jpeg_quality == 85, "default record jpeg_quality mismatch");
+        require(default_record_options.sample_rate == 10, "default record sample_rate mismatch");
         const auto forced_record_v4l2_config =
             rmcs_laser_guidance::record_session_v4l2_config({
                 .device_path = "/dev/video7",
@@ -131,7 +135,7 @@ int main() {
             capture_record_options.output_root == std::filesystem::path("./videos"),
             "capture record output root mismatch");
         require_near(
-            static_cast<float>(capture_record_options.duration_seconds), 240.0F, 1e-3F,
+            static_cast<float>(capture_record_options.duration_seconds), 180.0F, 1e-3F,
             "capture record duration mismatch");
         require(
             capture_record_options.lighting_tag == "indoor_lab",
@@ -143,6 +147,12 @@ int main() {
             capture_record_options.distance_tag == "20m", "capture record distance tag mismatch");
         require(
             capture_record_options.target_color == "red", "capture record target color mismatch");
+        require(
+            capture_record_options.frame_format == "jpeg", "capture record frame_format mismatch");
+        require(
+            capture_record_options.jpeg_quality == 85, "capture record jpeg_quality mismatch");
+        require(
+            capture_record_options.sample_rate == 10, "capture record sample_rate mismatch");
 
         const auto override_path = make_temp_path("rmcs_laser_guidance_config_override");
         write_text_file(

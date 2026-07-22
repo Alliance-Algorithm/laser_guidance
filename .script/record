@@ -34,7 +34,7 @@ if [ "$CAPTURE_BACKEND" = "hikcamera" ]; then
 fi
 
 OUTPUT="${2:-$REPO_ROOT/videos}"
-DURATION="${3:-240}"
+DURATION="${3:-120}"
 
 echo "=== 视频会话录制 ==="
 echo "配置: $CONFIG"
