@@ -98,6 +98,7 @@ private:
     std::unique_ptr<LatestValue<std::expected<Frame, std::string>>> frame_queue_{};
     std::thread capture_thread_{};
     std::atomic<bool> capture_stop_{false};
+    std::mutex backend_mutex_{};
 };
 
 } // namespace rmcs_laser_guidance

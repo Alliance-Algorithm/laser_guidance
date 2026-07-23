@@ -61,6 +61,11 @@ auto apply_hik_runtime_profile(hikcamera::Camera& camera, const HikRuntimeProfil
                 profile.white_balance_ratio_blue);
             !ret)
             return std::unexpected(ret.error());
+    } else {
+        if (auto ret = camera.parameter<hikcamera::param::white_balance_auto>().set(
+                auto_mode::continuous);
+            !ret)
+            return std::unexpected(ret.error());
     }
     return {};
 }
@@ -241,6 +246,7 @@ auto CaptureDevice::apply_runtime_profile(const HikRuntimeProfile& profile)
     if (!backend_) {
         return std::unexpected("capture backend is unavailable");
     }
+    std::scoped_lock lock(backend_mutex_);
     return backend_->apply_runtime_profile(profile);
 }
 
@@ -270,7 +276,11 @@ auto CaptureDevice::capture_loop() -> void {
     constexpr auto kErrorBackoff = std::chrono::milliseconds(100);
 
     while (!capture_stop_.load(std::memory_order_relaxed)) {
-        auto result = backend_->read_frame();
+        std::expected<Frame, std::string> result;
+        {
+            std::scoped_lock lock(backend_mutex_);
+            result = backend_->read_frame();
+        }
         if (capture_stop_.load(std::memory_order_relaxed)) {
             break;
         }
