@@ -51,7 +51,7 @@ auto default_record_session_options() -> RecordSessionOptions {
         .frame_format = "h264",
         .jpeg_quality = 85,
         .sample_rate = 10,
-        .h264_qp = 5,
+        .h264_qp = 23,
     };
 }
 

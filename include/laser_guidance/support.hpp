@@ -21,7 +21,7 @@ struct RecordSessionOptions {
     std::string frame_format{"h264"};
     int jpeg_quality = 85;
     int sample_rate = 10;
-    int h264_qp = 5;
+    int h264_qp = 23;
 };
 
 auto default_config_path() -> std::filesystem::path;

@@ -49,6 +49,8 @@ record:
   background_tag: field
   distance_tag: variable
   target_color: purple
+  frame_format: h264
+  h264_qp: 23
 streaming:
   enabled: true
   host: 127.0.0.1

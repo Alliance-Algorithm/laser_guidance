@@ -176,10 +176,22 @@ int main(int argc, char** argv) {
             monotonic_start + std::chrono::duration<double>(record_options.duration_seconds);
         const bool preview_enabled = record_preview_enabled(config);
         if (!preview_enabled) {
-            std::println(
-                "recording without preview window; wait {:.1f}s or press Ctrl+C to "
-                "finalize (unset LASER_RECORD_PREVIEW to enable)",
-                record_options.duration_seconds);
+            const char* preview_env = std::getenv("LASER_RECORD_PREVIEW");
+            const bool disabled_by_env =
+                preview_env != nullptr
+                && (std::string_view(preview_env) == "0"
+                    || std::string_view(preview_env) == "false");
+            if (disabled_by_env) {
+                std::println(
+                    "recording without preview window (LASER_RECORD_PREVIEW={}); wait {:.1f}s "
+                    "or Ctrl+C to finalize",
+                    preview_env, record_options.duration_seconds);
+            } else {
+                std::println(
+                    "recording without preview window (debug.show_window=false); wait {:.1f}s "
+                    "or Ctrl+C to finalize",
+                    record_options.duration_seconds);
+            }
         }
 
         const auto pixel_fmt = (open_result->pixel_encoding == "BGR8" ||
@@ -215,7 +227,9 @@ int main(int argc, char** argv) {
                     .distance_tag = record_options.distance_tag,
                     .target_color = record_options.target_color,
                     .operator_note_present = false,
-                });
+                    .h264_qp = record_options.h264_qp,
+                },
+                record_options.h264_qp);
             encode_label = std::format("H264 qp={}", record_options.h264_qp);
         } else {
             const bool use_png = record_options.frame_format == "png";
@@ -252,10 +266,13 @@ int main(int argc, char** argv) {
             } else if (frame_index % record_options.sample_rate == 0) {
                 const auto fname = std::format("{:06d}{}", frame_index, ext);
                 const auto fpath = frames_dir / fname;
-                cv::imwrite(fpath.string(), frame->image, encode_params);
-                const double blur = rmcs_laser_guidance::blur_score_for_frame(frame->image);
-                manifest_entries.emplace_back(frame_index, fname, blur);
-                saved_frames++;
+                if (cv::imwrite(fpath.string(), frame->image, encode_params)) {
+                    const double blur = rmcs_laser_guidance::blur_score_for_frame(frame->image);
+                    manifest_entries.emplace_back(frame_index, fname, blur);
+                    saved_frames++;
+                } else {
+                    std::println(stderr, "failed to write frame: {}", fpath.string());
+                }
             }
 
             if (g_ffplay_pipe) {
