@@ -291,6 +291,8 @@ auto ControlLoop::run_loop() -> void {
                     std::scoped_lock lock(state_mutex_);
                     negotiated_format_ = std::move(new_format);
                 }
+                // reconnect re-applies lit profile in HikBackend::open(); force resync.
+                active_hik_profile_difficulty_ = 1;
 
                 if (guidance_enabled_in_profile()) {
                     {
