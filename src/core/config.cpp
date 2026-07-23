@@ -121,7 +121,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             read_opt(unlit, "gain", config.hik.unlit.gain);
             read_opt(unlit, "framerate", config.hik.unlit.framerate);
             if (unlit["white_balance_ratio_red"] || unlit["white_balance_ratio_green"]
-                || unlit["white_balance_ratio_blue"] || unlit["white_balance_auto"]) {
+                || unlit["white_balance_ratio_blue"]) {
                 config.hik.unlit.set_white_balance = true;
                 read_opt(unlit, "white_balance_ratio_red", config.hik.unlit.white_balance_ratio_red);
                 read_opt(
@@ -357,6 +357,20 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         throw std::runtime_error("v4l2.height must be positive");
     if (config.v4l2.framerate <= 0.0F)
         throw std::runtime_error("v4l2.framerate must be positive");
+    if (config.hik.exposure_us <= 0.0F)
+        throw std::runtime_error("hik.exposure_us must be positive");
+    if (config.hik.gain < 0.0F)
+        throw std::runtime_error("hik.gain must be non-negative");
+    if (config.hik.framerate <= 0.0F)
+        throw std::runtime_error("hik.framerate must be positive");
+    if (config.hik.has_unlit_profile) {
+        if (config.hik.unlit.exposure_us <= 0.0F)
+            throw std::runtime_error("hik.profile_unlit.exposure_us must be positive");
+        if (config.hik.unlit.gain < 0.0F)
+            throw std::runtime_error("hik.profile_unlit.gain must be non-negative");
+        if (config.hik.unlit.framerate <= 0.0F)
+            throw std::runtime_error("hik.profile_unlit.framerate must be positive");
+    }
     if (config.runtime.max_input_age_ms <= 0)
         throw std::runtime_error("runtime.max_input_age_ms must be positive");
     if (config.runtime.max_observation_age_ms <= 0)
