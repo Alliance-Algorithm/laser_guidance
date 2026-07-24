@@ -99,7 +99,7 @@ auto PerceptionRunner::start() -> std::expected<void, std::string> {
     }
 
     if (enabled()) {
-        worker_ = std::thread([this] { run(); });
+        worker_ = std::jthread([this](std::stop_token) { run(); });
     }
     return {};
 }
@@ -139,9 +139,7 @@ auto PerceptionRunner::shutdown() -> void {
 
 auto PerceptionRunner::stop() -> void {
     shutdown();
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    worker_ = std::jthread{};
 
     {
         std::scoped_lock lock(state_mutex_);

@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <thread>
 
@@ -72,7 +73,7 @@ private:
     std::unique_ptr<ModelInfer> infer_trt_{};
     std::optional<RuntimeBackend> active_backend_{};
     bool started_ = false;
-    std::thread worker_{};
+    std::jthread worker_{};
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal
