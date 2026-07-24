@@ -188,8 +188,11 @@ macro(add_lg_lib name)
 endmacro()
 
 # ---- source globs ------------------------------------------------------------
-file(GLOB_RECURSE laser_guidance_support_SOURCES CONFIGURE_DEPENDS
-  src/core/*.cpp
+set(laser_guidance_support_SOURCES
+  src/core/config.cpp
+  src/core/debug_renderer.cpp
+  src/core/frame_format.cpp
+  src/core/replay.cpp
   src/runtime/support.cpp
   src/runtime/runtime_command.cpp)
 file(GLOB_RECURSE laser_guidance_tracking_SOURCES CONFIGURE_DEPENDS src/tracking/*.cpp)
