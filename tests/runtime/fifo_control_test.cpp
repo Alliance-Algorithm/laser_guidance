@@ -18,6 +18,7 @@ int main() {
         using rmcs_laser_guidance::CmdSetStreaming;
         using rmcs_laser_guidance::CmdShutdown;
         using rmcs_laser_guidance::EnemyColor;
+        using rmcs_laser_guidance::ErrorKind;
         using rmcs_laser_guidance::FifoControlServer;
         using rmcs_laser_guidance::RuntimeBackend;
         using rmcs_laser_guidance::RuntimeCommand;
@@ -81,14 +82,20 @@ int main() {
         {
             const auto command = FifoControlServer::parse_command("backend invalid");
             require(!command.has_value(), "invalid backend should fail");
-            require_contains(command.error(), "unsupported FIFO command", "invalid backend error");
+            require(command.error().kind == ErrorKind::config,
+                "invalid backend should be config error");
+            require_contains(command.error().message, "unsupported FIFO command",
+                "invalid backend error");
         }
 
         // blank command
         {
             const auto command = FifoControlServer::parse_command("   ");
             require(!command.has_value(), "blank command should fail");
-            require_contains(command.error(), "empty FIFO command", "blank command error");
+            require(command.error().kind == ErrorKind::config,
+                "blank should be config error");
+            require_contains(command.error().message, "empty FIFO command",
+                "blank command error");
         }
 
         // multi-line, partial, and recovery via FIFO

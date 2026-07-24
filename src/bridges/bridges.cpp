@@ -67,13 +67,15 @@ FifoControlServer::FifoControlServer(std::filesystem::path fifo_path)
 
 FifoControlServer::~FifoControlServer() { stop(); }
 
-auto FifoControlServer::start() -> std::expected<void, std::string> {
+auto FifoControlServer::start() -> std::expected<void, Error> {
     stop();
     ::mkfifo(fifo_path_.c_str(), 0666);
     fd_ = ::open(fifo_path_.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd_ < 0) {
-        last_error_ = "failed to open FIFO: " + fifo_path_.string();
-        return std::unexpected(last_error_);
+        const auto err = make_error(
+            ErrorKind::device, "failed to open FIFO: " + fifo_path_.string());
+        last_error_ = format_error(err);
+        return std::unexpected(err);
     }
     last_error_.clear();
     return {};
@@ -126,7 +128,7 @@ auto FifoControlServer::consume_buffered_command() -> std::optional<RuntimeComma
         read_buffer_.erase(0, newline_pos + 1);
         auto parsed = parse_command(command_text);
         if (!parsed) {
-            last_error_ = parsed.error();
+            last_error_ = format_error(parsed.error());
             continue;
         }
         last_error_.clear();
@@ -135,10 +137,10 @@ auto FifoControlServer::consume_buffered_command() -> std::optional<RuntimeComma
 }
 
 auto FifoControlServer::parse_command(std::string_view text)
-    -> std::expected<RuntimeCommand, std::string> {
+    -> std::expected<RuntimeCommand, Error> {
     const auto normalized = lower_copy(trim_copy(std::string(text)));
     if (normalized.empty()) {
-        return std::unexpected("empty FIFO command");
+        return std::unexpected(make_error(ErrorKind::config, "empty FIFO command"));
     }
     if (normalized == "quit") {
         return runtime_command::shutdown();
@@ -176,7 +178,8 @@ auto FifoControlServer::parse_command(std::string_view text)
     if (normalized == "ekf off") {
         return runtime_command::set_ekf(false);
     }
-    return std::unexpected("unsupported FIFO command: " + normalized);
+    return std::unexpected(
+        make_error(ErrorKind::config, "unsupported FIFO command: " + normalized));
 }
 
 struct UdpTelemetryPublisher::Impl {

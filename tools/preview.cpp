@@ -8,6 +8,7 @@
 
 #include "config.hpp"
 #include "laser_guidance/bridges.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/runtime.hpp"
 #include "laser_guidance/support.hpp"
 
@@ -52,7 +53,7 @@ int main(int argc, char** argv) {
                 if (fifo_started) {
                     if (auto command = fifo.poll_command(); command.has_value()) {
                         if (auto result = runtime.submit_command(*command); !result) {
-                            std::println(stderr, "command rejected: {}", result.error());
+                            std::println(stderr, "command rejected: {}", format_error(result.error()));
                         }
                     } else if (!fifo.last_error().empty()) {
                         std::println(stderr, "FIFO parse error: {}", fifo.last_error());
@@ -64,7 +65,7 @@ int main(int argc, char** argv) {
         });
 
         if (auto run_result = runtime.run(); !run_result) {
-            std::println(stderr, "preview runtime start failed: {}", run_result.error());
+            std::println(stderr, "preview runtime start failed: {}", format_error(run_result.error()));
             g_stop_requested = true;
             if (command_thread.joinable()) {
                 command_thread.join();

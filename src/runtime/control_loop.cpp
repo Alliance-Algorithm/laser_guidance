@@ -98,7 +98,7 @@ ControlLoop::~ControlLoop() {
     join();
 }
 
-auto ControlLoop::start() -> std::expected<void, std::string> {
+auto ControlLoop::start() -> std::expected<void, Error> {
     {
         std::scoped_lock lock(state_mutex_);
         if (state_.running) {
@@ -108,7 +108,7 @@ auto ControlLoop::start() -> std::expected<void, std::string> {
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return result;
+        return std::unexpected(make_error(ErrorKind::internal, result.error()));
     }
 
     {
@@ -122,17 +122,18 @@ auto ControlLoop::start() -> std::expected<void, std::string> {
     return {};
 }
 
-auto ControlLoop::run() -> std::expected<void, std::string> {
+auto ControlLoop::run() -> std::expected<void, Error> {
     {
         std::scoped_lock lock(state_mutex_);
         if (state_.running) {
-            return std::unexpected("control loop is already running");
+            return std::unexpected(
+                make_error(ErrorKind::internal, "control loop is already running"));
         }
     }
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return result;
+        return std::unexpected(make_error(ErrorKind::internal, result.error()));
     }
 
     {
@@ -155,15 +156,17 @@ auto ControlLoop::join() -> void {
 }
 
 auto ControlLoop::submit_command(const RuntimeCommand& command)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     // Backend switch may run outside the state lock (matches current order:
     // validate backend first, then update state).
     if (const auto* set_backend = std::get_if<CmdSetBackend>(&command)) {
         if (!perception_.has_backend(set_backend->backend)) {
-            return std::unexpected("requested backend is not available");
+            return std::unexpected(
+                make_error(ErrorKind::unavailable, "requested backend is not available"));
         }
         if (!perception_.set_active_backend(set_backend->backend)) {
-            return std::unexpected("failed to switch active backend");
+            return std::unexpected(
+                make_error(ErrorKind::unavailable, "failed to switch active backend"));
         }
     }
 

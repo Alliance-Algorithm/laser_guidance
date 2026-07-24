@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 
+#include "laser_guidance/error.hpp"
 #include "runtime/control_loop.hpp"
 
 namespace rmcs_laser_guidance {
@@ -23,16 +24,16 @@ CompetitionRuntime::CompetitionRuntime(Config config, CompetitionRuntimeOptions 
 
 CompetitionRuntime::~CompetitionRuntime() = default;
 
-auto CompetitionRuntime::start() -> std::expected<void, std::string> {
+auto CompetitionRuntime::start() -> std::expected<void, Error> {
     return impl_->runtime->start();
 }
-auto CompetitionRuntime::run() -> std::expected<void, std::string> {
+auto CompetitionRuntime::run() -> std::expected<void, Error> {
     return impl_->runtime->run();
 }
 auto CompetitionRuntime::stop() -> void { impl_->runtime->stop(); }
 auto CompetitionRuntime::join() -> void { impl_->runtime->join(); }
 auto CompetitionRuntime::submit_command(const RuntimeCommand& command)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     return impl_->runtime->submit_command(command);
 }
 auto CompetitionRuntime::snapshot() const -> RuntimeSnapshot {

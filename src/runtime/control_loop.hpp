@@ -10,6 +10,7 @@
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/runtime.hpp"
 #include "bridges/ros_bridge.hpp"
 #include "runtime/guidance_session.hpp"
@@ -39,11 +40,11 @@ public:
     ControlLoop(const ControlLoop&) = delete;
     auto operator=(const ControlLoop&) -> ControlLoop& = delete;
 
-    auto start() -> std::expected<void, std::string>;
-    auto run() -> std::expected<void, std::string>;
+    auto start() -> std::expected<void, Error>;
+    auto run() -> std::expected<void, Error>;
     auto stop() -> void;
     auto join() -> void;
-    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>;
+    auto submit_command(const RuntimeCommand& command) -> std::expected<void, Error>;
     [[nodiscard]] auto snapshot() const -> RuntimeSnapshot;
 
 private:

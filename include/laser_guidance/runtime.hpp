@@ -13,6 +13,7 @@
 #include <opencv2/core/types.hpp>
 
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/support.hpp"
 #include "types.hpp"
 namespace rmcs_laser_guidance {
@@ -163,11 +164,11 @@ public:
     CompetitionRuntime(const CompetitionRuntime&) = delete;
     auto operator=(const CompetitionRuntime&) -> CompetitionRuntime& = delete;
 
-    auto start() -> std::expected<void, std::string>;
-    auto run() -> std::expected<void, std::string>;
+    auto start() -> std::expected<void, Error>;
+    auto run() -> std::expected<void, Error>;
     auto stop() -> void;
     auto join() -> void;
-    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>;
+    auto submit_command(const RuntimeCommand& command) -> std::expected<void, Error>;
     [[nodiscard]] auto snapshot() const -> RuntimeSnapshot;
 
 private:
