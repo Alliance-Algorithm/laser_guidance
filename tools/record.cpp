@@ -11,6 +11,8 @@
 
 #include <opencv2/imgcodecs.hpp>
 
+#include "laser_guidance/error.hpp"
+
 #include "capture/capture_device.hpp"
 #include "config.hpp"
 #include "laser_guidance/support.hpp"

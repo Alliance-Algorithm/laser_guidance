@@ -45,7 +45,7 @@ public:
 
     [[nodiscard]] auto mode() const -> Mode { return mode_; }
     // Session existence implies readiness — factory methods return
-    // std::expected<GuidanceSession, std::string> so callers check
+    // std::expected<GuidanceSession, Error> so callers check
     // guidance_.has_value() instead of calling enabled()/ready().
     [[nodiscard]] auto calibration_state() const -> const GuidanceCalibrationState*;
     auto mutable_calibration_state() -> GuidanceCalibrationState*;
