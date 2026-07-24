@@ -113,16 +113,12 @@ private:
                 .timestamp = Clock::now() - config_.synthetic_capture_age,
             };
 
-            try {
-                const std::size_t overwrites = capture_queue_.push(std::move(frame));
-                {
-                    const std::scoped_lock lock(mutex_);
-                    snapshot_.captured_frames = next_sequence;
-                    snapshot_.capture_overwrites = overwrites;
-                    snapshot_.max_capture_queue_depth = 1;
-                }
-            } catch (const std::exception&) {
-                break;
+            const std::size_t overwrites = capture_queue_.push(std::move(frame));
+            {
+                const std::scoped_lock lock(mutex_);
+                snapshot_.captured_frames = next_sequence;
+                snapshot_.capture_overwrites = overwrites;
+                snapshot_.max_capture_queue_depth = 1;
             }
 
             if (config_.max_capture_frames != 0 && next_sequence >= config_.max_capture_frames)
@@ -137,12 +133,11 @@ private:
 
     auto worker_loop(const std::stop_token& stop_token) -> void {
         while (!stop_token.stop_requested()) {
-            Frame frame;
-            try {
-                frame = capture_queue_.pop();
-            } catch (const std::exception&) {
+            auto maybe_frame = capture_queue_.pop();
+            if (!maybe_frame.has_value()) {
                 break;
             }
+            Frame frame = std::move(*maybe_frame);
 
             const auto worker_start_time = Clock::now();
             record_worker_pop();

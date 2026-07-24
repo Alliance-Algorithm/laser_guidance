@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 
 namespace rmcs_laser_guidance {
@@ -17,26 +16,22 @@ public:
     auto push(T value) -> std::size_t {
         std::scoped_lock lock(mutex_);
         if (shutdown_) {
-            throw std::runtime_error("LatestValue is shutdown");
+            return overwrite_count_;
         }
-
         if (value_.has_value()) {
             ++overwrite_count_;
         }
-
         value_.emplace(std::move(value));
         cv_.notify_one();
         return overwrite_count_;
     }
 
-    auto pop() -> T {
+    auto pop() -> std::optional<T> {
         std::unique_lock lock(mutex_);
         cv_.wait(lock, [this] { return shutdown_ || value_.has_value(); });
-
-        if (shutdown_) {
-            throw std::runtime_error("LatestValue is shutdown");
+        if (!value_.has_value()) {
+            return std::nullopt;
         }
-
         T value = std::move(*value_);
         value_.reset();
         return value;
@@ -44,9 +39,9 @@ public:
 
     auto try_pop(T& value) -> bool {
         std::scoped_lock lock(mutex_);
-        if (!value_.has_value())
+        if (!value_.has_value()) {
             return false;
-
+        }
         value = std::move(*value_);
         value_.reset();
         return true;
@@ -61,6 +56,11 @@ public:
     [[nodiscard]] auto overwrite_count() const -> std::size_t {
         std::scoped_lock lock(mutex_);
         return overwrite_count_;
+    }
+
+    [[nodiscard]] auto is_shutdown() const -> bool {
+        std::scoped_lock lock(mutex_);
+        return shutdown_;
     }
 
 private:

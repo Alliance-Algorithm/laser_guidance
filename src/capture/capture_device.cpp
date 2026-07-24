@@ -208,11 +208,11 @@ auto CaptureDevice::read_frame() -> std::expected<Frame, Error> {
         return std::unexpected(
             make_error(ErrorKind::unavailable, "capture device is not open"));
     }
-    try {
-        return frame_queue_->pop();
-    } catch (const std::exception& e) {
-        return std::unexpected(make_error(ErrorKind::internal, e.what()));
+    auto item = frame_queue_->pop();
+    if (!item.has_value()) {
+        return std::unexpected(make_error(ErrorKind::unavailable, "capture stopped"));
     }
+    return std::move(*item);
 }
 
 auto CaptureDevice::close() noexcept -> void {
@@ -293,9 +293,8 @@ auto CaptureDevice::capture_loop() -> void {
             break;
         }
         const bool failed = !result.has_value();
-        try {
-            frame_queue_->push(std::move(result));
-        } catch (const std::exception&) {
+        frame_queue_->push(std::move(result));
+        if (frame_queue_->is_shutdown()) {
             break;
         }
         if (failed) {
