@@ -24,6 +24,9 @@
 以下类型保持值语义：
 
 - `RuntimeCommand`
+  - Closed sum type: `std::variant<CmdSetStreaming, CmdSetRecording, CmdSetEnemyColor, CmdSetBackend, CmdSetEkf, CmdShutdown>`.
+  - Factories in `runtime_command::` namespace.
+  - Exhaustive handling via `std::visit` in `ControlLoop::submit_command`.
 - `RuntimeSnapshot`
 - `DetectionBatch`
 - `TargetTrack`
@@ -32,14 +35,23 @@
 
 控制面和观测面优先通过这些值类型传播，而不是让 bridge 或 tool 持有内部对象引用。
 
-### 4. Variant Backend Selection
+### 4. Error Domain
+
+- `ErrorKind` — classified error categories: `config`, `device`, `unavailable`, `timeout`, `internal`.
+- `Error` — struct pairing `ErrorKind` with a human-readable `message`.
+- `format_error()` — produces `"[kind] message"` for logging.
+- Public control path (`CompetitionRuntime::start/run/submit_command`), capture (`CaptureDevice::open/reconnect`), guidance (`GuidanceSession::create_*`), and FT4222 (`Ft4222Spi::open/write/transfer`) all return `std::expected<T, Error>`.
+- Retry policy: `device` errors keep existing reconnect loops; `config` errors fail start or reject commands; `unavailable` degrades the feature; `internal` logs loudly and prefers fail-closed.
+
+### 5. Backend Selection
 
 - `CaptureDevice`
-  - 内部通过 `std::variant` 选择 `v4l2` 或 `hikcamera` backend。
+  - Selects backend via `std::unique_ptr<CaptureBackend>`, where `CaptureBackend` is a thin virtual base with 5-6 pure methods.
+  - Concrete implementations: `V4l2Backend` and `HikBackend` (latter in `src/capture/hik_backend.hpp`).
 
-这类“少量后端、启动时选定”的差异，优先用具体类型 + `switch` / `variant`，而不是长期维持虚接口。
+这类"少量后端、启动时选定"的差异，优先用具体类型 + thin virtual interface，避免大型虚接口森林。`CaptureBackend` 保持最小契约（open / read_frame / close / is_open / reconnect）。
 
-### 5. Bridge
+### 6. Bridge
 
 bridge 层只做协议转换和搬运：
 
@@ -50,7 +62,7 @@ bridge 层只做协议转换和搬运：
 
 它们不承载算法判断，也不反向侵入 runtime。
 
-### 6. 外部依赖隔离
+### 7. 外部依赖隔离
 
 对 SDK / 外部实现细节仍保留 concrete wrapper 或 Pimpl：
 
@@ -79,4 +91,5 @@ bridge 层只做协议转换和搬运：
 - public 面只保留稳定 facade 和 value types。
 - runtime 内部优先具体组合，不优先抽象。
 - 新增控制项先扩 `RuntimeCommand` / `RuntimeSnapshot`。
+- 失败分类通过 `Error` / `ErrorKind` 驱动重试与拒绝策略，替代裸 `std::string`。
 - 新增硬件或协议隔离点时，只在第三方依赖边界保留 wrapper。
