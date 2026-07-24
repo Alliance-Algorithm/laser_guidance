@@ -141,40 +141,40 @@ auto FifoControlServer::parse_command(std::string_view text)
         return std::unexpected("empty FIFO command");
     }
     if (normalized == "quit") {
-        return RuntimeCommand::shutdown();
+        return runtime_command::shutdown();
     }
     if (normalized == "stream on") {
-        return RuntimeCommand::set_streaming(true);
+        return runtime_command::set_streaming(true);
     }
     if (normalized == "stream off") {
-        return RuntimeCommand::set_streaming(false);
+        return runtime_command::set_streaming(false);
     }
     if (normalized == "record on") {
-        return RuntimeCommand::set_recording(true);
+        return runtime_command::set_recording(true);
     }
     if (normalized == "record off") {
-        return RuntimeCommand::set_recording(false);
+        return runtime_command::set_recording(false);
     }
     if (normalized == "enemy red") {
-        return RuntimeCommand::set_enemy_color(EnemyColor::red);
+        return runtime_command::set_enemy_color(EnemyColor::red);
     }
     if (normalized == "enemy blue") {
-        return RuntimeCommand::set_enemy_color(EnemyColor::blue);
+        return runtime_command::set_enemy_color(EnemyColor::blue);
     }
     if (normalized == "enemy auto") {
-        return RuntimeCommand::set_enemy_color(EnemyColor::auto_select);
+        return runtime_command::set_enemy_color(EnemyColor::auto_select);
     }
     if (normalized == "backend onnx") {
-        return RuntimeCommand::set_backend(RuntimeBackend::onnx);
+        return runtime_command::set_backend(RuntimeBackend::onnx);
     }
     if (normalized == "backend tensorrt") {
-        return RuntimeCommand::set_backend(RuntimeBackend::tensorrt);
+        return runtime_command::set_backend(RuntimeBackend::tensorrt);
     }
     if (normalized == "ekf on") {
-        return RuntimeCommand::set_ekf(true);
+        return runtime_command::set_ekf(true);
     }
     if (normalized == "ekf off") {
-        return RuntimeCommand::set_ekf(false);
+        return runtime_command::set_ekf(false);
     }
     return std::unexpected("unsupported FIFO command: " + normalized);
 }

@@ -3,7 +3,9 @@
 #include <chrono>
 #include <iostream>
 #include <print>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <opencv2/highgui.hpp>
 
@@ -154,42 +156,48 @@ auto ControlLoop::join() -> void {
 
 auto ControlLoop::submit_command(const RuntimeCommand& command)
     -> std::expected<void, std::string> {
-    if (command.type == RuntimeCommandType::set_backend) {
-        if (!perception_.has_backend(command.backend)) {
+    // Backend switch may run outside the state lock (matches current order:
+    // validate backend first, then update state).
+    if (const auto* set_backend = std::get_if<CmdSetBackend>(&command)) {
+        if (!perception_.has_backend(set_backend->backend)) {
             return std::unexpected("requested backend is not available");
         }
-        if (!perception_.set_active_backend(command.backend)) {
+        if (!perception_.set_active_backend(set_backend->backend)) {
             return std::unexpected("failed to switch active backend");
         }
     }
 
     EnemyColor enemy_color = EnemyColor::auto_select;
+    bool request_shutdown = false;
     {
         std::scoped_lock lock(state_mutex_);
-        switch (command.type) {
-        case RuntimeCommandType::set_streaming:
-            state_.streaming_requested = command.enabled && allows_streaming();
-            break;
-        case RuntimeCommandType::set_recording:
-            state_.recording_requested = command.enabled && allows_recording();
-            break;
-        case RuntimeCommandType::set_enemy_color:
-            state_.enemy_color = command.enemy_color;
-            break;
-        case RuntimeCommandType::set_backend: break;
-        case RuntimeCommandType::set_ekf:
-            state_.ekf_enabled = command.enabled;
-            break;
-        case RuntimeCommandType::shutdown:
-            state_.stop_requested = true;
-            break;
-        }
+        std::visit(
+            [&](const auto& cmd) {
+                using T = std::decay_t<decltype(cmd)>;
+                if constexpr (std::is_same_v<T, CmdSetStreaming>) {
+                    state_.streaming_requested = cmd.enabled && allows_streaming();
+                } else if constexpr (std::is_same_v<T, CmdSetRecording>) {
+                    state_.recording_requested = cmd.enabled && allows_recording();
+                } else if constexpr (std::is_same_v<T, CmdSetEnemyColor>) {
+                    state_.enemy_color = cmd.enemy_color;
+                } else if constexpr (std::is_same_v<T, CmdSetBackend>) {
+                    // already applied above, before acquiring the lock
+                } else if constexpr (std::is_same_v<T, CmdSetEkf>) {
+                    state_.ekf_enabled = cmd.enabled;
+                } else if constexpr (std::is_same_v<T, CmdShutdown>) {
+                    state_.stop_requested = true;
+                    request_shutdown = true;
+                } else {
+                    static_assert(sizeof(T) == 0, "non-exhaustive RuntimeCommand visit");
+                }
+            },
+            command);
         enemy_color = state_.enemy_color;
         update_status_locked();
     }
 
     perception_.set_enemy_color(enemy_color);
-    if (command.type == RuntimeCommandType::shutdown) {
+    if (request_shutdown) {
         request_stop();
     }
     return {};

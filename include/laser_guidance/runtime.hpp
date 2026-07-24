@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <opencv2/core/types.hpp>
@@ -27,28 +28,29 @@ enum class RuntimeBackend : std::uint8_t {
     tensorrt,
 };
 
-enum class RuntimeCommandType : std::uint8_t {
-    set_streaming,
-    set_recording,
-    set_enemy_color,
-    set_backend,
-    set_ekf,
-    shutdown,
-};
+struct CmdSetStreaming { bool enabled = false; };
+struct CmdSetRecording { bool enabled = false; };
+struct CmdSetEnemyColor { EnemyColor enemy_color = EnemyColor::auto_select; };
+struct CmdSetBackend { RuntimeBackend backend = RuntimeBackend::onnx; };
+struct CmdSetEkf { bool enabled = false; };
+struct CmdShutdown {};
 
-struct RuntimeCommand {
-    RuntimeCommandType type = RuntimeCommandType::shutdown;
-    bool enabled = false;
-    EnemyColor enemy_color = EnemyColor::auto_select;
-    RuntimeBackend backend = RuntimeBackend::onnx;
+using RuntimeCommand = std::variant<
+    CmdSetStreaming,
+    CmdSetRecording,
+    CmdSetEnemyColor,
+    CmdSetBackend,
+    CmdSetEkf,
+    CmdShutdown>;
 
-    static auto set_streaming(bool enabled) -> RuntimeCommand;
-    static auto set_recording(bool enabled) -> RuntimeCommand;
-    static auto set_enemy_color(EnemyColor color) -> RuntimeCommand;
-    static auto set_backend(RuntimeBackend backend) -> RuntimeCommand;
-    static auto set_ekf(bool enabled) -> RuntimeCommand;
-    static auto shutdown() -> RuntimeCommand;
-};
+namespace runtime_command {
+auto set_streaming(bool enabled) -> RuntimeCommand;
+auto set_recording(bool enabled) -> RuntimeCommand;
+auto set_enemy_color(EnemyColor color) -> RuntimeCommand;
+auto set_backend(RuntimeBackend backend) -> RuntimeCommand;
+auto set_ekf(bool enabled) -> RuntimeCommand;
+auto shutdown() -> RuntimeCommand;
+} // namespace runtime_command
 
 struct Detection {
     float score = 0.0F;

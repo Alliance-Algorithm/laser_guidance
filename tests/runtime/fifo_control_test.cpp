@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <string_view>
+#include <variant>
 
 #include "laser_guidance/bridges.hpp"
 #include "laser_guidance/runtime.hpp"
@@ -10,73 +11,87 @@
 
 int main() {
     try {
+        using rmcs_laser_guidance::CmdSetBackend;
+        using rmcs_laser_guidance::CmdSetEkf;
+        using rmcs_laser_guidance::CmdSetEnemyColor;
+        using rmcs_laser_guidance::CmdSetRecording;
+        using rmcs_laser_guidance::CmdSetStreaming;
+        using rmcs_laser_guidance::CmdShutdown;
         using rmcs_laser_guidance::EnemyColor;
         using rmcs_laser_guidance::FifoControlServer;
         using rmcs_laser_guidance::RuntimeBackend;
-        using rmcs_laser_guidance::RuntimeCommandType;
+        using rmcs_laser_guidance::RuntimeCommand;
+        using rmcs_laser_guidance::tests::make_temp_dir;
         using rmcs_laser_guidance::tests::require;
         using rmcs_laser_guidance::tests::require_contains;
-        using rmcs_laser_guidance::tests::make_temp_dir;
 
+        // stream on
         {
             const auto command = FifoControlServer::parse_command("stream on\n");
             require(command.has_value(), "stream on should parse");
-            require(command->type == RuntimeCommandType::set_streaming, "stream on type mismatch");
-            require(command->enabled, "stream on enabled mismatch");
+            const auto* streaming = std::get_if<CmdSetStreaming>(&*command);
+            require(streaming != nullptr, "stream on type mismatch");
+            require(streaming->enabled, "stream on enabled mismatch");
         }
 
+        // record off
         {
             const auto command = FifoControlServer::parse_command("record off");
             require(command.has_value(), "record off should parse");
-            require(command->type == RuntimeCommandType::set_recording, "record off type mismatch");
-            require(!command->enabled, "record off enabled mismatch");
+            const auto* recording = std::get_if<CmdSetRecording>(&*command);
+            require(recording != nullptr, "record off type mismatch");
+            require(!recording->enabled, "record off enabled mismatch");
         }
 
+        // enemy blue
         {
             const auto command = FifoControlServer::parse_command("enemy blue");
             require(command.has_value(), "enemy blue should parse");
-            require(
-                command->type == RuntimeCommandType::set_enemy_color,
-                "enemy blue type mismatch");
-            require(command->enemy_color == EnemyColor::blue, "enemy blue value mismatch");
+            const auto* enemy = std::get_if<CmdSetEnemyColor>(&*command);
+            require(enemy != nullptr, "enemy blue type mismatch");
+            require(enemy->enemy_color == EnemyColor::blue, "enemy blue value mismatch");
         }
 
+        // backend tensorrt
         {
             const auto command = FifoControlServer::parse_command("backend tensorrt");
             require(command.has_value(), "backend tensorrt should parse");
-            require(
-                command->type == RuntimeCommandType::set_backend,
-                "backend tensorrt type mismatch");
-            require(
-                command->backend == RuntimeBackend::tensorrt,
-                "backend tensorrt value mismatch");
+            const auto* backend = std::get_if<CmdSetBackend>(&*command);
+            require(backend != nullptr, "backend tensorrt type mismatch");
+            require(backend->backend == RuntimeBackend::tensorrt, "backend tensorrt value mismatch");
         }
 
+        // ekf off
         {
             const auto command = FifoControlServer::parse_command("ekf off");
             require(command.has_value(), "ekf off should parse");
-            require(command->type == RuntimeCommandType::set_ekf, "ekf off type mismatch");
-            require(!command->enabled, "ekf off enabled mismatch");
+            const auto* ekf = std::get_if<CmdSetEkf>(&*command);
+            require(ekf != nullptr, "ekf off type mismatch");
+            require(!ekf->enabled, "ekf off enabled mismatch");
         }
 
+        // quit
         {
             const auto command = FifoControlServer::parse_command("quit");
             require(command.has_value(), "quit should parse");
-            require(command->type == RuntimeCommandType::shutdown, "quit type mismatch");
+            require(std::holds_alternative<CmdShutdown>(*command), "quit type mismatch");
         }
 
+        // invalid backend
         {
             const auto command = FifoControlServer::parse_command("backend invalid");
             require(!command.has_value(), "invalid backend should fail");
             require_contains(command.error(), "unsupported FIFO command", "invalid backend error");
         }
 
+        // blank command
         {
             const auto command = FifoControlServer::parse_command("   ");
             require(!command.has_value(), "blank command should fail");
             require_contains(command.error(), "empty FIFO command", "blank command error");
         }
 
+        // multi-line, partial, and recovery via FIFO
         {
             const auto fifo_dir = make_temp_dir("fifo_control");
             const auto fifo_path = fifo_dir / "laser_cmd";
@@ -93,11 +108,16 @@ int main() {
 
             auto command = fifo.poll_command();
             require(command.has_value(), "first multi-line command should parse");
-            require(command->type == RuntimeCommandType::set_streaming, "first multi-line command mismatch");
+            require(std::holds_alternative<CmdSetStreaming>(*command),
+                "first multi-line command should be set_streaming");
+
             command = fifo.poll_command();
             require(command.has_value(), "second multi-line command should parse");
-            require(command->type == RuntimeCommandType::set_ekf, "second multi-line command mismatch");
-            require(!command->enabled, "second multi-line command payload mismatch");
+            {
+                const auto* ekf = std::get_if<CmdSetEkf>(&*command);
+                require(ekf != nullptr, "second multi-line command type mismatch");
+                require(!ekf->enabled, "second multi-line command payload mismatch");
+            }
 
             const std::string partial1 = "backend ten";
             require(::write(write_fd, partial1.data(), partial1.size()) == static_cast<ssize_t>(partial1.size()),
@@ -109,15 +129,22 @@ int main() {
                 "partial write 2 should succeed");
             command = fifo.poll_command();
             require(command.has_value(), "completed partial line should parse");
-            require(command->backend == RuntimeBackend::tensorrt, "partial command value mismatch");
+            {
+                const auto* backend = std::get_if<CmdSetBackend>(&*command);
+                require(backend != nullptr, "partial command type mismatch");
+                require(backend->backend == RuntimeBackend::tensorrt, "partial command value mismatch");
+            }
 
             const std::string recover = "backend nope\nenemy red\n";
             require(::write(write_fd, recover.data(), recover.size()) == static_cast<ssize_t>(recover.size()),
                 "recovery write should succeed");
             command = fifo.poll_command();
             require(command.has_value(), "parser should recover after invalid line");
-            require(command->type == RuntimeCommandType::set_enemy_color, "recovery command type mismatch");
-            require(command->enemy_color == EnemyColor::red, "recovery command value mismatch");
+            {
+                const auto* enemy = std::get_if<CmdSetEnemyColor>(&*command);
+                require(enemy != nullptr, "recovery command type mismatch");
+                require(enemy->enemy_color == EnemyColor::red, "recovery command value mismatch");
+            }
             require(fifo.last_error().empty(), "successful recovery should clear last error");
 
             ::close(write_fd);
