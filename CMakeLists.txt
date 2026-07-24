@@ -200,6 +200,7 @@ file(GLOB_RECURSE laser_guidance_bridges_SOURCES  CONFIGURE_DEPENDS src/streamin
 set(laser_guidance_runtime_SOURCES
   src/capture/capture_device.cpp
   src/capture/v4l2_capture.cpp
+  src/capture/hik_backend.cpp
   src/runtime/runtime.cpp
   src/runtime/control_loop.cpp
   src/runtime/guidance_ops_app.cpp

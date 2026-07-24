@@ -15,8 +15,6 @@
 #include "tracking/freshness_queue.hpp"
 #include "types.hpp"
 
-#include <hikcamera/capturer.hpp>
-
 namespace rmcs_laser_guidance {
 
 struct CaptureFormat {
@@ -31,39 +29,6 @@ struct CaptureFormat {
 };
 
 auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat;
-
-auto to_capture_format(
-    const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
-    -> CaptureFormat;
-
-struct V4l2Backend : public CaptureBackend {
-    explicit V4l2Backend(V4l2Config config_in)
-        : capture(std::move(config_in)) {}
-
-    auto open() -> std::expected<CaptureFormat, Error> override;
-    auto read_frame() -> std::expected<Frame, Error> override;
-    auto close() noexcept -> void override;
-    [[nodiscard]] auto is_open() const noexcept -> bool override;
-    auto reconnect() -> std::expected<CaptureFormat, Error> override;
-
-    V4l2Capture capture;
-};
-
-struct HikBackend : public CaptureBackend {
-    explicit HikBackend(HikCameraConfig config_in)
-        : config(std::move(config_in)) {}
-
-    auto open() -> std::expected<CaptureFormat, Error> override;
-    auto read_frame() -> std::expected<Frame, Error> override;
-    auto close() noexcept -> void override;
-    [[nodiscard]] auto is_open() const noexcept -> bool override;
-    auto reconnect() -> std::expected<CaptureFormat, Error> override;
-    auto apply_runtime_profile(const HikRuntimeProfile& profile)
-        -> std::expected<void, Error> override;
-
-    hikcamera::Camera camera{};
-    HikCameraConfig config{};
-};
 
 class CaptureDevice {
 public:
