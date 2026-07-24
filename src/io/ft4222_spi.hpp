@@ -4,6 +4,8 @@
 #include <expected>
 #include <string>
 
+#include "laser_guidance/error.hpp"
+
 namespace rmcs_laser_guidance {
 
 enum class Ft4222SysClock : uint8_t {
@@ -59,12 +61,12 @@ public:
 
     ~Ft4222Spi() noexcept;
 
-    [[nodiscard]] static auto open(Ft4222Config config) -> std::expected<Ft4222Spi, std::string>;
+    [[nodiscard]] static auto open(Ft4222Config config) -> std::expected<Ft4222Spi, Error>;
 
-    auto write(const uint8_t* data, uint16_t len) -> std::expected<void, std::string>;
+    auto write(const uint8_t* data, uint16_t len) -> std::expected<void, Error>;
 
     auto transfer(const uint8_t* tx_buf, uint16_t tx_len, uint8_t* rx_buf, uint16_t rx_len)
-        -> std::expected<void, std::string>;
+        -> std::expected<void, Error>;
 
     auto close() noexcept -> void;
 

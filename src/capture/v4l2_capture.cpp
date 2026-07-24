@@ -74,11 +74,13 @@ V4l2Capture::V4l2Capture(V4l2Config config)
 
 V4l2Capture::~V4l2Capture() noexcept { close(); }
 
-auto V4l2Capture::open() -> std::expected<V4l2NegotiatedFormat, std::string> {
+auto V4l2Capture::open() -> std::expected<V4l2NegotiatedFormat, Error> {
     close();
 
     if (!open_capture(capture_, config_.device_path)) {
-        return std::unexpected("failed to open V4L2 device " + config_.device_path.string());
+        return std::unexpected(
+            make_error(ErrorKind::device,
+                       "failed to open V4L2 device " + config_.device_path.string()));
     }
 
     (void)capture_.set(cv::CAP_PROP_BUFFERSIZE, 1.0);
@@ -101,9 +103,9 @@ auto V4l2Capture::open() -> std::expected<V4l2NegotiatedFormat, std::string> {
     return negotiated_;
 }
 
-auto V4l2Capture::read_frame() -> std::expected<Frame, std::string> {
+auto V4l2Capture::read_frame() -> std::expected<Frame, Error> {
     if (!capture_.isOpened())
-        return std::unexpected("V4L2 device is not open");
+        return std::unexpected(make_error(ErrorKind::device, "V4L2 device is not open"));
 
     std::string last_error;
     for (int attempt = 0; attempt < kReadRetryCount; ++attempt) {
@@ -122,9 +124,10 @@ auto V4l2Capture::read_frame() -> std::expected<Frame, std::string> {
         };
     }
 
-    return std::unexpected(
+    return std::unexpected(make_error(
+        ErrorKind::device,
         "failed to read valid frame from V4L2 device " + config_.device_path.string() + " after "
-        + std::to_string(kReadRetryCount) + " attempts; last error: " + last_error);
+        + std::to_string(kReadRetryCount) + " attempts; last error: " + last_error));
 }
 
 auto V4l2Capture::close() noexcept -> void {

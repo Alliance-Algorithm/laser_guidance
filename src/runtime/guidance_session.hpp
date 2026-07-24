@@ -6,6 +6,7 @@
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "runtime/control_loop_types.hpp"
 #include "runtime/guidance_calibration.hpp"
 #include "runtime/guidance_state_machine.hpp"
@@ -36,11 +37,11 @@ public:
     auto operator=(const GuidanceSession&) -> GuidanceSession& = delete;
 
     static auto create_auto(const Config& config, const CaptureFormat& format)
-        -> std::expected<GuidanceSession, std::string>;
+        -> std::expected<GuidanceSession, Error>;
     static auto create_manual(
         const Config& config, const CaptureFormat& format,
         std::shared_ptr<GuidanceCalibrationState> calibration_state)
-        -> std::expected<GuidanceSession, std::string>;
+        -> std::expected<GuidanceSession, Error>;
 
     [[nodiscard]] auto mode() const -> Mode { return mode_; }
     // Session existence implies readiness — factory methods return
@@ -75,7 +76,7 @@ private:
 inline auto try_create_guidance_session(
     const Config& config, const CaptureFormat& format,
     const std::shared_ptr<GuidanceCalibrationState>& calibration_state)
-    -> std::expected<GuidanceSession, std::string> {
+    -> std::expected<GuidanceSession, Error> {
     if (calibration_state) {
         return GuidanceSession::create_manual(config, format, calibration_state);
     }

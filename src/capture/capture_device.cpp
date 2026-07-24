@@ -26,46 +26,46 @@ auto to_hik_config(const HikCameraConfig& config) -> hikcamera::Config {
 }
 
 auto apply_hik_runtime_profile(hikcamera::Camera& camera, const HikRuntimeProfile& profile)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     using hikcamera::auto_mode;
 
     if (auto ret = camera.parameter<hikcamera::param::exposure_auto>().set(auto_mode::off); !ret)
-        return std::unexpected(ret.error());
+        return std::unexpected(make_error(ErrorKind::device, ret.error()));
     if (auto ret = camera.parameter<hikcamera::param::gain_auto>().set(auto_mode::off); !ret)
-        return std::unexpected(ret.error());
+        return std::unexpected(make_error(ErrorKind::device, ret.error()));
     if (auto ret = camera.parameter<hikcamera::param::exposure_time_us>().set(profile.exposure_us);
         !ret)
-        return std::unexpected(ret.error());
+        return std::unexpected(make_error(ErrorKind::device, ret.error()));
     if (auto ret = camera.parameter<hikcamera::param::gain>().set(profile.gain); !ret)
-        return std::unexpected(ret.error());
+        return std::unexpected(make_error(ErrorKind::device, ret.error()));
     if (profile.framerate > 0.0F) {
         if (auto ret =
                 camera.parameter<hikcamera::param::frame_rate_fps>().set(profile.framerate);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
     }
     if (profile.set_white_balance) {
         if (auto ret =
                 camera.parameter<hikcamera::param::white_balance_auto>().set(auto_mode::off);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
         if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_red>().set(
                 profile.white_balance_ratio_red);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
         if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_green>().set(
                 profile.white_balance_ratio_green);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
         if (auto ret = camera.parameter<hikcamera::param::white_balance_ratio_blue>().set(
                 profile.white_balance_ratio_blue);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
     } else {
         if (auto ret = camera.parameter<hikcamera::param::white_balance_auto>().set(
                 auto_mode::continuous);
             !ret)
-            return std::unexpected(ret.error());
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
     }
     return {};
 }
@@ -102,7 +102,7 @@ auto to_capture_format(
 
 // ---- V4l2Backend ----------------------------------------------------------------
 
-auto V4l2Backend::open() -> std::expected<CaptureFormat, std::string> {
+auto V4l2Backend::open() -> std::expected<CaptureFormat, Error> {
     auto format = capture.open();
     if (!format) {
         return std::unexpected(format.error());
@@ -110,7 +110,7 @@ auto V4l2Backend::open() -> std::expected<CaptureFormat, std::string> {
     return to_capture_format(*format);
 }
 
-auto V4l2Backend::read_frame() -> std::expected<Frame, std::string> {
+auto V4l2Backend::read_frame() -> std::expected<Frame, Error> {
     return capture.read_frame();
 }
 
@@ -118,43 +118,46 @@ auto V4l2Backend::close() noexcept -> void { capture.close(); }
 
 auto V4l2Backend::is_open() const noexcept -> bool { return capture.is_open(); }
 
-auto V4l2Backend::reconnect() -> std::expected<CaptureFormat, std::string> {
+auto V4l2Backend::reconnect() -> std::expected<CaptureFormat, Error> {
     capture.close();
     return open();
 }
 
 // ---- HikBackend -----------------------------------------------------------------
 
-auto HikBackend::open() -> std::expected<CaptureFormat, std::string> {
+auto HikBackend::open() -> std::expected<CaptureFormat, Error> {
     camera.configure(to_hik_config(config));
     auto connected = camera.connect();
     if (!connected) {
-        return std::unexpected(connected.error());
+        return std::unexpected(make_error(ErrorKind::device, connected.error()));
     }
     if (!camera.device_info().has_value()) {
-        return std::unexpected("Hik camera connected but device info is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::device, "Hik camera connected but device info is unavailable"));
     }
     if (!camera.stream_format().has_value()) {
-        return std::unexpected("Hik camera connected but stream format is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::device, "Hik camera connected but stream format is unavailable"));
     }
     if (auto applied = apply_hik_runtime_profile(camera, config.lit_profile()); !applied) {
-        std::println(stderr, "Hik lit profile apply: {}", applied.error());
+        std::println(stderr, "Hik lit profile apply: {}", format_error(applied.error()));
     }
     return to_capture_format(*camera.device_info(), *camera.stream_format());
 }
 
 auto HikBackend::apply_runtime_profile(const HikRuntimeProfile& profile)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     if (!camera.connected()) {
-        return std::unexpected("Hik camera is not connected");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "Hik camera is not connected"));
     }
     return apply_hik_runtime_profile(camera, profile);
 }
 
-auto HikBackend::read_frame() -> std::expected<Frame, std::string> {
+auto HikBackend::read_frame() -> std::expected<Frame, Error> {
     auto image = camera.read_image_with_timestamp();
     if (!image) {
-        return std::unexpected(image.error());
+        return std::unexpected(make_error(ErrorKind::device, image.error()));
     }
     return Frame{
         .image = std::move(image->mat),
@@ -166,7 +169,7 @@ auto HikBackend::close() noexcept -> void { (void)camera.disconnect(); }
 
 auto HikBackend::is_open() const noexcept -> bool { return camera.connected(); }
 
-auto HikBackend::reconnect() -> std::expected<CaptureFormat, std::string> {
+auto HikBackend::reconnect() -> std::expected<CaptureFormat, Error> {
     (void)camera.disconnect();
     return open();
 }
@@ -179,14 +182,16 @@ CaptureDevice::CaptureDevice(Config config)
 
 CaptureDevice::~CaptureDevice() noexcept { close(); }
 
-auto CaptureDevice::open() -> std::expected<CaptureFormat, std::string> {
+auto CaptureDevice::open() -> std::expected<CaptureFormat, Error> {
     if (is_open() || capture_thread_.joinable()) {
-        return std::unexpected("capture device is already open");
+        return std::unexpected(
+            make_error(ErrorKind::internal, "capture device is already open"));
     }
     negotiated_.reset();
 
     if (!backend_) {
-        return std::unexpected("capture backend is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
     }
 
     auto format = backend_->open();
@@ -198,14 +203,15 @@ auto CaptureDevice::open() -> std::expected<CaptureFormat, std::string> {
     return *negotiated_;
 }
 
-auto CaptureDevice::read_frame() -> std::expected<Frame, std::string> {
+auto CaptureDevice::read_frame() -> std::expected<Frame, Error> {
     if (!frame_queue_) {
-        return std::unexpected("capture device is not open");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture device is not open"));
     }
     try {
         return frame_queue_->pop();
     } catch (const std::exception& e) {
-        return std::unexpected(e.what());
+        return std::unexpected(make_error(ErrorKind::internal, e.what()));
     }
 }
 
@@ -225,9 +231,10 @@ auto CaptureDevice::negotiated_format() const noexcept -> const std::optional<Ca
     return negotiated_;
 }
 
-auto CaptureDevice::reconnect() -> std::expected<void, std::string> {
+auto CaptureDevice::reconnect() -> std::expected<void, Error> {
     if (!backend_) {
-        return std::unexpected("capture backend is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
     }
 
     stop_capture_thread();
@@ -242,16 +249,17 @@ auto CaptureDevice::reconnect() -> std::expected<void, std::string> {
 }
 
 auto CaptureDevice::apply_runtime_profile(const HikRuntimeProfile& profile)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     if (!backend_) {
-        return std::unexpected("capture backend is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
     }
     std::scoped_lock lock(backend_mutex_);
     return backend_->apply_runtime_profile(profile);
 }
 
 auto CaptureDevice::start_capture_thread() -> void {
-    frame_queue_ = std::make_unique<LatestValue<std::expected<Frame, std::string>>>();
+    frame_queue_ = std::make_unique<LatestValue<std::expected<Frame, Error>>>();
     capture_stop_.store(false, std::memory_order_relaxed);
     capture_thread_ = std::thread([this] { capture_loop(); });
 }
@@ -276,7 +284,7 @@ auto CaptureDevice::capture_loop() -> void {
     constexpr auto kErrorBackoff = std::chrono::milliseconds(100);
 
     while (!capture_stop_.load(std::memory_order_relaxed)) {
-        std::expected<Frame, std::string> result;
+        std::expected<Frame, Error> result;
         {
             std::scoped_lock lock(backend_mutex_);
             result = backend_->read_frame();

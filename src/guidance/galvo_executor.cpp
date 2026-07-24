@@ -2,6 +2,7 @@
 
 #include "guidance/galvo_driver.hpp"
 #include "io/ft4222_spi.hpp"
+#include "laser_guidance/error.hpp"
 
 namespace rmcs_laser_guidance {
 
@@ -10,11 +11,11 @@ GalvoExecutor::GalvoExecutor(const Config& config, Ft4222Spi& spi)
     try {
         driver_ = std::make_unique<GalvoDriver>(spi, config_);
         if (auto result = driver_->enable_reference(); !result) {
-            init_error_ = "DAC reference enable failed: " + result.error();
+            init_error_ = "DAC reference enable failed: " + format_error(result.error());
             return;
         }
         if (auto result = driver_->set_center(); !result) {
-            init_error_ = "galvo center failed: " + result.error();
+            init_error_ = "galvo center failed: " + format_error(result.error());
             return;
         }
         initialized_ = true;
@@ -36,7 +37,8 @@ auto GalvoExecutor::apply(const AimOutput& aim) -> std::string {
     if (aim.output_voltages.has_value()) {
         latest_output_voltages_ = aim.output_voltages;
         latest_output_angles_.reset();
-        return driver_->set_voltages(aim.output_voltages->x, aim.output_voltages->y).error_or("");
+        auto r = driver_->set_voltages(aim.output_voltages->x, aim.output_voltages->y);
+        return r ? std::string{} : format_error(r.error());
     }
 
     if (aim.output_angles.has_value()) {
@@ -45,7 +47,8 @@ auto GalvoExecutor::apply(const AimOutput& aim) -> std::string {
             driver_->optical_to_voltage(aim.output_angles->x),
             driver_->optical_to_voltage(aim.output_angles->y),
         };
-        return driver_->set_angles(aim.output_angles->x, aim.output_angles->y).error_or("");
+        auto r = driver_->set_angles(aim.output_angles->x, aim.output_angles->y);
+        return r ? std::string{} : format_error(r.error());
     }
 
     return "aim output missing command payload";
@@ -57,7 +60,8 @@ auto GalvoExecutor::set_center() -> std::string {
     }
     latest_output_angles_.reset();
     latest_output_voltages_.reset();
-    return driver_->set_center().error_or("");
+    auto r = driver_->set_center();
+    return r ? std::string{} : format_error(r.error());
 }
 
 auto GalvoExecutor::process_calib_angle(const float angle_x_deg, const float angle_y_deg)
@@ -68,7 +72,8 @@ auto GalvoExecutor::process_calib_angle(const float angle_x_deg, const float ang
     latest_output_angles_ = cv::Point2f{angle_x_deg, angle_y_deg};
     latest_output_voltages_ =
         cv::Point2f{driver_->optical_to_voltage(angle_x_deg), driver_->optical_to_voltage(angle_y_deg)};
-    return driver_->set_angles(angle_x_deg, angle_y_deg).error_or("");
+    auto r = driver_->set_angles(angle_x_deg, angle_y_deg);
+    return r ? std::string{} : format_error(r.error());
 }
 
 auto GalvoExecutor::process_calib_voltage(const float x_voltage, const float y_voltage)
@@ -78,7 +83,8 @@ auto GalvoExecutor::process_calib_voltage(const float x_voltage, const float y_v
     }
     latest_output_angles_.reset();
     latest_output_voltages_ = cv::Point2f{x_voltage, y_voltage};
-    return driver_->set_voltages(x_voltage, y_voltage).error_or("");
+    auto r = driver_->set_voltages(x_voltage, y_voltage);
+    return r ? std::string{} : format_error(r.error());
 }
 
 auto GalvoExecutor::latest_output_angles() const -> std::optional<cv::Point2f> {

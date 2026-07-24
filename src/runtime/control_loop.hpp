@@ -51,7 +51,7 @@ private:
     static auto make_output_capabilities(CompetitionProfile profile)
         -> RuntimeOutputCapabilities;
 
-    auto initialize_components() -> std::expected<void, std::string>;
+    auto initialize_components() -> std::expected<void, Error>;
     auto run_loop() -> void;
     auto teardown_components() -> void;
     auto request_stop() -> void;

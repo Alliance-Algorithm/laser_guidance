@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
 
         rmcs_laser_guidance::runtime_internal::GuidanceOpsApp app(std::move(config));
         if (auto run_result = app.run(); !run_result) {
-            std::println(stderr, "guidance app failed: {}", run_result.error());
+            std::println(stderr, "guidance app failed: {}", format_error(run_result.error()));
             return 1;
         }
         return 0;

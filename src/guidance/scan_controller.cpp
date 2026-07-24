@@ -5,6 +5,7 @@
 
 #include "guidance/galvo_driver.hpp"
 #include "guidance/galvo_executor.hpp"
+#include "laser_guidance/error.hpp"
 
 namespace rmcs_laser_guidance {
 
@@ -90,7 +91,7 @@ auto ScanController::scan_rectangle_once(const float cx_deg, const float cy_deg)
             const int col = row % 2 == 0 ? step : (n - 1 - step);
             const float x = cx_deg - hw + static_cast<float>(col) * sx;
             if (auto result = driver->set_angles(x, y); !result) {
-                return "scan write failed: " + result.error();
+                return "scan write failed: " + format_error(result.error());
             }
         }
     }
@@ -127,7 +128,7 @@ auto ScanController::scan_rectangle_once_voltage(const float cx_v, const float c
             const int col = row % 2 == 0 ? step : (n - 1 - step);
             const float x = cx_v - hw + static_cast<float>(col) * sx;
             if (auto result = driver->set_voltages(x, y); !result) {
-                return "scan voltage write failed: " + result.error();
+                return "scan voltage write failed: " + format_error(result.error());
             }
         }
     }

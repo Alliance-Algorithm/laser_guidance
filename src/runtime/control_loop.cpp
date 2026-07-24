@@ -108,7 +108,7 @@ auto ControlLoop::start() -> std::expected<void, Error> {
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return std::unexpected(make_error(ErrorKind::internal, result.error()));
+        return std::unexpected(result.error());
     }
 
     {
@@ -133,7 +133,7 @@ auto ControlLoop::run() -> std::expected<void, Error> {
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return std::unexpected(make_error(ErrorKind::internal, result.error()));
+        return std::unexpected(result.error());
     }
 
     {
@@ -232,7 +232,7 @@ auto ControlLoop::make_output_capabilities(const CompetitionProfile profile)
     return {};
 }
 
-auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
+auto ControlLoop::initialize_components() -> std::expected<void, Error> {
     previous_output_ = cv::Mat{};
     negotiated_format_.reset();
     guidance_.reset();
@@ -240,8 +240,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     const auto open_result = capture_.open();
     if (!open_result) {
         std::println(
-            stderr, "camera init failed: {}, will retry...", open_result.error());
-        sync_last_error("Camera open failed: " + open_result.error());
+            stderr, "camera init failed: {}, will retry...", format_error(open_result.error()));
+        sync_last_error(format_error(open_result.error()));
     } else {
         negotiated_format_ = *open_result;
     }
@@ -256,8 +256,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
                 auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
         if (!guidance) {
             std::println(
-                stderr, "guidance init failed: {}, guidance disabled", guidance.error());
-            sync_last_error("Guidance init failed: " + guidance.error());
+                stderr, "guidance init failed: {}, guidance disabled", format_error(guidance.error()));
+            sync_last_error(format_error(guidance.error()));
         } else {
             guidance_ = std::move(*guidance);
         }
@@ -316,8 +316,8 @@ auto ControlLoop::run_loop() -> void {
                 retry_policy.on_reconnect_succeeded();
             } else {
                 std::println(
-                    stderr, "reconnect failed: {}", reconnect_result.error());
-                sync_last_error("Reconnect failed: " + reconnect_result.error());
+                    stderr, "reconnect failed: {}", format_error(reconnect_result.error()));
+                sync_last_error(format_error(reconnect_result.error()));
                 retry_policy.on_reconnect_failed(Clock::now());
             }
             continue;
@@ -335,7 +335,7 @@ auto ControlLoop::run_loop() -> void {
                     retry_policy.clear_guidance_retry();
                     std::println("guidance initialized");
                 } else {
-                    std::println(stderr, "guidance retry failed: {}", guidance.error());
+                    std::println(stderr, "guidance retry failed: {}", format_error(guidance.error()));
                     retry_policy.defer_guidance_retry(now);
                 }
             }
@@ -343,7 +343,7 @@ auto ControlLoop::run_loop() -> void {
 
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
-            sync_last_error(frame_result.error());
+            sync_last_error(format_error(frame_result.error()));
 
             if (retry_policy.on_read_error(Clock::now())) {
                 decltype(guidance_) stale_guidance;
@@ -356,7 +356,7 @@ auto ControlLoop::run_loop() -> void {
                 }
                 std::println(
                     stderr, "camera read failed repeatedly: {}, entering reconnect state",
-                    frame_result.error());
+                    format_error(frame_result.error()));
                 sync_last_error("Camera read failed repeatedly; entering reconnect state");
             } else {
                 std::this_thread::sleep_for(kReadErrorDelay);
@@ -584,7 +584,7 @@ auto ControlLoop::maybe_switch_hik_profile() -> void {
     if (auto applied = capture_.apply_runtime_profile(profile); !applied) {
         std::println(
             stderr, "Hik profile switch to {} failed: {}", want_unlit ? "unlit" : "lit",
-            applied.error());
+            format_error(applied.error()));
         return;
     }
 
