@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cmath>
 
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
 
 constexpr int kStateDim = 6;
 constexpr int kMeasDim = 2;
-
-auto squared(const double value) -> double { return value * value; }
 
 } // namespace
 

@@ -1,9 +1,7 @@
 #include "vision/training_data.hpp"
 #include "vision/cuda_check.hpp"
 
-#include <algorithm>
 #include <cerrno>
-#include <cctype>
 #include <cmath>
 #include <csignal>
 #include <cstdio>
@@ -22,18 +20,13 @@
 
 #include <opencv2/core.hpp>
 
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
 
-auto normalize_lower(std::string value) -> std::string {
-    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
-
 auto validate_video_extension(const std::filesystem::path& path) -> void {
-    const std::string extension = normalize_lower(path.extension().string());
+    const std::string extension = to_lower(path.extension().string());
     if (extension == ".mp4")
         return;
     throw std::runtime_error(

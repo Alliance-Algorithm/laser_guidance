@@ -1,7 +1,5 @@
 #include "config.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <format>
 #include <stdexcept>
@@ -11,21 +9,16 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
-
-auto to_lower_copy(std::string value) -> std::string {
-    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
 
 template <typename Enum, std::size_t N>
 auto parse_enum(
     std::string_view value, const std::pair<std::string_view, Enum> (&mapping)[N],
     std::string_view error_message) -> Enum {
-    const std::string lower = to_lower_copy(std::string(value));
+    const std::string lower = to_lower(std::string(value));
     for (const auto& [name, kind] : mapping) {
         if (lower == name)
             return kind;
@@ -170,7 +163,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         if (inference["model_path"])
             config.inference.model_path = inference["model_path"].as<std::string>();
         if (inference["enemy_color"]) {
-            const auto ec = to_lower_copy(inference["enemy_color"].as<std::string>());
+            const auto ec = to_lower(inference["enemy_color"].as<std::string>());
             if (ec == "red")
                 config.inference.enemy_class_id = 1;
             else if (ec == "blue")
@@ -314,7 +307,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
 
         if (const YAML::Node wiring = guidance["wiring"]) {
             if (wiring["mode"]) {
-                const auto mode_str = to_lower_copy(wiring["mode"].as<std::string>());
+                const auto mode_str = to_lower(wiring["mode"].as<std::string>());
                 if (mode_str == "differential")
                     config.guidance.wiring.mode = GalvoWiringMode::differential;
                 else if (mode_str == "single_ended")
@@ -331,7 +324,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         }
 
         if (guidance["scan_mode"]) {
-            const auto mode = to_lower_copy(guidance["scan_mode"].as<std::string>());
+            const auto mode = to_lower(guidance["scan_mode"].as<std::string>());
             if (mode == "rectangle")
                 config.guidance.scan_mode = ScanMode::rectangle;
         }

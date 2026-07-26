@@ -35,4 +35,7 @@ auto should_exit_from_key(int key) -> bool;
 auto pixel_format_name(V4l2PixelFormat pixel_format) noexcept -> const char*;
 auto inference_backend_name(InferenceBackendKind backend) noexcept -> const char*;
 
+auto to_lower(std::string s) -> std::string;
+inline auto squared(double v) -> double { return v * v; }
+
 } // namespace rmcs_laser_guidance
