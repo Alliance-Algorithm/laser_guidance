@@ -28,7 +28,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ---- dependencies -----------------------------------------------------------
-find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio dnn)
 if(OpenCV_VERSION VERSION_GREATER_EQUAL "5.0")
   find_package(OpenCV REQUIRED COMPONENTS calib geometry)
 else()
@@ -50,6 +50,10 @@ set_target_properties(zmq::zmq PROPERTIES
   IMPORTED_LOCATION "${ZMQ_LIBRARY}"
   INTERFACE_INCLUDE_DIRECTORIES "${ZMQ_INCLUDE_DIR}")
 message(STATUS "ZMQ enabled")
+
+# ---- nlohmann_json ----------------------------------------------------------
+find_package(nlohmann_json REQUIRED)
+message(STATUS "nlohmann_json enabled")
 
 # ---- ONNX Runtime (required) -------------------------------------------------
 find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime/core/session/onnxruntime_cxx_api.h
@@ -239,7 +243,8 @@ target_include_directories(laser_guidance_bridges PRIVATE
   ${rclcpp_INCLUDE_DIRS} ${visualization_msgs_INCLUDE_DIRS} ${std_msgs_INCLUDE_DIRS})
 target_link_libraries(laser_guidance_bridges PUBLIC
   laser_guidance_support laser_guidance_tracking
-  ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES})
+  ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES}
+  nlohmann_json::nlohmann_json)
 
 add_lg_lib(laser_guidance_runtime)
 target_link_libraries(laser_guidance_runtime PUBLIC

@@ -93,10 +93,7 @@ ControlLoop::ControlLoop(Config config, CompetitionRuntimeOptions options)
     state_.recording_requested = config_.runtime.record_enabled && allows_recording();
 }
 
-ControlLoop::~ControlLoop() {
-    stop();
-    join();
-}
+ControlLoop::~ControlLoop() { stop(); }
 
 auto ControlLoop::start() -> std::expected<void, Error> {
     {
@@ -118,7 +115,7 @@ auto ControlLoop::start() -> std::expected<void, Error> {
         update_status_locked();
     }
 
-    main_thread_ = std::thread([this] { run_loop(); });
+    main_thread_ = std::jthread([this] { run_loop(); });
     return {};
 }
 

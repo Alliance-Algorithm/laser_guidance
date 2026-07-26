@@ -30,13 +30,13 @@ int main() {
         require_contains(populated_json, "\"brightness\":0.5", "brightness field");
         require_contains(
             populated_json,
-            "\"contour\":[[100,50],[200,50],[200,150],[100,150]]",
+            "\"contour\":[[100.0,50.0],[200.0,50.0],[200.0,150.0],[100.0,150.0]]",
             "contour field");
         require_contains(populated_json, "\"candidates\":[{", "candidates field");
         require_contains(populated_json, "\"score\":0.75", "candidate score field");
         require_contains(populated_json, "\"class_id\":0", "candidate class field");
-        require_contains(populated_json, "\"bbox\":[100,50,200,100]", "candidate bbox field");
-        require_contains(populated_json, "\"center\":[200,100]", "candidate center field");
+        require_contains(populated_json, "\"bbox\":[100.0,50.0,200.0,100.0]", "candidate bbox field");
+        require_contains(populated_json, "\"center\":[200.0,100.0]", "candidate center field");
 
         const TargetObservation empty{
             .detected = false,
@@ -48,7 +48,7 @@ int main() {
 
         const std::string empty_json = serialize_laser_json(empty);
         require_contains(empty_json, "\"detected\":false", "empty detected field");
-        require_contains(empty_json, "\"center\":[-1,-1]", "empty center field");
+        require_contains(empty_json, "\"center\":[-1.0,-1.0]", "empty center field");
         require_contains(empty_json, "\"contour\":[]", "empty contour field");
         require_contains(empty_json, "\"candidates\":[]", "empty candidates field");
 

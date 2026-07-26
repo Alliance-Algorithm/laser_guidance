@@ -1,7 +1,5 @@
 #include "vision/training_data.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -13,29 +11,10 @@
 #include <system_error>
 #include <utility>
 
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
-
-auto normalize_lower(std::string value) -> std::string {
-    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
-
-auto shell_quote(std::string_view value) -> std::string {
-    std::string quoted;
-    quoted.reserve(value.size() + 2);
-    quoted.push_back('\'');
-    for (const char ch : value) {
-        if (ch == '\'')
-            quoted += "'\"'\"'";
-        else
-            quoted.push_back(ch);
-    }
-    quoted.push_back('\'');
-    return quoted;
-}
 
 struct CommandResult {
     int exit_code = -1;
@@ -101,8 +80,8 @@ auto parse_video_encoding_info(const std::string& output) -> VideoEncodingInfo {
 }
 
 auto is_h264_avc1(const VideoEncodingInfo& info) -> bool {
-    return normalize_lower(info.codec_name) == "h264"
-        && normalize_lower(info.codec_tag_string) == "avc1";
+    return to_lower(info.codec_name) == "h264"
+        && to_lower(info.codec_tag_string) == "avc1";
 }
 
 } // namespace

@@ -19,7 +19,7 @@ namespace rmcs_laser_guidance {
 struct RtpStreamer::Details {
     RtpConfig config;
     std::FILE* pipe = nullptr;
-    std::thread writer;
+    std::jthread writer;
     std::mutex mtx;
     std::condition_variable cv;
     cv::Mat latest_frame;
@@ -89,18 +89,19 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         details_->config.host, details_->config.port, details_->config.sdp_path.string(), encoder);
 
     details_->running = true;
-    details_->writer = std::thread([this] {
+    details_->writer = std::jthread([this] {
+        auto stoken = details_->writer.get_stop_token();
         uint64_t frame_count = 0;
 
-        while (details_->running.load()) {
+        while (!stoken.stop_requested()) {
             cv::Mat frame;
             {
                 std::unique_lock lock(details_->mtx);
-                details_->cv.wait(lock, [this] {
-                    return !details_->running.load()
+                details_->cv.wait(lock, [&] {
+                    return stoken.stop_requested()
                         || details_->frame_seq != details_->written_seq;
                 });
-                if (!details_->running.load())
+                if (stoken.stop_requested())
                     break;
                 if (details_->latest_frame.empty())
                     continue;
@@ -163,6 +164,7 @@ auto RtpStreamer::stop() -> void {
     if (!was_running && !details_->writer.joinable() && details_->pipe == nullptr) {
         return;
     }
+    details_->writer.request_stop();
     details_->cv.notify_one();
     if (details_->writer.joinable())
         details_->writer.join();

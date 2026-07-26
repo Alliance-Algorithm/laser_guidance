@@ -15,7 +15,7 @@ ScanController::ScanController(const GuidanceConfig& config, GalvoExecutor& exec
     , enabled_(config.scan_mode == ScanMode::rectangle && executor.is_initialized())
     , voltage_mode_(config.command_model == GuidanceCommandModelKind::direct_voltage) {
     if (enabled_) {
-        worker_ = std::thread([this] { run(); });
+        worker_ = std::jthread([this] { run(); });
     }
 }
 
@@ -56,10 +56,8 @@ auto ScanController::stop() -> void {
         stop_requested_ = true;
         active_ = false;
     }
+    worker_.request_stop();
     cv_.notify_all();
-    if (worker_.joinable()) {
-        worker_.join();
-    }
 }
 
 auto ScanController::scan_rectangle_once(const float cx_deg, const float cy_deg) -> std::string {
@@ -137,13 +135,14 @@ auto ScanController::scan_rectangle_once_voltage(const float cx_v, const float c
 }
 
 auto ScanController::run() -> void {
-    while (true) {
+    auto stoken = worker_.get_stop_token();
+    while (!stoken.stop_requested()) {
         std::optional<cv::Point2f> angle_center;
         std::optional<cv::Point2f> voltage_center;
         {
             std::unique_lock lock(mutex_);
-            cv_.wait(lock, [this] { return stop_requested_ || active_; });
-            if (stop_requested_) {
+            cv_.wait(lock, [this, &stoken] { return stoken.stop_requested() || stop_requested_ || active_; });
+            if (stoken.stop_requested()) {
                 return;
             }
             angle_center = angle_center_;

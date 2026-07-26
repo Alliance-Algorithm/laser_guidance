@@ -1,6 +1,4 @@
 #include "vision/training_data.hpp"
-#include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <ctime>
 #include <fstream>
@@ -15,6 +13,9 @@
 #include <opencv2/videoio.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include "core/frame_format.hpp"
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
 
@@ -22,42 +23,14 @@ constexpr const char* kExportManifestHeader = "image_name,source_session_id,sour
                                               "ms,split,blur_score,width,height,relative_image_"
                                               "path";
 
-auto normalize_lower(std::string value) -> std::string {
-    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
-
 auto normalize_split_name(std::string_view split) -> std::string {
-    const std::string normalized = normalize_lower(std::string(split));
+    const std::string normalized = to_lower(std::string(split));
 
     if (normalized != "train" && normalized != "val" && normalized != "test") {
         throw std::runtime_error("split must be one of: train, val, test");
     }
 
     return normalized;
-}
-
-auto to_gray_image(const cv::Mat& image) -> cv::Mat {
-    if (image.empty())
-        return {};
-
-    if (image.channels() == 1)
-        return image;
-
-    cv::Mat gray;
-    if (image.channels() == 3) {
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-        return gray;
-    }
-
-    if (image.channels() == 4) {
-        cv::cvtColor(image, gray, cv::COLOR_BGRA2GRAY);
-        return gray;
-    }
-
-    throw std::runtime_error("unsupported image channel count for blur scoring");
 }
 
 auto make_image_name(std::string_view session_id, const std::int64_t timestamp_ms) -> std::string {

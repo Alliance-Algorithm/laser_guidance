@@ -5,12 +5,12 @@
 
 #include <opencv2/core/mat.hpp>
 
+#include "laser_guidance/support.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
 
 constexpr int kStateDim = 2; // [depth_mm, velocity_mm_s]
-
-auto squared(const double value) -> double { return value * value; }
 
 } // namespace
 

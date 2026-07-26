@@ -6,16 +6,12 @@
 #include <string>
 
 namespace rmcs_laser_guidance {
-namespace {
 
-auto normalize_lower(std::string_view s) -> std::string {
-    std::string result(s);
-    std::transform(result.begin(), result.end(), result.begin(),
+auto to_lower(std::string s) -> std::string {
+    std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return result;
+    return s;
 }
-
-} // namespace
 
 auto default_config_path() -> std::filesystem::path {
     return "config/default.yaml";
@@ -83,7 +79,7 @@ auto load_record_session_options(const std::filesystem::path& config_path) -> Re
         options.target_color = record["target_color"].as<std::string>();
     }
     if (record["frame_format"]) {
-        options.frame_format = normalize_lower(record["frame_format"].as<std::string>());
+        options.frame_format = to_lower(record["frame_format"].as<std::string>());
     }
     if (record["jpeg_quality"]) {
         options.jpeg_quality = record["jpeg_quality"].as<int>();

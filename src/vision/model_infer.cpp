@@ -2,14 +2,11 @@
 
 #include "vision/cuda_check.hpp"
 
-#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <print>
 #include <string>
 #include <utility>
-
-#include <opencv2/imgproc.hpp>
 
 #include "vision/model_adapter.hpp"
 #include "vision/model_runtime.hpp"
@@ -22,72 +19,6 @@ namespace {
 
 constexpr int kInputWidth = 640;
 constexpr int kInputHeight = 640;
-
-struct LetterboxParams {
-    float scale = 1.0F;
-    int resized_width = kInputWidth;
-    int resized_height = kInputHeight;
-    float pad_x = 0.0F;
-    float pad_y = 0.0F;
-};
-
-struct TensorrtPreprocessResult {
-    std::vector<float> input;
-    LetterboxParams params;
-};
-
-auto compute_letterbox_params(int width, int height) -> LetterboxParams {
-    LetterboxParams params;
-    params.scale = std::min(
-        static_cast<float>(kInputWidth) / width, static_cast<float>(kInputHeight) / height);
-    params.resized_width = std::max(1, static_cast<int>(std::lround(width * params.scale)));
-    params.resized_height = std::max(1, static_cast<int>(std::lround(height * params.scale)));
-    params.pad_x = static_cast<float>((kInputWidth - params.resized_width) / 2);
-    params.pad_y = static_cast<float>((kInputHeight - params.resized_height) / 2);
-    return params;
-}
-
-auto preprocess_for_tensorrt(const cv::Mat& image) -> TensorrtPreprocessResult {
-    cv::Mat bgr;
-    if (image.channels() == 4)
-        cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
-    else if (image.channels() == 1)
-        cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
-    else
-        bgr = image;
-
-    const auto params = compute_letterbox_params(bgr.cols, bgr.rows);
-
-    cv::Mat resized;
-    cv::resize(
-        bgr, resized, cv::Size(params.resized_width, params.resized_height), 0.0, 0.0,
-        cv::INTER_LINEAR);
-
-    cv::Mat letterbox(kInputHeight, kInputWidth, CV_8UC3, cv::Scalar(114, 114, 114));
-    resized.copyTo(letterbox(
-        cv::Rect(
-            static_cast<int>(params.pad_x), static_cast<int>(params.pad_y), params.resized_width,
-            params.resized_height)));
-
-    cv::Mat rgb;
-    cv::cvtColor(letterbox, rgb, cv::COLOR_BGR2RGB);
-    cv::Mat rgb_float;
-    rgb.convertTo(rgb_float, CV_32F, 1.0 / 255.0);
-
-    std::vector<cv::Mat> channels;
-    cv::split(rgb_float, channels);
-
-    std::vector<float> input(3 * kInputHeight * kInputWidth);
-    std::size_t ch_size = kInputHeight * kInputWidth;
-    for (std::size_t c = 0; c < 3; ++c)
-        std::copy(
-            channels[c].ptr<float>(0), channels[c].ptr<float>(0) + ch_size,
-            input.begin() + c * ch_size);
-    return {
-        .input = std::move(input),
-        .params = params,
-    };
-}
 
 auto build_tensorrt_run_result(
     const ModelRunResult& base, const std::vector<float>& output, std::int32_t input_w,
@@ -172,16 +103,16 @@ struct ModelInfer::Details {
     }
 
     auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
-        const auto preprocess = preprocess_for_tensorrt(frame.image);
+        auto [input_data, transform] = preprocess_blob(frame.image, kInputWidth, kInputHeight);
         std::vector<float> output(300 * 6);
-        auto run_result = tensorrt_engine->run(preprocess.input, output);
+        auto run_result = tensorrt_engine->run(input_data, output);
         if (!run_result) {
             result.message = "TensorRT inference: " + run_result.error();
             return result;
         }
         auto run_model = build_tensorrt_run_result(
-            {}, output, frame.image.cols, frame.image.rows, preprocess.params.scale,
-            preprocess.params.pad_x, preprocess.params.pad_y);
+            {}, output, frame.image.cols, frame.image.rows, transform.scale,
+            transform.pad_x, transform.pad_y);
         auto adapter_result = adapt_yolo_outputs(frame, run_model);
         result.success = adapter_result.success;
         result.contract_supported = adapter_result.contract_supported;
