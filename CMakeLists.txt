@@ -51,6 +51,10 @@ set_target_properties(zmq::zmq PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${ZMQ_INCLUDE_DIR}")
 message(STATUS "ZMQ enabled")
 
+# ---- nlohmann_json ----------------------------------------------------------
+find_package(nlohmann_json REQUIRED)
+message(STATUS "nlohmann_json enabled")
+
 # ---- ONNX Runtime (required) -------------------------------------------------
 find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime/core/session/onnxruntime_cxx_api.h
   HINTS ${ONNXRUNTIME_ROOT} ENV ONNXRUNTIME_ROOT PATH_SUFFIXES include)
