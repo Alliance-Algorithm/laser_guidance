@@ -84,7 +84,7 @@ private:
     OverlayRenderer overlay_{};
     cv::Mat previous_output_{};
     bool window_open_ = false;
-    std::thread main_thread_{};
+    std::jthread main_thread_{};
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal

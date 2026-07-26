@@ -144,12 +144,11 @@ auto CaptureDevice::apply_runtime_profile(const HikRuntimeProfile& profile)
 
 auto CaptureDevice::start_capture_thread() -> void {
     frame_queue_ = std::make_unique<LatestValue<std::expected<Frame, Error>>>();
-    capture_stop_.store(false, std::memory_order_relaxed);
-    capture_thread_ = std::thread([this] { capture_loop(); });
+    capture_thread_ = std::jthread([this] { capture_loop(); });
 }
 
 auto CaptureDevice::stop_capture_thread() noexcept -> void {
-    capture_stop_.store(true, std::memory_order_relaxed);
+    capture_thread_.request_stop();
     if (frame_queue_) {
         frame_queue_->shutdown();
     }
@@ -166,14 +165,15 @@ auto CaptureDevice::capture_loop() -> void {
     // now only paces "how often it drains the queue", not "how often the hardware
     // is polled", so the delay must live here.
     constexpr auto kErrorBackoff = std::chrono::milliseconds(100);
+    auto stoken = capture_thread_.get_stop_token();
 
-    while (!capture_stop_.load(std::memory_order_relaxed)) {
+    while (!stoken.stop_requested()) {
         std::expected<Frame, Error> result;
         {
             std::scoped_lock lock(backend_mutex_);
             result = backend_->read_frame();
         }
-        if (capture_stop_.load(std::memory_order_relaxed)) {
+        if (stoken.stop_requested()) {
             break;
         }
         const bool failed = !result.has_value();

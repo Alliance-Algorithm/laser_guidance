@@ -41,7 +41,7 @@ private:
     bool voltage_mode_ = false;
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::thread worker_;
+    std::jthread worker_;
     bool stop_requested_ = false;
     bool active_ = false;
     std::optional<cv::Point2f> angle_center_{};

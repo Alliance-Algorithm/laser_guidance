@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -62,8 +61,7 @@ private:
     // can overlap its own processing with the next frame's capture instead of
     // paying for both serially. LatestValue gives "newest frame wins" semantics.
     std::unique_ptr<LatestValue<std::expected<Frame, Error>>> frame_queue_{};
-    std::thread capture_thread_{};
-    std::atomic<bool> capture_stop_{false};
+    std::jthread capture_thread_{};
     std::mutex backend_mutex_{};
 };
 
