@@ -115,7 +115,7 @@ auto ControlLoop::start() -> std::expected<void, Error> {
         update_status_locked();
     }
 
-    main_thread_ = std::thread([this] { run_loop(); });
+    main_thread_ = std::jthread([this] { run_loop(); });
     return {};
 }
 
