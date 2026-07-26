@@ -159,17 +159,5 @@ int main(int argc, char** argv) {
     std::println("q_x: {:.6f}", q_opt[1]);
     std::println("q_y: {:.6f}", q_opt[2]);
     std::println("q_z: {:.6f}", q_opt[3]);
-
-    {
-        Eigen::Quaterniond qo(q_opt[0], q_opt[1], q_opt[2], q_opt[3]);
-        auto euler = qo.toRotationMatrix().eulerAngles(2, 1, 0);
-        constexpr double k = 3.14159265358979323846 / 180.0;
-        CameraGalvoGeometry opt_geom(
-            static_cast<float>(t_opt[0]), static_cast<float>(t_opt[1]), static_cast<float>(t_opt[2]),
-            static_cast<float>(-euler[1] / k), static_cast<float>(-euler[2] / k), static_cast<float>(-euler[0] / k),
-            init.mirror_separation_mm);
-        std::println("residual: {:.3f}deg",
-                     compute_residual(recs, opt_geom));
-    }
     return 0;
 }
