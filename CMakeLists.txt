@@ -239,7 +239,8 @@ target_include_directories(laser_guidance_bridges PRIVATE
   ${rclcpp_INCLUDE_DIRS} ${visualization_msgs_INCLUDE_DIRS} ${std_msgs_INCLUDE_DIRS})
 target_link_libraries(laser_guidance_bridges PUBLIC
   laser_guidance_support laser_guidance_tracking
-  ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES})
+  ${rclcpp_LIBRARIES} ${visualization_msgs_LIBRARIES} ${std_msgs_LIBRARIES}
+  nlohmann_json::nlohmann_json)
 
 add_lg_lib(laser_guidance_runtime)
 target_link_libraries(laser_guidance_runtime PUBLIC
