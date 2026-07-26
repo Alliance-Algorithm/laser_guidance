@@ -16,20 +16,6 @@
 namespace rmcs_laser_guidance {
 namespace {
 
-auto shell_quote(std::string_view value) -> std::string {
-    std::string quoted;
-    quoted.reserve(value.size() + 2);
-    quoted.push_back('\'');
-    for (const char ch : value) {
-        if (ch == '\'')
-            quoted += "'\"'\"'";
-        else
-            quoted.push_back(ch);
-    }
-    quoted.push_back('\'');
-    return quoted;
-}
-
 struct CommandResult {
     int exit_code = -1;
     std::string output{};

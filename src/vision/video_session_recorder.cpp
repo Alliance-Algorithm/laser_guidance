@@ -33,20 +33,6 @@ auto validate_video_extension(const std::filesystem::path& path) -> void {
         "unsupported session video extension, expected .mp4: " + path.string());
 }
 
-auto shell_quote(std::string_view value) -> std::string {
-    std::string quoted;
-    quoted.reserve(value.size() + 2);
-    quoted.push_back('\'');
-    for (const char ch : value) {
-        if (ch == '\'')
-            quoted += "'\"'\"'";
-        else
-            quoted.push_back(ch);
-    }
-    quoted.push_back('\'');
-    return quoted;
-}
-
 auto h264_nvenc_available() -> bool {
     const int status = std::system(
         "ffmpeg -hide_banner -loglevel error -h encoder=h264_nvenc >/dev/null 2>&1");
