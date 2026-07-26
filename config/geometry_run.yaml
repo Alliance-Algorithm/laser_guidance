@@ -80,9 +80,9 @@ guidance:
   depth_scale: 1.0
   voltage_gain_x: 1.0
   voltage_gain_y: 1.35
-  t_x_mm: -97.0
-  t_y_mm: 15.1
-  t_z_mm: 146.0
+  t_x_mm: 85.5
+  t_y_mm: 15.0
+  t_z_mm: 0.0
   r_x_deg: 0.31
   r_y_deg: 0.05
   r_z_deg: 1.82
