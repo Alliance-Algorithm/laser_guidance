@@ -41,36 +41,21 @@ auto load_records(const std::string& path) -> std::vector<CalibRecord> {
     return recs;
 }
 
-auto euler_to_quat(float rx, float ry, float rz) -> std::array<double, 4> {
-    constexpr double k = 3.14159265358979323846 / 180.0;
-    Eigen::Quaterniond q =
-        Eigen::AngleAxisd(-rz * k, Eigen::Vector3d::UnitZ())
-        * Eigen::AngleAxisd(-rx * k, Eigen::Vector3d::UnitY())
-        * Eigen::AngleAxisd(-ry * k, Eigen::Vector3d::UnitX());
-    return {q.w(), q.x(), q.y(), q.z()};
-}
-
 auto compute_residual(const std::vector<CalibRecord>& recs,
-                      const Eigen::Quaterniond& q, const Eigen::Vector3d& t,
-                      float m_sep) -> double {
+                      const CameraGalvoGeometry& geom) -> double {
     double total = 0.0;
     for (const auto& r : recs) {
-        Eigen::Vector3d P_c(r.p_x_mm, r.p_y_mm, r.p_z_mm);
-        if (P_c.z() <= 0.0) continue;
-        Eigen::Vector3d P_g = q * (P_c - t);
-        if (P_g.z() <= 0.0) continue;
-        double z_eff = P_g.z() + m_sep;
-        double r_yz = std::sqrt(P_g.y() * P_g.y() + z_eff * z_eff);
-        double th_x = 0.5 * std::atan2(P_g.x(), r_yz);
-        double th_y = 0.5 * std::atan2(P_g.y(), z_eff);
-        double k = 180.0 / 3.14159265358979323846;
-        double dx = 2.0 * th_x * k - r.theta_x_deg;
-        double dy = 2.0 * th_y * k - r.theta_y_deg;
+        auto angles = geom.solve_angles({r.p_x_mm, r.p_y_mm, r.p_z_mm});
+        if (!angles.valid) continue;
+        double dx = static_cast<double>(angles.theta_x_optical_deg) - static_cast<double>(r.theta_x_deg);
+        double dy = static_cast<double>(angles.theta_y_optical_deg) - static_cast<double>(r.theta_y_deg);
         total += dx * dx + dy * dy;
     }
     return std::sqrt(total / static_cast<double>(recs.size()));
 }
 
+// Ceres AutoDiff residual. The kinematics matches CameraGalvoGeometry::solve_angles()
+// but is templated on T to support automatic differentiation.
 struct ExtrinsicResidual {
     float p_x, p_y, p_z;
     float th_x, th_y;
@@ -128,19 +113,21 @@ int main(int argc, char** argv) {
     auto config = load_config(config_path);
     auto init = config.guidance;
 
-    auto q_opt = euler_to_quat(init.r_x_deg, init.r_y_deg, init.r_z_deg);
-    std::array<double, 3> t_opt = {static_cast<double>(init.t_x_mm),
-                                    static_cast<double>(init.t_y_mm),
-                                    static_cast<double>(init.t_z_mm)};
+    CameraGalvoGeometry init_geom(init.t_x_mm, init.t_y_mm, init.t_z_mm,
+                                   init.r_x_deg, init.r_y_deg, init.r_z_deg,
+                                   init.mirror_separation_mm);
+    auto qf = init_geom.rotation();
+    auto tf = init_geom.translation();
 
-    {
-        Eigen::Quaterniond qi(q_opt[0], q_opt[1], q_opt[2], q_opt[3]);
-        Eigen::Vector3d ti(t_opt[0], t_opt[1], t_opt[2]);
-        std::println("Initial: t=({:.1f},{:.1f},{:.1f}) q=({:.4f},{:.4f},{:.4f},{:.4f}) err={:.3f}deg",
-                     init.t_x_mm, init.t_y_mm, init.t_z_mm,
-                     q_opt[0], q_opt[1], q_opt[2], q_opt[3],
-                     compute_residual(recs, qi, ti, init.mirror_separation_mm));
-    }
+    std::array<double, 4> q_opt = {static_cast<double>(qf.w()), static_cast<double>(qf.x()),
+                                    static_cast<double>(qf.y()), static_cast<double>(qf.z())};
+    std::array<double, 3> t_opt = {static_cast<double>(tf.x()), static_cast<double>(tf.y()),
+                                    static_cast<double>(tf.z())};
+
+    std::println("Initial: t=({:.1f},{:.1f},{:.1f}) q=({:.4f},{:.4f},{:.4f},{:.4f}) err={:.3f}deg",
+                 init.t_x_mm, init.t_y_mm, init.t_z_mm,
+                 q_opt[0], q_opt[1], q_opt[2], q_opt[3],
+                 compute_residual(recs, init_geom));
 
     ceres::Problem problem;
     for (const auto& r : recs) {
@@ -175,9 +162,14 @@ int main(int argc, char** argv) {
 
     {
         Eigen::Quaterniond qo(q_opt[0], q_opt[1], q_opt[2], q_opt[3]);
-        Eigen::Vector3d to(t_opt[0], t_opt[1], t_opt[2]);
+        auto euler = qo.toRotationMatrix().eulerAngles(2, 1, 0);
+        constexpr double k = 3.14159265358979323846 / 180.0;
+        CameraGalvoGeometry opt_geom(
+            static_cast<float>(t_opt[0]), static_cast<float>(t_opt[1]), static_cast<float>(t_opt[2]),
+            static_cast<float>(-euler[1] / k), static_cast<float>(-euler[2] / k), static_cast<float>(-euler[0] / k),
+            init.mirror_separation_mm);
         std::println("residual: {:.3f}deg",
-                     compute_residual(recs, qo, to, init.mirror_separation_mm));
+                     compute_residual(recs, opt_geom));
     }
     return 0;
 }
