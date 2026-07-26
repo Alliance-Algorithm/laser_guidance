@@ -5,24 +5,22 @@
 #include <thread>
 #include <utility>
 
+#include "capture/hik_backend.hpp"
+
 namespace rmcs_laser_guidance {
-namespace {
 
-auto to_hik_config(const HikCameraConfig& config) -> hikcamera::Config {
-    return hikcamera::Config{
-        .device_id = config.device_id,
-        .timeout_ms = config.timeout_ms,
-        .exposure_us = config.exposure_us,
-        .framerate = config.framerate,
-        .gain = config.gain,
-        .invert_image = config.invert_image,
-        .software_sync = config.software_sync,
-        .trigger_mode = config.trigger_mode,
-        .fixed_framerate = config.fixed_framerate,
-    };
-}
+struct V4l2Backend : public CaptureBackend {
+    explicit V4l2Backend(V4l2Config config_in)
+        : capture(std::move(config_in)) {}
 
-} // namespace
+    auto open() -> std::expected<CaptureFormat, Error> override;
+    auto read_frame() -> std::expected<Frame, Error> override;
+    auto close() noexcept -> void override;
+    [[nodiscard]] auto is_open() const noexcept -> bool override;
+    auto reconnect() -> std::expected<CaptureFormat, Error> override;
+
+    V4l2Capture capture;
+};
 
 auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat {
     return CaptureFormat{
@@ -37,24 +35,9 @@ auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat {
     };
 }
 
-auto to_capture_format(
-    const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
-    -> CaptureFormat {
-    return CaptureFormat{
-        .backend = CaptureBackendKind::hikcamera,
-        .device_id = device_info.device_id,
-        .width = format.width,
-        .height = format.height,
-        .framerate = format.framerate,
-        .format_name = format.pixel_format_name,
-        .device_path = device_info.device_id,
-        .pixel_encoding = "BGR8",
-    };
-}
-
 // ---- V4l2Backend ----------------------------------------------------------------
 
-auto V4l2Backend::open() -> std::expected<CaptureFormat, std::string> {
+auto V4l2Backend::open() -> std::expected<CaptureFormat, Error> {
     auto format = capture.open();
     if (!format) {
         return std::unexpected(format.error());
@@ -62,7 +45,7 @@ auto V4l2Backend::open() -> std::expected<CaptureFormat, std::string> {
     return to_capture_format(*format);
 }
 
-auto V4l2Backend::read_frame() -> std::expected<Frame, std::string> {
+auto V4l2Backend::read_frame() -> std::expected<Frame, Error> {
     return capture.read_frame();
 }
 
@@ -70,45 +53,8 @@ auto V4l2Backend::close() noexcept -> void { capture.close(); }
 
 auto V4l2Backend::is_open() const noexcept -> bool { return capture.is_open(); }
 
-auto V4l2Backend::reconnect() -> std::expected<CaptureFormat, std::string> {
+auto V4l2Backend::reconnect() -> std::expected<CaptureFormat, Error> {
     capture.close();
-    return open();
-}
-
-// ---- HikBackend -----------------------------------------------------------------
-
-auto HikBackend::open() -> std::expected<CaptureFormat, std::string> {
-    camera.configure(to_hik_config(config));
-    auto connected = camera.connect();
-    if (!connected) {
-        return std::unexpected(connected.error());
-    }
-    if (!camera.device_info().has_value()) {
-        return std::unexpected("Hik camera connected but device info is unavailable");
-    }
-    if (!camera.stream_format().has_value()) {
-        return std::unexpected("Hik camera connected but stream format is unavailable");
-    }
-    return to_capture_format(*camera.device_info(), *camera.stream_format());
-}
-
-auto HikBackend::read_frame() -> std::expected<Frame, std::string> {
-    auto image = camera.read_image_with_timestamp();
-    if (!image) {
-        return std::unexpected(image.error());
-    }
-    return Frame{
-        .image = std::move(image->mat),
-        .timestamp = image->timestamp,
-    };
-}
-
-auto HikBackend::close() noexcept -> void { (void)camera.disconnect(); }
-
-auto HikBackend::is_open() const noexcept -> bool { return camera.connected(); }
-
-auto HikBackend::reconnect() -> std::expected<CaptureFormat, std::string> {
-    (void)camera.disconnect();
     return open();
 }
 
@@ -120,14 +66,16 @@ CaptureDevice::CaptureDevice(Config config)
 
 CaptureDevice::~CaptureDevice() noexcept { close(); }
 
-auto CaptureDevice::open() -> std::expected<CaptureFormat, std::string> {
+auto CaptureDevice::open() -> std::expected<CaptureFormat, Error> {
     if (is_open() || capture_thread_.joinable()) {
-        return std::unexpected("capture device is already open");
+        return std::unexpected(
+            make_error(ErrorKind::internal, "capture device is already open"));
     }
     negotiated_.reset();
 
     if (!backend_) {
-        return std::unexpected("capture backend is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
     }
 
     auto format = backend_->open();
@@ -139,15 +87,16 @@ auto CaptureDevice::open() -> std::expected<CaptureFormat, std::string> {
     return *negotiated_;
 }
 
-auto CaptureDevice::read_frame() -> std::expected<Frame, std::string> {
+auto CaptureDevice::read_frame() -> std::expected<Frame, Error> {
     if (!frame_queue_) {
-        return std::unexpected("capture device is not open");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture device is not open"));
     }
-    try {
-        return frame_queue_->pop();
-    } catch (const std::exception& e) {
-        return std::unexpected(e.what());
+    auto item = frame_queue_->pop();
+    if (!item.has_value()) {
+        return std::unexpected(make_error(ErrorKind::unavailable, "capture stopped"));
     }
+    return std::move(*item);
 }
 
 auto CaptureDevice::close() noexcept -> void {
@@ -166,9 +115,10 @@ auto CaptureDevice::negotiated_format() const noexcept -> const std::optional<Ca
     return negotiated_;
 }
 
-auto CaptureDevice::reconnect() -> std::expected<void, std::string> {
+auto CaptureDevice::reconnect() -> std::expected<void, Error> {
     if (!backend_) {
-        return std::unexpected("capture backend is unavailable");
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
     }
 
     stop_capture_thread();
@@ -182,8 +132,18 @@ auto CaptureDevice::reconnect() -> std::expected<void, std::string> {
     return {};
 }
 
+auto CaptureDevice::apply_runtime_profile(const HikRuntimeProfile& profile)
+    -> std::expected<void, Error> {
+    if (!backend_) {
+        return std::unexpected(
+            make_error(ErrorKind::unavailable, "capture backend is unavailable"));
+    }
+    std::scoped_lock lock(backend_mutex_);
+    return backend_->apply_runtime_profile(profile);
+}
+
 auto CaptureDevice::start_capture_thread() -> void {
-    frame_queue_ = std::make_unique<LatestValue<std::expected<Frame, std::string>>>();
+    frame_queue_ = std::make_unique<LatestValue<std::expected<Frame, Error>>>();
     capture_stop_.store(false, std::memory_order_relaxed);
     capture_thread_ = std::thread([this] { capture_loop(); });
 }
@@ -208,14 +168,17 @@ auto CaptureDevice::capture_loop() -> void {
     constexpr auto kErrorBackoff = std::chrono::milliseconds(100);
 
     while (!capture_stop_.load(std::memory_order_relaxed)) {
-        auto result = backend_->read_frame();
+        std::expected<Frame, Error> result;
+        {
+            std::scoped_lock lock(backend_mutex_);
+            result = backend_->read_frame();
+        }
         if (capture_stop_.load(std::memory_order_relaxed)) {
             break;
         }
         const bool failed = !result.has_value();
-        try {
-            frame_queue_->push(std::move(result));
-        } catch (const std::exception&) {
+        frame_queue_->push(std::move(result));
+        if (frame_queue_->is_shutdown()) {
             break;
         }
         if (failed) {

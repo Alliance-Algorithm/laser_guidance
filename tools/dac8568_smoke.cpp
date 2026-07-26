@@ -158,7 +158,7 @@ auto payload_bytes(uint32_t payload) -> std::array<uint8_t, 4> {
 }
 
 auto write_payload(rmcs_laser_guidance::Ft4222Spi& spi, uint32_t payload, std::string_view label)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const auto bytes = payload_bytes(payload);
     std::println(
@@ -168,13 +168,13 @@ auto write_payload(rmcs_laser_guidance::Ft4222Spi& spi, uint32_t payload, std::s
 }
 
 auto write_internal_reference_enable(rmcs_laser_guidance::Ft4222Spi& spi)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
     constexpr uint32_t kEnableInternalReference = 0x08000001u;
     return write_payload(spi, kEnableInternalReference, "enable_internal_reference");
 }
 
 auto write_voltage(rmcs_laser_guidance::Ft4222Spi& spi, uint8_t channel, double voltage)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const double clipped = clamp_voltage(voltage);
     const uint16_t code = voltage_to_code(clipped);
@@ -193,7 +193,7 @@ auto maybe_sleep(int hold_ms) -> void {
 }
 
 auto run_single_voltage(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     if (auto result = write_voltage(spi, options.channel, options.single_voltage); !result)
         return result;
@@ -214,7 +214,7 @@ auto run_single_voltage(rmcs_laser_guidance::Ft4222Spi& spi, const Options& opti
 }
 
 auto run_sequence(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const std::array<double, 4> sequence{0.0, 1.0, -1.0, 0.0};
     for (std::size_t i = 0; i < sequence.size(); ++i) {
@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
             .cs_channel = 0,
         });
         if (!spi) {
-            std::println(stderr, "tool_dac8568_smoke: failed to open FT4222: {}", spi.error());
+            std::println(stderr, "tool_dac8568_smoke: failed to open FT4222: {}", format_error(spi.error()));
             return 1;
         }
 
@@ -274,14 +274,14 @@ int main(int argc, char** argv) {
             channel_name(options->channel));
 
         if (auto result = write_internal_reference_enable(*spi); !result) {
-            std::println(stderr, "tool_dac8568_smoke: {}", result.error());
+            std::println(stderr, "tool_dac8568_smoke: {}", format_error(result.error()));
             return 1;
         }
 
         const auto result = options->has_single_voltage ? run_single_voltage(*spi, *options)
-                                                        : run_sequence(*spi, *options);
+                                                         : run_sequence(*spi, *options);
         if (!result) {
-            std::println(stderr, "tool_dac8568_smoke: {}", result.error());
+            std::println(stderr, "tool_dac8568_smoke: {}", format_error(result.error()));
             return 1;
         }
 

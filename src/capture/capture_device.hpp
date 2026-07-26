@@ -11,10 +11,9 @@
 #include "capture/capture_backend.hpp"
 #include "capture/v4l2_capture.hpp"
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "tracking/freshness_queue.hpp"
 #include "types.hpp"
-
-#include <hikcamera/capturer.hpp>
 
 namespace rmcs_laser_guidance {
 
@@ -31,37 +30,6 @@ struct CaptureFormat {
 
 auto to_capture_format(const V4l2NegotiatedFormat& format) -> CaptureFormat;
 
-auto to_capture_format(
-    const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
-    -> CaptureFormat;
-
-struct V4l2Backend : public CaptureBackend {
-    explicit V4l2Backend(V4l2Config config_in)
-        : capture(std::move(config_in)) {}
-
-    auto open() -> std::expected<CaptureFormat, std::string> override;
-    auto read_frame() -> std::expected<Frame, std::string> override;
-    auto close() noexcept -> void override;
-    [[nodiscard]] auto is_open() const noexcept -> bool override;
-    auto reconnect() -> std::expected<CaptureFormat, std::string> override;
-
-    V4l2Capture capture;
-};
-
-struct HikBackend : public CaptureBackend {
-    explicit HikBackend(HikCameraConfig config_in)
-        : config(std::move(config_in)) {}
-
-    auto open() -> std::expected<CaptureFormat, std::string> override;
-    auto read_frame() -> std::expected<Frame, std::string> override;
-    auto close() noexcept -> void override;
-    [[nodiscard]] auto is_open() const noexcept -> bool override;
-    auto reconnect() -> std::expected<CaptureFormat, std::string> override;
-
-    hikcamera::Camera camera{};
-    HikCameraConfig config{};
-};
-
 class CaptureDevice {
 public:
     explicit CaptureDevice(Config config);
@@ -70,13 +38,14 @@ public:
     CaptureDevice(const CaptureDevice&) = delete;
     auto operator=(const CaptureDevice&) -> CaptureDevice& = delete;
 
-    auto open() -> std::expected<CaptureFormat, std::string>;
-    auto read_frame() -> std::expected<Frame, std::string>;
+    auto open() -> std::expected<CaptureFormat, Error>;
+    auto read_frame() -> std::expected<Frame, Error>;
     auto close() noexcept -> void;
     [[nodiscard]] auto is_open() const noexcept -> bool;
     [[nodiscard]] auto negotiated_format() const noexcept -> const std::optional<CaptureFormat>&;
 
-    auto reconnect() -> std::expected<void, std::string>;
+    auto reconnect() -> std::expected<void, Error>;
+    auto apply_runtime_profile(const HikRuntimeProfile& profile) -> std::expected<void, Error>;
 
 private:
     [[nodiscard]] auto make_backend() const -> std::unique_ptr<CaptureBackend>;
@@ -92,9 +61,10 @@ private:
     // SDK's demosaic/convert step) independently of the consumer, so the consumer
     // can overlap its own processing with the next frame's capture instead of
     // paying for both serially. LatestValue gives "newest frame wins" semantics.
-    std::unique_ptr<LatestValue<std::expected<Frame, std::string>>> frame_queue_{};
+    std::unique_ptr<LatestValue<std::expected<Frame, Error>>> frame_queue_{};
     std::thread capture_thread_{};
     std::atomic<bool> capture_stop_{false};
+    std::mutex backend_mutex_{};
 };
 
 } // namespace rmcs_laser_guidance

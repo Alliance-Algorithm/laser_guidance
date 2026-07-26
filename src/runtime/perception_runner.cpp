@@ -99,7 +99,7 @@ auto PerceptionRunner::start() -> std::expected<void, std::string> {
     }
 
     if (enabled()) {
-        worker_ = std::thread([this] { run(); });
+        worker_ = std::jthread([this](std::stop_token) { run(); });
     }
     return {};
 }
@@ -109,17 +109,14 @@ auto PerceptionRunner::submit(Frame frame) -> bool {
         return true;
     }
 
-    try {
-        frame_queue_->push(QueuedFrame{
-            .image = std::move(frame.image),
-            .capture_time = frame.timestamp,
-        });
-        return true;
-    } catch (const std::exception& e) {
-        std::scoped_lock lock(state_mutex_);
-        last_error_ = e.what();
+    if (!frame_queue_ || frame_queue_->is_shutdown()) {
         return false;
     }
+    frame_queue_->push(QueuedFrame{
+        .image = std::move(frame.image),
+        .capture_time = frame.timestamp,
+    });
+    return true;
 }
 
 auto PerceptionRunner::poll() const -> PerceptionPollResult {
@@ -142,9 +139,7 @@ auto PerceptionRunner::shutdown() -> void {
 
 auto PerceptionRunner::stop() -> void {
     shutdown();
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    worker_ = std::jthread{};
 
     {
         std::scoped_lock lock(state_mutex_);
@@ -210,12 +205,11 @@ auto PerceptionRunner::degraded() const -> bool {
 auto PerceptionRunner::run() -> void {
     try {
         while (true) {
-            QueuedFrame queued_frame;
-            try {
-                queued_frame = frame_queue_->pop();
-            } catch (const std::exception&) {
+            auto queued = frame_queue_->pop();
+            if (!queued.has_value()) {
                 break;
             }
+            QueuedFrame queued_frame = std::move(*queued);
 
             const auto worker_start = Clock::now();
             const auto before_infer = stale_policy_.make_before_inference_sample(

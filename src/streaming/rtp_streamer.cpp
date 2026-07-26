@@ -52,18 +52,20 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         encoder = "libx264";
     }
 
+    constexpr int kRtpPktSize = 1200;
     std::string encoder_opts;
     if (encoder.find("nvenc") != std::string::npos) {
         encoder_opts = std::format(
-            "-preset p1 -tune ll -rc cbr -b:v {} -g {} -bf 0 "
-            "-pix_fmt yuv420p -profile:v high -zerolatency 1 -forced-idr 1",
-            details_->config.bitrate, gop);
+            "-preset p1 -tune ll -rc cbr -b:v {} -maxrate {} -bufsize {} "
+            "-g {} -bf 0 -pix_fmt yuv420p -profile:v high -zerolatency 1 -forced-idr 1",
+            details_->config.bitrate, details_->config.bitrate, details_->config.bitrate, gop);
     } else {
         encoder_opts = std::format(
-            "-preset ultrafast -tune zerolatency -b:v {} -g {} "
-            "-pix_fmt yuv420p -profile:v high "
+            "-preset ultrafast -tune zerolatency -b:v {} -maxrate {} -bufsize {} "
+            "-g {} -pix_fmt yuv420p -profile:v high "
             "-x264-params \"{}\"",
-            details_->config.bitrate, gop, x264_params);
+            details_->config.bitrate, details_->config.bitrate, details_->config.bitrate, gop,
+            x264_params);
     }
 
     const std::string command = std::format(
@@ -72,9 +74,9 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         "-framerate {} -i pipe:0 "
         "-c:v {} {} "
         "-flags:v +global_header "
-        "-f rtp -sdp_file \"{}\" \"rtp://{}:{}\"",
-        width, height, framerate, encoder, encoder_opts, details_->config.sdp_path.string(),
-        details_->config.host, details_->config.port);
+        "-f rtp -pkt_size {} -sdp_file \"{}\" \"rtp://{}:{}\"",
+        width, height, framerate, encoder, encoder_opts, kRtpPktSize,
+        details_->config.sdp_path.string(), details_->config.host, details_->config.port);
 
     details_->pipe = popen(command.c_str(), "w");
     if (!details_->pipe) {

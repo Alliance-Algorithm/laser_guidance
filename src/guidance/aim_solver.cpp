@@ -9,6 +9,7 @@
 
 #include "guidance/camera_projection.hpp"
 #include "guidance/depth_estimator.hpp"
+#include "guidance/depth_filter.hpp"
 #include "guidance/galvo_kinematics.hpp"
 #include "guidance/voltage_mapper.hpp"
 
@@ -98,6 +99,9 @@ auto AimSolver::load_geometry_calibration(const std::filesystem::path& path) -> 
         auto [camera, dist] = load_yaml_calibration(path);
         projection_ = std::make_unique<CameraProjection>(camera.clone(), dist.clone());
         depth_estimator_ = std::make_unique<DepthEstimator>(config_, camera.clone());
+        if (config_.depth_filter_enabled) {
+            depth_filter_ = std::make_unique<DepthFilter>(config_);
+        }
         kinematics_ = std::make_unique<GalvoKinematics>(config_);
         return {};
     } catch (const std::exception& e) {
@@ -129,7 +133,8 @@ auto AimSolver::solve(const AimInput& input) -> AimSolveResult {
     return solve_geometry(input);
 }
 
-auto AimSolver::observe_target(const Detection* detection) -> AimSolveTelemetry {
+auto AimSolver::observe_target(const Detection* detection, const double dt_seconds)
+    -> AimSolveTelemetry {
     AimSolveTelemetry telemetry;
     if (detection != nullptr) {
         if (const auto depth = estimate_depth(*detection)) {
@@ -138,7 +143,17 @@ auto AimSolver::observe_target(const Detection* detection) -> AimSolveTelemetry 
         }
     }
 
-    if (last_valid_depth_mm_ > 0.0F) {
+    if (depth_filter_) {
+        // See depth_filter.hpp for why raw measurements are filtered here.
+        depth_filter_->predict(dt_seconds);
+        if (telemetry.measured_depth_mm.has_value()) {
+            depth_filter_->update(*telemetry.measured_depth_mm);
+        }
+        if (depth_filter_->is_initialized()) {
+            telemetry.active_depth_mm = depth_filter_->state().depth_mm;
+            telemetry.used_cached_depth = !telemetry.measured_depth_mm.has_value();
+        }
+    } else if (last_valid_depth_mm_ > 0.0F) {
         telemetry.active_depth_mm = last_valid_depth_mm_;
         telemetry.used_cached_depth = !telemetry.measured_depth_mm.has_value();
     }
@@ -166,6 +181,13 @@ auto AimSolver::project_to_camera(const cv::Point2f& pixel, const float depth_mm
     return projection_->project(pixel, depth_mm);
 }
 
+auto AimSolver::reset_depth_cache() noexcept -> void {
+    last_valid_depth_mm_ = 0.0F;
+    if (depth_filter_) {
+        depth_filter_->reset();
+    }
+}
+
 auto AimSolver::cached_depth_mm() const -> std::optional<float> {
     if (last_valid_depth_mm_ <= 0.0F) {
         return std::nullopt;
@@ -183,7 +205,7 @@ auto AimSolver::solve_geometry(const AimInput& input) -> AimSolveResult {
     const auto* selected =
         input.track.selected_detection.has_value() ? &*input.track.selected_detection : nullptr;
     auto result = AimSolveResult{
-        .telemetry = observe_target(selected),
+        .telemetry = observe_target(selected, input.track.dt_seconds),
     };
     if (!result.telemetry.active_depth_mm.has_value()) {
         result.aim_output.message = "no valid depth";
@@ -215,7 +237,7 @@ auto AimSolver::solve_direct_voltage(const AimInput& input) -> AimSolveResult {
     const auto* selected =
         input.track.selected_detection.has_value() ? &*input.track.selected_detection : nullptr;
     auto result = AimSolveResult{
-        .telemetry = observe_target(selected),
+        .telemetry = observe_target(selected, input.track.dt_seconds),
     };
     if (!voltage_mapper_) {
         result.aim_output.message = "direct voltage mapper not initialized";

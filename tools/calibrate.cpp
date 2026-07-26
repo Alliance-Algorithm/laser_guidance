@@ -506,7 +506,7 @@ int main(int argc, char** argv) {
         rmcs_laser_guidance::CaptureDevice capture(config);
         const auto open_result = capture.open();
         if (!open_result) {
-            std::println(stderr, "Failed to open camera: {}", open_result.error());
+            std::println(stderr, "Failed to open camera: {}", format_error(open_result.error()));
             return 1;
         }
 
@@ -523,7 +523,7 @@ int main(int argc, char** argv) {
         while (true) {
             auto frame = capture.read_frame();
             if (!frame) {
-                std::println(stderr, "Frame read error: {}", frame.error());
+                std::println(stderr, "Frame read error: {}", format_error(frame.error()));
                 continue;
             }
 

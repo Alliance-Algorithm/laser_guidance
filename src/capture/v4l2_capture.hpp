@@ -7,6 +7,7 @@
 #include <opencv2/videoio.hpp>
 
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "types.hpp"
 
 namespace rmcs_laser_guidance {
@@ -24,8 +25,8 @@ public:
     explicit V4l2Capture(V4l2Config config);
     ~V4l2Capture() noexcept;
 
-    auto open() -> std::expected<V4l2NegotiatedFormat, std::string>;
-    auto read_frame() -> std::expected<Frame, std::string>;
+    auto open() -> std::expected<V4l2NegotiatedFormat, Error>;
+    auto read_frame() -> std::expected<Frame, Error>;
     auto close() noexcept -> void;
 
     [[nodiscard]] auto is_open() const noexcept -> bool;

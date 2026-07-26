@@ -3,6 +3,7 @@
 #include <print>
 
 #include "config.hpp"
+#include "guidance/camera_galvo_geometry.hpp"
 #include "guidance/galvo_kinematics.hpp"
 
 namespace {
@@ -67,13 +68,13 @@ void test_positive_y() {
 }
 
 void test_extrinsic_offset() {
-    auto cfg = make_test_config(-92.5F, 0.0F, 0.0F);
+    auto cfg = make_test_config(85.5F, 0.0F, 0.0F);
     GalvoKinematics kin(cfg);
-    auto angles = kin.compute({-92.5F, 0.0F, 10000.0F});
+    auto angles = kin.compute({85.5F, 0.0F, 10000.0F});
     CHECK(angles.valid);
     CHECK(std::abs(angles.theta_x_optical_deg) < kEps);
     CHECK(std::abs(angles.theta_y_optical_deg) < kEps);
-    std::println("  extrinsic_offset: OK (t_x=-92.5mm)");
+    std::println("  extrinsic_offset: OK (t_x=85.5mm)");
 }
 
 void test_behind_camera() {
@@ -102,6 +103,40 @@ void test_mirror_separation_effect() {
         a_with.theta_y_optical_deg);
 }
 
+void test_geometry_identity() {
+    CameraGalvoGeometry geom(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 15.0F);
+    auto a = geom.solve_angles({0.0F, 0.0F, 10000.0F});
+    CHECK(a.valid);
+    CHECK(std::abs(a.theta_x_optical_deg) < kEps);
+    CHECK(std::abs(a.theta_y_optical_deg) < kEps);
+    std::println("  geometry_identity: OK");
+}
+
+void test_geometry_positive_x() {
+    CameraGalvoGeometry geom(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 15.0F);
+    auto a = geom.solve_angles({500.0F, 0.0F, 10000.0F});
+    CHECK(a.valid);
+    CHECK(a.theta_x_optical_deg > 0.0F);
+    CHECK(std::abs(a.theta_y_optical_deg) < kEps);
+    std::println("  geometry_positive_x: OK");
+}
+
+void test_geometry_extrinsic_offset() {
+    CameraGalvoGeometry geom(85.5F, 15.0F, 0.0F, 0.0F, 0.0F, 0.0F, 15.0F);
+    auto a = geom.solve_angles({85.5F, 15.0F, 10000.0F});
+    CHECK(a.valid);
+    CHECK(std::abs(a.theta_x_optical_deg) < kEps);
+    CHECK(std::abs(a.theta_y_optical_deg) < kEps);
+    std::println("  geometry_extrinsic_offset: OK");
+}
+
+void test_geometry_back() {
+    CameraGalvoGeometry geom(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 15.0F);
+    auto a = geom.solve_angles({0.0F, 0.0F, -100.0F});
+    CHECK(!a.valid);
+    std::println("  geometry_back: OK");
+}
+
 } // namespace
 
 int main() {
@@ -113,6 +148,10 @@ int main() {
     test_behind_camera();
     test_behind_galvo();
     test_mirror_separation_effect();
+    test_geometry_identity();
+    test_geometry_positive_x();
+    test_geometry_extrinsic_offset();
+    test_geometry_back();
     std::println("PASSED");
     return 0;
 }

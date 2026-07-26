@@ -6,6 +6,7 @@
 
 #include "config.hpp"
 #include "laser_guidance/bridges.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/runtime.hpp"
 #include "laser_guidance/support.hpp"
 
@@ -45,13 +46,13 @@ int main(int argc, char** argv) {
 
         rmcs_laser_guidance::CompetitionRuntime runtime(config, {.record_options = record_options});
         if (auto start_result = runtime.start(); !start_result) {
-            std::println(stderr, "competition runtime start failed: {}", start_result.error());
+            std::println(stderr, "competition runtime start failed: {}", format_error(start_result.error()));
             return 1;
         }
 
         rmcs_laser_guidance::FifoControlServer fifo;
         if (auto fifo_result = fifo.start(); !fifo_result) {
-            std::println(stderr, "FIFO start failed: {}", fifo_result.error());
+            std::println(stderr, "FIFO start failed: {}", format_error(fifo_result.error()));
             runtime.stop();
             runtime.join();
             return 1;
@@ -61,7 +62,7 @@ int main(int argc, char** argv) {
         while (!g_stop_requested.load()) {
             if (auto command = fifo.poll_command(); command.has_value()) {
                 if (auto result = runtime.submit_command(*command); !result) {
-                    std::println(stderr, "command rejected: {}", result.error());
+                    std::println(stderr, "command rejected: {}", format_error(result.error()));
                 }
             } else if (!fifo.last_error().empty()) {
                 std::println(stderr, "FIFO parse error: {}", fifo.last_error());

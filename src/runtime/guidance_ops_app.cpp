@@ -116,7 +116,7 @@ GuidanceOpsApp::GuidanceOpsApp(Config config, GuidanceRecorderPaths paths)
     calibration_state_->angle_y_deg = config_.guidance.calib_angle_y_deg;
 }
 
-auto GuidanceOpsApp::run() -> std::expected<void, std::string> {
+auto GuidanceOpsApp::run() -> std::expected<void, Error> {
     if (auto result = initialize(); !result) {
         teardown();
         return result;
@@ -126,14 +126,14 @@ auto GuidanceOpsApp::run() -> std::expected<void, std::string> {
     return {};
 }
 
-auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
+auto GuidanceOpsApp::initialize() -> std::expected<void, Error> {
     stop_requested_ = false;
     retry_policy_ = CaptureRetryPolicy{};
 
     auto format = capture_.open();
     if (!format) {
         std::println(
-            stderr, "camera init failed: {}, will retry...", format.error());
+            stderr, "camera init failed: {}, will retry...", format_error(format.error()));
         negotiated_format_.reset();
     } else {
         negotiated_format_ = *format;
@@ -150,7 +150,7 @@ auto GuidanceOpsApp::initialize() -> std::expected<void, std::string> {
         if (!guidance) {
             std::println(
                 stderr, "guidance init failed: {}, guidance disabled",
-                guidance.error());
+                format_error(guidance.error()));
             retry_policy_.arm_guidance_retry(std::chrono::steady_clock::now());
         } else {
             guidance_ = std::move(*guidance);
@@ -222,7 +222,7 @@ auto GuidanceOpsApp::run_loop() -> void {
                 retry_policy_.arm_guidance_retry(Clock::now());
                 retry_policy_.on_reconnect_succeeded();
             } else {
-                std::println(stderr, "guidance app reconnect failed: {}", reconnect_result.error());
+                std::println(stderr, "guidance app reconnect failed: {}", format_error(reconnect_result.error()));
                 retry_policy_.on_reconnect_failed(Clock::now());
             }
             continue;
@@ -239,7 +239,7 @@ auto GuidanceOpsApp::run_loop() -> void {
                     retry_policy_.clear_guidance_retry();
                     std::println("guidance app guidance initialized");
                 } else {
-                    std::println(stderr, "guidance app retry failed: {}", guidance.error());
+                    std::println(stderr, "guidance app retry failed: {}", format_error(guidance.error()));
                     retry_policy_.defer_guidance_retry(now);
                 }
             }
@@ -247,7 +247,7 @@ auto GuidanceOpsApp::run_loop() -> void {
 
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
-            std::println(stderr, "capture read failed: {}", frame_result.error());
+            std::println(stderr, "capture read failed: {}", format_error(frame_result.error()));
             if (retry_policy_.on_read_error(Clock::now())) {
                 if (guidance_) {
                     guidance_->shutdown();

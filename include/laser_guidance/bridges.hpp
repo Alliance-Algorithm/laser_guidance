@@ -10,6 +10,7 @@
 #include <opencv2/core/mat.hpp>
 
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/runtime.hpp"
 
 namespace rmcs_laser_guidance {
@@ -22,13 +23,13 @@ public:
     FifoControlServer(const FifoControlServer&) = delete;
     auto operator=(const FifoControlServer&) -> FifoControlServer& = delete;
 
-    auto start() -> std::expected<void, std::string>;
+    auto start() -> std::expected<void, Error>;
     auto stop() -> void;
     [[nodiscard]] auto poll_command() -> std::optional<RuntimeCommand>;
     [[nodiscard]] auto last_error() const -> const std::string&;
     [[nodiscard]] auto fifo_path() const -> const std::filesystem::path&;
 
-    static auto parse_command(std::string_view text) -> std::expected<RuntimeCommand, std::string>;
+    static auto parse_command(std::string_view text) -> std::expected<RuntimeCommand, Error>;
 
 private:
     auto consume_buffered_command() -> std::optional<RuntimeCommand>;

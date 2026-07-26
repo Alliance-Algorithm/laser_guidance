@@ -3,7 +3,9 @@
 #include <chrono>
 #include <iostream>
 #include <print>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <opencv2/highgui.hpp>
 
@@ -96,7 +98,7 @@ ControlLoop::~ControlLoop() {
     join();
 }
 
-auto ControlLoop::start() -> std::expected<void, std::string> {
+auto ControlLoop::start() -> std::expected<void, Error> {
     {
         std::scoped_lock lock(state_mutex_);
         if (state_.running) {
@@ -106,7 +108,7 @@ auto ControlLoop::start() -> std::expected<void, std::string> {
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return result;
+        return std::unexpected(result.error());
     }
 
     {
@@ -120,17 +122,18 @@ auto ControlLoop::start() -> std::expected<void, std::string> {
     return {};
 }
 
-auto ControlLoop::run() -> std::expected<void, std::string> {
+auto ControlLoop::run() -> std::expected<void, Error> {
     {
         std::scoped_lock lock(state_mutex_);
         if (state_.running) {
-            return std::unexpected("control loop is already running");
+            return std::unexpected(
+                make_error(ErrorKind::internal, "control loop is already running"));
         }
     }
 
     if (auto result = initialize_components(); !result) {
         teardown_components();
-        return result;
+        return std::unexpected(result.error());
     }
 
     {
@@ -153,43 +156,51 @@ auto ControlLoop::join() -> void {
 }
 
 auto ControlLoop::submit_command(const RuntimeCommand& command)
-    -> std::expected<void, std::string> {
-    if (command.type == RuntimeCommandType::set_backend) {
-        if (!perception_.has_backend(command.backend)) {
-            return std::unexpected("requested backend is not available");
+    -> std::expected<void, Error> {
+    // Backend switch may run outside the state lock (matches current order:
+    // validate backend first, then update state).
+    if (const auto* set_backend = std::get_if<CmdSetBackend>(&command)) {
+        if (!perception_.has_backend(set_backend->backend)) {
+            return std::unexpected(
+                make_error(ErrorKind::unavailable, "requested backend is not available"));
         }
-        if (!perception_.set_active_backend(command.backend)) {
-            return std::unexpected("failed to switch active backend");
+        if (!perception_.set_active_backend(set_backend->backend)) {
+            return std::unexpected(
+                make_error(ErrorKind::unavailable, "failed to switch active backend"));
         }
     }
 
     EnemyColor enemy_color = EnemyColor::auto_select;
+    bool request_shutdown = false;
     {
         std::scoped_lock lock(state_mutex_);
-        switch (command.type) {
-        case RuntimeCommandType::set_streaming:
-            state_.streaming_requested = command.enabled && allows_streaming();
-            break;
-        case RuntimeCommandType::set_recording:
-            state_.recording_requested = command.enabled && allows_recording();
-            break;
-        case RuntimeCommandType::set_enemy_color:
-            state_.enemy_color = command.enemy_color;
-            break;
-        case RuntimeCommandType::set_backend: break;
-        case RuntimeCommandType::set_ekf:
-            state_.ekf_enabled = command.enabled;
-            break;
-        case RuntimeCommandType::shutdown:
-            state_.stop_requested = true;
-            break;
-        }
+        std::visit(
+            [&](const auto& cmd) {
+                using T = std::decay_t<decltype(cmd)>;
+                if constexpr (std::is_same_v<T, CmdSetStreaming>) {
+                    state_.streaming_requested = cmd.enabled && allows_streaming();
+                } else if constexpr (std::is_same_v<T, CmdSetRecording>) {
+                    state_.recording_requested = cmd.enabled && allows_recording();
+                } else if constexpr (std::is_same_v<T, CmdSetEnemyColor>) {
+                    state_.enemy_color = cmd.enemy_color;
+                } else if constexpr (std::is_same_v<T, CmdSetBackend>) {
+                    // already applied above, before acquiring the lock
+                } else if constexpr (std::is_same_v<T, CmdSetEkf>) {
+                    state_.ekf_enabled = cmd.enabled;
+                } else if constexpr (std::is_same_v<T, CmdShutdown>) {
+                    state_.stop_requested = true;
+                    request_shutdown = true;
+                } else {
+                    static_assert(sizeof(T) == 0, "non-exhaustive RuntimeCommand visit");
+                }
+            },
+            command);
         enemy_color = state_.enemy_color;
         update_status_locked();
     }
 
     perception_.set_enemy_color(enemy_color);
-    if (command.type == RuntimeCommandType::shutdown) {
+    if (request_shutdown) {
         request_stop();
     }
     return {};
@@ -221,7 +232,7 @@ auto ControlLoop::make_output_capabilities(const CompetitionProfile profile)
     return {};
 }
 
-auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
+auto ControlLoop::initialize_components() -> std::expected<void, Error> {
     previous_output_ = cv::Mat{};
     negotiated_format_.reset();
     guidance_.reset();
@@ -229,8 +240,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
     const auto open_result = capture_.open();
     if (!open_result) {
         std::println(
-            stderr, "camera init failed: {}, will retry...", open_result.error());
-        sync_last_error("Camera open failed: " + open_result.error());
+            stderr, "camera init failed: {}, will retry...", format_error(open_result.error()));
+        sync_last_error(format_error(open_result.error()));
     } else {
         negotiated_format_ = *open_result;
     }
@@ -245,8 +256,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, std::string> {
                 auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
         if (!guidance) {
             std::println(
-                stderr, "guidance init failed: {}, guidance disabled", guidance.error());
-            sync_last_error("Guidance init failed: " + guidance.error());
+                stderr, "guidance init failed: {}, guidance disabled", format_error(guidance.error()));
+            sync_last_error(format_error(guidance.error()));
         } else {
             guidance_ = std::move(*guidance);
         }
@@ -291,6 +302,8 @@ auto ControlLoop::run_loop() -> void {
                     std::scoped_lock lock(state_mutex_);
                     negotiated_format_ = std::move(new_format);
                 }
+                // reconnect re-applies lit profile in HikBackend::open(); force resync.
+                active_hik_profile_difficulty_ = 1;
 
                 if (guidance_enabled_in_profile()) {
                     {
@@ -303,8 +316,8 @@ auto ControlLoop::run_loop() -> void {
                 retry_policy.on_reconnect_succeeded();
             } else {
                 std::println(
-                    stderr, "reconnect failed: {}", reconnect_result.error());
-                sync_last_error("Reconnect failed: " + reconnect_result.error());
+                    stderr, "reconnect failed: {}", format_error(reconnect_result.error()));
+                sync_last_error(format_error(reconnect_result.error()));
                 retry_policy.on_reconnect_failed(Clock::now());
             }
             continue;
@@ -322,7 +335,7 @@ auto ControlLoop::run_loop() -> void {
                     retry_policy.clear_guidance_retry();
                     std::println("guidance initialized");
                 } else {
-                    std::println(stderr, "guidance retry failed: {}", guidance.error());
+                    std::println(stderr, "guidance retry failed: {}", format_error(guidance.error()));
                     retry_policy.defer_guidance_retry(now);
                 }
             }
@@ -330,7 +343,7 @@ auto ControlLoop::run_loop() -> void {
 
         auto frame_result = capture_.read_frame();
         if (!frame_result) {
-            sync_last_error(frame_result.error());
+            sync_last_error(format_error(frame_result.error()));
 
             if (retry_policy.on_read_error(Clock::now())) {
                 decltype(guidance_) stale_guidance;
@@ -343,7 +356,7 @@ auto ControlLoop::run_loop() -> void {
                 }
                 std::println(
                     stderr, "camera read failed repeatedly: {}, entering reconnect state",
-                    frame_result.error());
+                    format_error(frame_result.error()));
                 sync_last_error("Camera read failed repeatedly; entering reconnect state");
             } else {
                 std::this_thread::sleep_for(kReadErrorDelay);
@@ -420,6 +433,7 @@ auto ControlLoop::run_loop() -> void {
         }
 
         update_hit_progress(frame.detection);
+        maybe_switch_hik_profile();
         const auto pre_output_status = outputs_.status();
         overlay_.render(
             frame,
@@ -545,6 +559,44 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
                                ? 1.0F / static_cast<float>(negotiated_format_->framerate)
                                : 1.0F / 60.0F;
     hit_progress_.update(is_purple, frame_dt_s);
+}
+
+auto ControlLoop::maybe_switch_hik_profile() -> void {
+    if (config_.capture_backend != CaptureBackendKind::hikcamera) {
+        return;
+    }
+    if (!config_.hik.has_unlit_profile) {
+        return;
+    }
+    if (!capture_.is_open()) {
+        return;
+    }
+
+    const int difficulty = hit_progress_.difficulty();
+    const bool want_unlit = difficulty >= 3;
+    const int target = want_unlit ? 3 : 1;
+    if (target == active_hik_profile_difficulty_) {
+        return;
+    }
+
+    const HikRuntimeProfile profile =
+        want_unlit ? config_.hik.unlit : config_.hik.lit_profile();
+    if (auto applied = capture_.apply_runtime_profile(profile); !applied) {
+        std::println(
+            stderr, "Hik profile switch to {} failed: {}", want_unlit ? "unlit" : "lit",
+            format_error(applied.error()));
+        return;
+    }
+
+    active_hik_profile_difficulty_ = target;
+    if (negotiated_format_ && profile.framerate > 0.0F) {
+        negotiated_format_->framerate = static_cast<double>(profile.framerate);
+    }
+    std::println(
+        stderr,
+        "Hik profile -> {} (difficulty={}) exposure_us={} gain={} fps={} wb={}",
+        want_unlit ? "unlit" : "lit", difficulty, profile.exposure_us, profile.gain,
+        profile.framerate, profile.set_white_balance);
 }
 
 auto ControlLoop::show_window() const -> bool { return config_.debug.show_window; }

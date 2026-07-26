@@ -2,7 +2,10 @@
 #include <stdexcept>
 #include <vector>
 
+#include <hikcamera/capturer.hpp>
+
 #include "capture/capture_device.hpp"
+#include "capture/hik_backend.hpp"
 #include "test_utils.hpp"
 
 int main() {

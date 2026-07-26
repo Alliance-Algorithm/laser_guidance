@@ -370,7 +370,7 @@ auto payload_bytes(uint32_t payload) -> std::array<uint8_t, 4> {
 
 auto write_payload(
     rmcs_laser_guidance::Ft4222Spi& spi, uint32_t payload, std::string_view label,
-    bool verbose = true) -> std::expected<void, std::string> {
+    bool verbose = true) -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const auto bytes = payload_bytes(payload);
     if (verbose) {
@@ -382,14 +382,14 @@ auto write_payload(
 }
 
 auto write_internal_reference_enable(rmcs_laser_guidance::Ft4222Spi& spi)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
     constexpr uint32_t kEnableInternalReference = 0x08000001u;
     return write_payload(spi, kEnableInternalReference, "enable_internal_reference");
 }
 
 auto write_voltage(
     rmcs_laser_guidance::Ft4222Spi& spi, uint8_t channel, double voltage, std::string_view label,
-    bool verbose = true) -> std::expected<void, std::string> {
+    bool verbose = true) -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const double clipped = clamp_dac_voltage(voltage);
     const uint16_t code = voltage_to_code(clipped);
@@ -411,7 +411,7 @@ auto maybe_sleep(int hold_ms) -> void {
 }
 
 auto write_center(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     if (auto r = write_voltage(spi, options.x_plus, 0.0, "center_x_plus"); !r)
         return r;
@@ -430,7 +430,7 @@ auto write_center(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
 
 auto write_axis_state(
     rmcs_laser_guidance::Ft4222Spi& spi, const Options& options, double x_diff, double y_diff,
-    std::string_view label, bool verbose = true) -> std::expected<void, std::string> {
+    std::string_view label, bool verbose = true) -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const double x_pos = options.wiring == WiringMode::Differential ? x_diff : x_diff;
     const double x_neg = options.wiring == WiringMode::Differential ? -x_diff : 0.0;
@@ -460,7 +460,7 @@ auto write_axis_state(
 }
 
 auto run_sine_sweep(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options, bool x_axis)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const double duration_s = static_cast<double>(options.sweep_duration_ms) / 1000.0;
     const double f0 = options.sweep_start_hz;
@@ -513,7 +513,7 @@ auto run_sine_sweep(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options,
 }
 
 auto run_xy_sine_pattern(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const double duration_s = static_cast<double>(options.sweep_duration_ms) / 1000.0;
     const double f0 = options.sweep_start_hz;
@@ -569,7 +569,7 @@ auto run_xy_sine_pattern(rmcs_laser_guidance::Ft4222Spi& spi, const Options& opt
 }
 
 auto run_sequence(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     const std::array<std::pair<std::string_view, std::pair<double, double>>, 9> steps{{
         {"center_1", {0.0, 0.0}},
@@ -597,7 +597,7 @@ auto run_sequence(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
 }
 
 auto run_target(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, rmcs_laser_guidance::Error> {
 
     switch (options.target) {
     case Target::Center: return write_center(spi, options);
@@ -614,7 +614,8 @@ auto run_target(rmcs_laser_guidance::Ft4222Spi& spi, const Options& options)
     case Target::XYSinePattern: return run_xy_sine_pattern(spi, options);
     case Target::Sequence: return run_sequence(spi, options);
     }
-    return std::unexpected("unsupported target");
+    return std::unexpected(
+        rmcs_laser_guidance::make_error(rmcs_laser_guidance::ErrorKind::config, "unsupported target"));
 }
 
 } // namespace
@@ -641,7 +642,7 @@ int main(int argc, char** argv) {
             .cs_channel = 0,
         });
         if (!spi) {
-            std::println(stderr, "tool_galvo_smoke: failed to open FT4222: {}", spi.error());
+            std::println(stderr, "tool_galvo_smoke: failed to open FT4222: {}", format_error(spi.error()));
             return 1;
         }
 
@@ -656,19 +657,19 @@ int main(int argc, char** argv) {
             "with the DAC board");
 
         if (auto r = write_internal_reference_enable(*spi); !r) {
-            std::println(stderr, "tool_galvo_smoke: {}", r.error());
+            std::println(stderr, "tool_galvo_smoke: {}", format_error(r.error()));
             return 1;
         }
 
         if (auto r = run_target(*spi, *options); !r) {
-            std::println(stderr, "tool_galvo_smoke: {}", r.error());
+            std::println(stderr, "tool_galvo_smoke: {}", format_error(r.error()));
             return 1;
         }
 
         if (!options->keep_last && options->target != Target::Sequence) {
             maybe_sleep(options->hold_ms);
             if (auto r = write_center(*spi, *options); !r) {
-                std::println(stderr, "tool_galvo_smoke: failed to restore center: {}", r.error());
+                std::println(stderr, "tool_galvo_smoke: failed to restore center: {}", format_error(r.error()));
                 return 1;
             }
             std::println("restored galvo command outputs to center");

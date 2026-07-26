@@ -111,6 +111,25 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         read_opt(hik, "software_sync", config.hik.software_sync);
         read_opt(hik, "trigger_mode", config.hik.trigger_mode);
         read_opt(hik, "fixed_framerate", config.hik.fixed_framerate);
+
+        if (const YAML::Node unlit = hik["profile_unlit"]) {
+            config.hik.has_unlit_profile = true;
+            config.hik.unlit.exposure_us = config.hik.exposure_us;
+            config.hik.unlit.gain = config.hik.gain;
+            config.hik.unlit.framerate = config.hik.framerate;
+            read_opt(unlit, "exposure_us", config.hik.unlit.exposure_us);
+            read_opt(unlit, "gain", config.hik.unlit.gain);
+            read_opt(unlit, "framerate", config.hik.unlit.framerate);
+            if (unlit["white_balance_ratio_red"] || unlit["white_balance_ratio_green"]
+                || unlit["white_balance_ratio_blue"]) {
+                config.hik.unlit.set_white_balance = true;
+                read_opt(unlit, "white_balance_ratio_red", config.hik.unlit.white_balance_ratio_red);
+                read_opt(
+                    unlit, "white_balance_ratio_green", config.hik.unlit.white_balance_ratio_green);
+                read_opt(
+                    unlit, "white_balance_ratio_blue", config.hik.unlit.white_balance_ratio_blue);
+            }
+        }
     }
 
     if (const YAML::Node debug = yaml["debug"]) {
@@ -256,6 +275,20 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.guidance.voltage_offset_vy = guidance["voltage_offset_vy"].as<float>();
         if (guidance["depth_scale"])
             config.guidance.depth_scale = guidance["depth_scale"].as<float>();
+        if (guidance["depth_filter_enabled"])
+            config.guidance.depth_filter_enabled = guidance["depth_filter_enabled"].as<bool>();
+        if (guidance["depth_process_noise_q"])
+            config.guidance.depth_process_noise_q = guidance["depth_process_noise_q"].as<double>();
+        if (guidance["depth_measurement_noise_r"])
+            config.guidance.depth_measurement_noise_r =
+                guidance["depth_measurement_noise_r"].as<double>();
+        if (guidance["depth_initial_pos_std"])
+            config.guidance.depth_initial_pos_std = guidance["depth_initial_pos_std"].as<double>();
+        if (guidance["depth_initial_vel_std"])
+            config.guidance.depth_initial_vel_std = guidance["depth_initial_vel_std"].as<double>();
+        if (guidance["depth_max_missed_frames"])
+            config.guidance.depth_max_missed_frames =
+                guidance["depth_max_missed_frames"].as<int>();
         if (guidance["voltage_gain_x"])
             config.guidance.voltage_gain_x = guidance["voltage_gain_x"].as<float>();
         if (guidance["voltage_gain_y"])
@@ -324,6 +357,20 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         throw std::runtime_error("v4l2.height must be positive");
     if (config.v4l2.framerate <= 0.0F)
         throw std::runtime_error("v4l2.framerate must be positive");
+    if (config.hik.exposure_us <= 0.0F)
+        throw std::runtime_error("hik.exposure_us must be positive");
+    if (config.hik.gain < 0.0F)
+        throw std::runtime_error("hik.gain must be non-negative");
+    if (config.hik.framerate <= 0.0F)
+        throw std::runtime_error("hik.framerate must be positive");
+    if (config.hik.has_unlit_profile) {
+        if (config.hik.unlit.exposure_us <= 0.0F)
+            throw std::runtime_error("hik.profile_unlit.exposure_us must be positive");
+        if (config.hik.unlit.gain < 0.0F)
+            throw std::runtime_error("hik.profile_unlit.gain must be non-negative");
+        if (config.hik.unlit.framerate <= 0.0F)
+            throw std::runtime_error("hik.profile_unlit.framerate must be positive");
+    }
     if (config.runtime.max_input_age_ms <= 0)
         throw std::runtime_error("runtime.max_input_age_ms must be positive");
     if (config.runtime.max_observation_age_ms <= 0)

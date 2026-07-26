@@ -1,46 +1,22 @@
 #include "laser_guidance/runtime.hpp"
 
-namespace rmcs_laser_guidance {
+namespace rmcs_laser_guidance::runtime_command {
 
-auto RuntimeCommand::set_streaming(const bool enabled) -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::set_streaming,
-        .enabled = enabled,
-    };
+auto set_streaming(const bool enabled) -> RuntimeCommand {
+    return CmdSetStreaming{.enabled = enabled};
 }
-
-auto RuntimeCommand::set_recording(const bool enabled) -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::set_recording,
-        .enabled = enabled,
-    };
+auto set_recording(const bool enabled) -> RuntimeCommand {
+    return CmdSetRecording{.enabled = enabled};
 }
-
-auto RuntimeCommand::set_enemy_color(const EnemyColor color) -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::set_enemy_color,
-        .enemy_color = color,
-    };
+auto set_enemy_color(const EnemyColor color) -> RuntimeCommand {
+    return CmdSetEnemyColor{.enemy_color = color};
 }
-
-auto RuntimeCommand::set_backend(const RuntimeBackend backend) -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::set_backend,
-        .backend = backend,
-    };
+auto set_backend(const RuntimeBackend backend) -> RuntimeCommand {
+    return CmdSetBackend{.backend = backend};
 }
-
-auto RuntimeCommand::set_ekf(const bool enabled) -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::set_ekf,
-        .enabled = enabled,
-    };
+auto set_ekf(const bool enabled) -> RuntimeCommand {
+    return CmdSetEkf{.enabled = enabled};
 }
+auto shutdown() -> RuntimeCommand { return CmdShutdown{}; }
 
-auto RuntimeCommand::shutdown() -> RuntimeCommand {
-    return RuntimeCommand{
-        .type = RuntimeCommandType::shutdown,
-    };
-}
-
-} // namespace rmcs_laser_guidance
+} // namespace rmcs_laser_guidance::runtime_command

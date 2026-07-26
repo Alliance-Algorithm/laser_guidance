@@ -1,6 +1,6 @@
 #include <chrono>
-#include <exception>
 #include <future>
+#include <optional>
 #include <print>
 #include <stop_token>
 #include <thread>
@@ -26,21 +26,18 @@ int main() {
             require(queue.push(3) == 2, "third push should report two overwrites");
 
             const auto value = queue.pop();
-            require(value == 3, "pop should return newest value");
+            require(value.has_value(), "pop should return a value");
+            require(*value == 3, "pop should return newest value");
             require(queue.overwrite_count() == 2, "overwrite count mismatch");
         }
 
         {
             rmcs_laser_guidance::LatestValue<int> queue;
-            std::promise<int> popped;
+            std::promise<std::optional<int>> popped;
             auto future = popped.get_future();
 
             const std::jthread worker([&](const std::stop_token&) {
-                try {
-                    popped.set_value(queue.pop());
-                } catch (...) {
-                    popped.set_exception(std::current_exception());
-                }
+                popped.set_value(queue.pop());
             });
 
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -49,36 +46,31 @@ int main() {
                 "pop should block until push");
 
             require(queue.push(42) == 0, "push after block should not overwrite");
-            require(future.get() == 42, "blocked pop should wake with pushed value");
+            auto result = future.get();
+            require(result.has_value(), "blocked pop should return a value");
+            require(*result == 42, "blocked pop should wake with pushed value");
         }
 
         {
             rmcs_laser_guidance::LatestValue<int> queue;
-            std::promise<bool> finished;
-            auto future = finished.get_future();
+            std::promise<std::optional<int>> popped;
+            auto future = popped.get_future();
 
             const std::jthread worker([&](const std::stop_token&) {
-                try {
-                    (void)queue.pop();
-                    finished.set_value(false);
-                } catch (const std::exception&) {
-                    finished.set_value(true);
-                }
+                popped.set_value(queue.pop());
             });
 
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             queue.shutdown();
-            require(future.get(), "shutdown should unblock waiting pop");
-            int value = 0;
-            require(!queue.try_pop(value), "shutdown empty queue should stay empty");
+            const auto value = future.get();
+            require(!value.has_value(), "shutdown should unblock pop with nullopt");
 
-            bool push_rejected = false;
-            try {
-                (void)queue.push(7);
-            } catch (const std::exception&) {
-                push_rejected = true;
-            }
-            require(push_rejected, "push after shutdown should be rejected");
+            int tmp = 0;
+            require(!queue.try_pop(tmp), "shutdown empty queue should stay empty");
+
+            // push after shutdown: non-throwing discard
+            require(queue.push(7) == queue.overwrite_count(), "push after shutdown should not throw");
+            require(!queue.try_pop(tmp), "push after shutdown must not store value");
         }
 
         return 0;

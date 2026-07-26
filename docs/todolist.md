@@ -10,6 +10,13 @@
 - [x] `ModelAdapter` 改为 free-function 适配层
 - [x] ws30 / lidar 接入删除
 - [x] 主文档与示例配置同步更新
+- [x] `RuntimeCommand` 改为 `std::variant` closed sum type，工厂在 `runtime_command::` namespace
+- [x] `Error` / `ErrorKind` 分类错误域 + `format_error`，public 控制路径使用 `std::expected<T, Error>`
+- [x] 迁移 capture/guidance/FT4222 内部错误返回至 `Error` 域
+- [x] `LatestValue` 非抛出 shutdown（`pop` 返回 `std::optional<T>`）
+- [x] `PerceptionRunner` 改用 `std::jthread`
+- [x] Hik backend 类型迁出 `capture_device.hpp` 至 `src/capture/hik_backend.{hpp,cpp}`
+- [x] `laser_guidance_support` 使用显式 CMake 源文件列表
 
 ## 后续可做
 

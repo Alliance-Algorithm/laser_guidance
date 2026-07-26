@@ -10,6 +10,7 @@
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
+#include "laser_guidance/error.hpp"
 #include "laser_guidance/runtime.hpp"
 #include "bridges/ros_bridge.hpp"
 #include "runtime/guidance_session.hpp"
@@ -39,18 +40,18 @@ public:
     ControlLoop(const ControlLoop&) = delete;
     auto operator=(const ControlLoop&) -> ControlLoop& = delete;
 
-    auto start() -> std::expected<void, std::string>;
-    auto run() -> std::expected<void, std::string>;
+    auto start() -> std::expected<void, Error>;
+    auto run() -> std::expected<void, Error>;
     auto stop() -> void;
     auto join() -> void;
-    auto submit_command(const RuntimeCommand& command) -> std::expected<void, std::string>;
+    auto submit_command(const RuntimeCommand& command) -> std::expected<void, Error>;
     [[nodiscard]] auto snapshot() const -> RuntimeSnapshot;
 
 private:
     static auto make_output_capabilities(CompetitionProfile profile)
         -> RuntimeOutputCapabilities;
 
-    auto initialize_components() -> std::expected<void, std::string>;
+    auto initialize_components() -> std::expected<void, Error>;
     auto run_loop() -> void;
     auto teardown_components() -> void;
     auto request_stop() -> void;
@@ -58,6 +59,7 @@ private:
     auto update_status_locked() -> void;
     auto sync_last_error(std::string error) -> void;
     auto update_hit_progress(const DetectionBatch& detection) -> void;
+    auto maybe_switch_hik_profile() -> void;
     [[nodiscard]] auto show_window() const -> bool;
     [[nodiscard]] auto window_name() const -> const char*;
     [[nodiscard]] auto allows_streaming() const -> bool;
@@ -77,6 +79,7 @@ private:
     std::unique_ptr<RosBridge> ros_bridge_{};
     std::optional<GuidanceSession> guidance_{};
     HitProgress hit_progress_{};
+    int active_hik_profile_difficulty_ = 1;
     std::optional<CaptureFormat> negotiated_format_{};
     OverlayRenderer overlay_{};
     cv::Mat previous_output_{};

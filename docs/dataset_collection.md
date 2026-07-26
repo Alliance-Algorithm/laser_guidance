@@ -75,7 +75,7 @@ config/capture_red_20m.yaml
 
 如果不传第 2 个参数，默认会话根目录是仓库根目录下的 `videos/`。
 `tool_record` 会在运行时强制使用 `yuyv` 取图；如果你要排查配置本身的取图问题，优先用 `tool_preview` 单独验证。
-`tool_record` 默认不打开原始预览窗口，避免高分辨率录制时额外的 BGR 原始管道影响帧率；需要预览时设置 `LASER_RECORD_PREVIEW=1`。
+`tool_record` 默认打开原始预览窗口；如需关闭预览（避免高分辨率录制时额外的 BGR 原始管道影响帧率），设置 `LASER_RECORD_PREVIEW=0`。
 运行后终端会持续占用，等时长结束或按 `Ctrl+C` 才会优雅收尾并写完 `raw.mp4` / `session.yaml` / `notes.txt`。
 
 参数含义：

@@ -129,22 +129,24 @@ void Ft4222Spi::close() noexcept {
     handle_ = nullptr;
 }
 
-auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, std::string> {
+auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, Error> {
     auto& api = ft4222_api();
     if (!api.load())
-        return std::unexpected("FT4222: failed to load libft4222.so");
+        return std::unexpected(make_error(ErrorKind::device, "FT4222: failed to load libft4222.so"));
 
     DWORD num_devs = 0;
     FT_STATUS ft_status = api.ft_create_device_info_list(&num_devs);
     if (ft_status != FT_OK)
-        return std::unexpected("FT_CreateDeviceInfoList failed: " + std::to_string(ft_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "FT_CreateDeviceInfoList failed: " + std::to_string(ft_status)));
     if (num_devs == 0)
-        return std::unexpected("No FTDI devices found");
+        return std::unexpected(make_error(ErrorKind::device, "No FTDI devices found"));
 
     auto dev_list = std::make_unique<FT_DEVICE_LIST_INFO_NODE[]>(num_devs);
     ft_status = api.ft_get_device_info_list(dev_list.get(), &num_devs);
     if (ft_status != FT_OK)
-        return std::unexpected("FT_GetDeviceInfoList failed: " + std::to_string(ft_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "FT_GetDeviceInfoList failed: " + std::to_string(ft_status)));
 
     FT_HANDLE ft_handle = nullptr;
     bool found = false;
@@ -181,7 +183,8 @@ auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, std::strin
     }
 
     if (!found)
-        return std::unexpected("FT4222H not found with compatible chip mode");
+        return std::unexpected(make_error(
+            ErrorKind::device, "FT4222H not found with compatible chip mode"));
 
     FT4222_STATUS ft4222_status = api.ft4222_spi_master_init(
         ft_handle, static_cast<FT4222_SPIMode>(SPI_IO_SINGLE),
@@ -189,14 +192,16 @@ auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, std::strin
         static_cast<FT4222_SPICPHA>(config.cpha), static_cast<uint8_t>(1U << config.cs_channel));
     if (ft4222_status != FT4222_OK) {
         api.ft_close(ft_handle);
-        return std::unexpected("SPI Master init failed: " + std::to_string(ft4222_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "SPI Master init failed: " + std::to_string(ft4222_status)));
     }
 
     ft4222_status = api.ft4222_set_clock(ft_handle, static_cast<FT4222_ClockRate>(config.sys_clock));
     if (ft4222_status != FT4222_OK) {
         api.ft4222_uninitialize(ft_handle);
         api.ft_close(ft_handle);
-        return std::unexpected("FT4222_SetClock failed: " + std::to_string(ft4222_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "FT4222_SetClock failed: " + std::to_string(ft4222_status)));
     }
 
     ft4222_status = api.ft4222_spi_master_set_cs(
@@ -204,7 +209,8 @@ auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, std::strin
     if (ft4222_status != FT4222_OK) {
         api.ft4222_uninitialize(ft_handle);
         api.ft_close(ft_handle);
-        return std::unexpected("FT4222_SPIMaster_SetCS failed: " + std::to_string(ft4222_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "FT4222_SPIMaster_SetCS failed: " + std::to_string(ft4222_status)));
     }
 
     uint16_t max_transfer = 0;
@@ -212,36 +218,40 @@ auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, std::strin
     if (ft4222_status != FT4222_OK) {
         api.ft4222_uninitialize(ft_handle);
         api.ft_close(ft_handle);
-        return std::unexpected(
-            "FT4222_GetMaxTransferSize failed: " + std::to_string(ft4222_status));
+        return std::unexpected(make_error(
+            ErrorKind::device,
+            "FT4222_GetMaxTransferSize failed: " + std::to_string(ft4222_status)));
     }
 
     ft4222_status = api.ft4222_spi_set_driving_strength(ft_handle, DS_8MA, DS_8MA, DS_8MA);
     if (ft4222_status != FT4222_OK) {
         api.ft4222_uninitialize(ft_handle);
         api.ft_close(ft_handle);
-        return std::unexpected("SetDrivingStrength failed: " + std::to_string(ft4222_status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "SetDrivingStrength failed: " + std::to_string(ft4222_status)));
     }
 
     return Ft4222Spi(ft_handle, config);
 }
 
-auto Ft4222Spi::write(const uint8_t* data, uint16_t len) -> std::expected<void, std::string> {
+auto Ft4222Spi::write(const uint8_t* data, uint16_t len) -> std::expected<void, Error> {
     auto& api = ft4222_api();
     uint16_t transferred = 0;
     FT4222_STATUS status = api.ft4222_spi_master_single_write(
         static_cast<FT_HANDLE>(handle_), const_cast<uint8_t*>(data), len, &transferred, 1);
 
     if (status != FT4222_OK)
-        return std::unexpected("SPI write error: " + std::to_string(status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "SPI write error: " + std::to_string(status)));
     if (transferred != len)
-        return std::unexpected(
-            "SPI write short: " + std::to_string(transferred) + "/" + std::to_string(len));
+        return std::unexpected(make_error(
+            ErrorKind::device,
+            "SPI write short: " + std::to_string(transferred) + "/" + std::to_string(len)));
     return {};
 }
 
 auto Ft4222Spi::transfer(const uint8_t* tx_buf, uint16_t tx_len, uint8_t* rx_buf, uint16_t rx_len)
-    -> std::expected<void, std::string> {
+    -> std::expected<void, Error> {
     auto& api = ft4222_api();
 
     const uint16_t total = tx_len + rx_len;
@@ -257,10 +267,12 @@ auto Ft4222Spi::transfer(const uint8_t* tx_buf, uint16_t tx_len, uint8_t* rx_buf
         1);
 
     if (status != FT4222_OK)
-        return std::unexpected("SPI transfer error: " + std::to_string(status));
+        return std::unexpected(make_error(
+            ErrorKind::device, "SPI transfer error: " + std::to_string(status)));
     if (transferred != total)
-        return std::unexpected(
-            "SPI transfer short: " + std::to_string(transferred) + "/" + std::to_string(total));
+        return std::unexpected(make_error(
+            ErrorKind::device,
+            "SPI transfer short: " + std::to_string(transferred) + "/" + std::to_string(total)));
 
     std::memcpy(rx_buf, combined_rx.get() + tx_len, rx_len);
     return {};

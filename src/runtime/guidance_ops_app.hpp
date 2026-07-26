@@ -29,10 +29,10 @@ class GuidanceOpsApp {
 public:
     explicit GuidanceOpsApp(Config config, GuidanceRecorderPaths paths = {});
 
-    auto run() -> std::expected<void, std::string>;
+    auto run() -> std::expected<void, Error>;
 
 private:
-    auto initialize() -> std::expected<void, std::string>;
+    auto initialize() -> std::expected<void, Error>;
     auto teardown() -> void;
     auto run_loop() -> void;
     auto handle_key(int key, const ControlLoopFrame& frame) -> void;

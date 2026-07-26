@@ -4,7 +4,14 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <fstream>
+#include <iomanip>
 #include <print>
+#include <vector>
+
+#include <opencv2/imgcodecs.hpp>
+
+#include "laser_guidance/error.hpp"
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
@@ -105,7 +112,10 @@ auto close_ffplay_viewer(FILE* pipe) -> void {
 }
 
 auto record_preview_enabled(const rmcs_laser_guidance::Config& config) -> bool {
-    return config.debug.show_window && std::getenv("LASER_RECORD_PREVIEW") != nullptr;
+    const char* env = std::getenv("LASER_RECORD_PREVIEW");
+    if (env && (std::string_view(env) == "0" || std::string_view(env) == "false"))
+        return false;
+    return config.debug.show_window;
 }
 
 } // namespace
@@ -150,7 +160,7 @@ int main(int argc, char** argv) {
         rmcs_laser_guidance::CaptureDevice capture(record_config);
         const auto open_result = capture.open();
         if (!open_result) {
-            std::println(stderr, "Failed to open capture: {}", open_result.error());
+            std::println(stderr, "Failed to open capture: {}", format_error(open_result.error()));
             return 1;
         }
 
@@ -160,34 +170,30 @@ int main(int argc, char** argv) {
         const std::string session_id = rmcs_laser_guidance::format_session_id(capture_start);
         const double fps =
             open_result->framerate > 0.0 ? open_result->framerate : config.v4l2.framerate;
-        rmcs_laser_guidance::VideoSessionRecorder recorder(
-            record_options.output_root,
-            rmcs_laser_guidance::VideoSessionMetadata{
-                .session_id = session_id,
-                .relative_video_path = "raw.mp4",
-                .device_path = open_result->device_path,
-                .width = open_result->width,
-                .height = open_result->height,
-                .framerate = fps,
-                .fourcc = open_result->pixel_encoding,
-                .capture_start_unix_ms = unix_time_milliseconds(capture_start),
-                .duration_ms = 0,
-                .lighting_tag = record_options.lighting_tag,
-                .background_tag = record_options.background_tag,
-                .distance_tag = record_options.distance_tag,
-                .target_color = record_options.target_color,
-                .operator_note_present = false,
-            });
+        const auto session_root = record_options.output_root / session_id;
+        std::filesystem::create_directories(session_root);
 
         const auto monotonic_start = std::chrono::steady_clock::now();
         const auto deadline =
             monotonic_start + std::chrono::duration<double>(record_options.duration_seconds);
         const bool preview_enabled = record_preview_enabled(config);
         if (!preview_enabled) {
-            std::println(
-                "recording without preview window; wait {:.1f}s or press Ctrl+C to "
-                "finalize (set LASER_RECORD_PREVIEW=1 to enable raw preview)",
-                record_options.duration_seconds);
+            const char* preview_env = std::getenv("LASER_RECORD_PREVIEW");
+            const bool disabled_by_env =
+                preview_env != nullptr
+                && (std::string_view(preview_env) == "0"
+                    || std::string_view(preview_env) == "false");
+            if (disabled_by_env) {
+                std::println(
+                    "recording without preview window (LASER_RECORD_PREVIEW={}); wait {:.1f}s "
+                    "or Ctrl+C to finalize",
+                    preview_env, record_options.duration_seconds);
+            } else {
+                std::println(
+                    "recording without preview window (debug.show_window=false); wait {:.1f}s "
+                    "or Ctrl+C to finalize",
+                    record_options.duration_seconds);
+            }
         }
 
         const auto pixel_fmt = (open_result->pixel_encoding == "BGR8" ||
@@ -198,23 +204,87 @@ int main(int argc, char** argv) {
                             ? launch_ffplay_viewer(open_result->width, open_result->height, fps, pixel_fmt)
                             : nullptr;
 
+        const bool use_h264 = record_options.frame_format == "h264";
+        std::unique_ptr<rmcs_laser_guidance::VideoSessionRecorder> h264_recorder;
+        std::filesystem::path frames_dir;
+        std::string ext;
+        std::vector<int> encode_params;
+        std::string encode_label;
+
+        if (use_h264) {
+            h264_recorder = std::make_unique<rmcs_laser_guidance::VideoSessionRecorder>(
+                record_options.output_root,
+                rmcs_laser_guidance::VideoSessionMetadata{
+                    .session_id = session_id,
+                    .relative_video_path = "raw.mp4",
+                    .device_path = open_result->device_path,
+                    .width = open_result->width,
+                    .height = open_result->height,
+                    .framerate = fps,
+                    .fourcc = open_result->pixel_encoding,
+                    .capture_start_unix_ms = unix_time_milliseconds(capture_start),
+                    .duration_ms = 0,
+                    .lighting_tag = record_options.lighting_tag,
+                    .background_tag = record_options.background_tag,
+                    .distance_tag = record_options.distance_tag,
+                    .target_color = record_options.target_color,
+                    .operator_note_present = false,
+                    .h264_qp = record_options.h264_qp,
+                },
+                record_options.h264_qp);
+            encode_label = std::format("H264 qp={}", record_options.h264_qp);
+        } else {
+            const bool use_png = record_options.frame_format == "png";
+            ext = use_png ? ".png" : ".jpg";
+            frames_dir = session_root / "frames";
+            std::filesystem::create_directories(frames_dir);
+            if (use_png) {
+                encode_params = {cv::IMWRITE_PNG_COMPRESSION, 1};
+                encode_label = "PNG (lossless)";
+            } else {
+                encode_params = {cv::IMWRITE_JPEG_QUALITY, record_options.jpeg_quality};
+                encode_label = std::format("JPEG q{}", record_options.jpeg_quality);
+            }
+            encode_label += std::format(" | sample_rate=1/{}", record_options.sample_rate);
+        }
+
+        std::println("recording: {} → {}", encode_label, session_root.string());
+
+        std::vector<std::tuple<int, std::string, double>> manifest_entries;
+
+        int frame_index = 0;
+        int saved_frames = 0;
+
         while (!stop_requested() && std::chrono::steady_clock::now() < deadline) {
             auto frame = capture.read_frame();
             if (!frame) {
-                std::println(stderr, "Failed to read frame: {}", frame.error());
+                std::println(stderr, "Failed to read frame: {}", format_error(frame.error()));
                 continue;
             }
 
-            recorder.record_frame(frame->image);
+            if (use_h264) {
+                h264_recorder->record_frame(frame->image);
+                saved_frames++;
+            } else if (frame_index % record_options.sample_rate == 0) {
+                const auto fname = std::format("{:06d}{}", frame_index, ext);
+                const auto fpath = frames_dir / fname;
+                if (cv::imwrite(fpath.string(), frame->image, encode_params)) {
+                    const double blur = rmcs_laser_guidance::blur_score_for_frame(frame->image);
+                    manifest_entries.emplace_back(frame_index, fname, blur);
+                    saved_frames++;
+                } else {
+                    std::println(stderr, "failed to write frame: {}", fpath.string());
+                }
+            }
 
             if (g_ffplay_pipe) {
                 std::fwrite(frame->image.data, 1, frame->image.total() * frame->image.elemSize(),
                             g_ffplay_pipe);
             }
+            frame_index++;
         }
 
         close_ffplay_viewer(g_ffplay_pipe);
-
         capture.close();
         if (stop_requested())
             std::println("stop requested, finalizing recorded session");
@@ -222,12 +292,40 @@ int main(int argc, char** argv) {
         const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                      std::chrono::steady_clock::now() - monotonic_start)
                                      .count();
-        recorder.flush(duration_ms);
+
+        if (use_h264) {
+            h264_recorder->flush(duration_ms);
+        } else {
+            rmcs_laser_guidance::write_video_session_metadata(
+                session_root / "session.yaml",
+                rmcs_laser_guidance::VideoSessionMetadata{
+                    .session_id = session_id,
+                    .relative_video_path = "frames/",
+                    .device_path = open_result->device_path,
+                    .width = open_result->width,
+                    .height = open_result->height,
+                    .framerate = fps,
+                    .fourcc = open_result->pixel_encoding,
+                    .capture_start_unix_ms = unix_time_milliseconds(capture_start),
+                    .duration_ms = duration_ms,
+                    .lighting_tag = record_options.lighting_tag,
+                    .background_tag = record_options.background_tag,
+                    .distance_tag = record_options.distance_tag,
+                    .target_color = record_options.target_color,
+                    .operator_note_present = false,
+                });
+            const auto manifest_path = session_root / "manifest.csv";
+            std::ofstream manifest(manifest_path);
+            manifest << "frame_index,filename,blur_score\n";
+            for (const auto& [idx, name, blur] : manifest_entries) {
+                manifest << idx << "," << name << "," << std::fixed << std::setprecision(2) << blur << "\n";
+            }
+        }
 
         std::println(
-            "session_id={} recorded_frames={} session_root={}", session_id,
-            recorder.recorded_frames(), recorder.session_root().string());
-        return recorder.recorded_frames() > 0 ? 0 : 1;
+            "session_id={} captured_frames={} saved={} session_root={}",
+            session_id, frame_index, saved_frames, session_root.string());
+        return (frame_index > 0 && saved_frames > 0) ? 0 : 1;
     } catch (const std::exception& e) {
         std::println(stderr, "example_v4l2_record_session failed: {}", e.what());
         return 1;

@@ -9,7 +9,8 @@
 
 - **多后端采集** — V4L2/UVC 与 Hik 工业相机，由 `CaptureDevice` 统一 dispatch
 - **ONNX / TensorRT 推理** — 运行时切换，敌方颜色过滤，EKF 目标跟踪
-- **几何引导** — 相机标定 + 外参解算 → FT4222H USB-to-SPI 振镜控制（runtime 默认高速 SPI，smoke 工具默认保守低速）
+- **几何引导** — 相机标定 + SE(3) 外参解算（Eigen 四元数旋转 + 李群表示）→ FT4222H USB-to-SPI 振镜控制（runtime 默认高速 SPI，smoke 工具默认保守低速）
+- **Ceres 外参标定** — 非线性最小二乘优化，在 SO(3) 流形上同步优化旋转与平移 6 参数，AutoDiff 自动求导
 - **空中机器人反制进度** — `HitProgress` 按 2026 规则计算 0.1s 阶梯增量、5 次锁定与 1/2/3 难度阶段
 - **硬件容错** — 相机或 FT4222 缺失时记录错误并继续运行；FT4222 作为 guidance 级运行时依赖，硬件恢复后自动重连
 - **ZMQ / UDP telemetry** — UDP 维持二进制 telemetry；ZMQ 发布 `cmd_id=0x2003` 的 Laser JSON 到 `tcp://*:5555`
@@ -81,7 +82,7 @@ CaptureDevice → PerceptionRunner → TargetTrack → GuidanceSession → Runti
 |------|------|
 | `CaptureDevice` | 采集后端选择：v4l2 / hikcamera |
 | `PerceptionRunner` | ONNX / TensorRT 推理 + 敌方颜色过滤 + EKF 跟踪 |
-| `GuidanceSession` | FT4222H SPI 振镜控制 + 几何解算 + 瞄准执行 |
+| `GuidanceSession` | FT4222H SPI 振镜控制 + 几何解算（SE(3) 外参、四元数旋转、镜距模型）+ 瞄准执行 |
 | `RuntimeOutputs` | RTP 推流、SHM 共享内存、UDP/ZMQ telemetry、录制 |
 | `RosBridge` | RuntimeSnapshot → ROS2 topic（MarkerArray / Marker / Float64） |
 | `CompetitionRuntime` | main / preview profile，FIFO 命令入口 |
@@ -119,6 +120,8 @@ docker-build-laser --push   # 构建并推送镜像
 | Hik MVS SDK | submodule 自带 vendored SDK，或 `MVS_SDK_ROOT` |
 | ROS2 Jazzy | rclcpp、visualization_msgs、std_msgs |
 | ZMQ | libzmq3-dev、cppzmq-dev |
+| Eigen3 | 头文件库，李群旋转表示（SO(3)/SE(3)）与坐标变换 |
+| Ceres Solver | 非线性最小二乘，相机-振镜外参标定优化 |
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -165,7 +168,7 @@ ctest --test-dir build --output-on-failure
 include/              public API
 src/capture/          采集后端（v4l2 / hikcamera）
 src/vision/           推理与模型适配
-src/guidance/         几何解算与振镜控制
+src/guidance/         几何解算（SE(3) 外参、四元数旋转变换、深度估计、振镜控制）
 src/runtime/          运行时核心
 src/bridges/          FIFO / RTP / SHM / UDP / ZMQ / ROS2
 src/io/               硬件 I/O（FT4222H SPI）

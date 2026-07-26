@@ -35,6 +35,7 @@ else()
   find_package(OpenCV REQUIRED COMPONENTS calib3d)
 endif()
 find_package(yaml-cpp REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # ZMQ (no cmake config shipped by distro)
 find_library(ZMQ_LIBRARY zmq)
@@ -140,6 +141,10 @@ find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 message(STATUS "ROS2 bridge enabled")
 
+# ---- Ceres Solver (calibration tool only) ----------------------------------
+find_package(Ceres REQUIRED)
+message(STATUS "Ceres enabled")
+
 # ---- Hikcamera (always enabled) ----------------------------------------------
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/hikcamera/CMakeLists.txt")
   message(FATAL_ERROR "Hikcamera requires vendor/hikcamera submodule. "
@@ -188,8 +193,11 @@ macro(add_lg_lib name)
 endmacro()
 
 # ---- source globs ------------------------------------------------------------
-file(GLOB_RECURSE laser_guidance_support_SOURCES CONFIGURE_DEPENDS
-  src/core/*.cpp
+set(laser_guidance_support_SOURCES
+  src/core/config.cpp
+  src/core/debug_renderer.cpp
+  src/core/frame_format.cpp
+  src/core/replay.cpp
   src/runtime/support.cpp
   src/runtime/runtime_command.cpp)
 file(GLOB_RECURSE laser_guidance_tracking_SOURCES CONFIGURE_DEPENDS src/tracking/*.cpp)
@@ -200,6 +208,7 @@ file(GLOB_RECURSE laser_guidance_bridges_SOURCES  CONFIGURE_DEPENDS src/streamin
 set(laser_guidance_runtime_SOURCES
   src/capture/capture_device.cpp
   src/capture/v4l2_capture.cpp
+  src/capture/hik_backend.cpp
   src/runtime/runtime.cpp
   src/runtime/control_loop.cpp
   src/runtime/guidance_ops_app.cpp
@@ -223,7 +232,7 @@ target_link_libraries(laser_guidance_vision PUBLIC
   CUDA::cudart CUDA::cuda)
 
 add_lg_lib(laser_guidance_guidance)
-target_link_libraries(laser_guidance_guidance PUBLIC laser_guidance_support)
+target_link_libraries(laser_guidance_guidance PUBLIC laser_guidance_support Eigen3::Eigen)
 
 add_lg_lib(laser_guidance_bridges)
 target_include_directories(laser_guidance_bridges PRIVATE
@@ -264,6 +273,9 @@ foreach(_src ${TOOL_SOURCES})
   add_executable(tool_${_name} ${_src})
   target_include_directories(tool_${_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
   target_link_libraries(tool_${_name} PRIVATE rmcs_laser_guidance_core)
+  if(_name STREQUAL "calib_solve")
+    target_link_libraries(tool_${_name} PRIVATE Ceres::ceres)
+  endif()
   if(_name STREQUAL "galvo_smoke" OR _name STREQUAL "dac8568_smoke")
     target_link_libraries(tool_${_name} PRIVATE ft4222::ft4222)
   endif()

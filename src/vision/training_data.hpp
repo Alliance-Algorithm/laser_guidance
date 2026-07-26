@@ -28,6 +28,7 @@ struct VideoSessionMetadata {
     std::string distance_tag{};
     std::string target_color{};
     bool operator_note_present = false;
+    int h264_qp = 23;
 };
 
 struct ExportedTrainingFrame {
@@ -52,7 +53,8 @@ struct VideoEncodingInfo {
 
 class VideoSessionRecorder {
 public:
-    VideoSessionRecorder(std::filesystem::path output_root, VideoSessionMetadata metadata);
+    VideoSessionRecorder(
+        std::filesystem::path output_root, VideoSessionMetadata metadata, int h264_qp = 23);
     ~VideoSessionRecorder();
 
     VideoSessionRecorder(const VideoSessionRecorder&) = delete;

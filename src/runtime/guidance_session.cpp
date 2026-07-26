@@ -10,7 +10,7 @@
 namespace rmcs_laser_guidance::runtime_internal {
 namespace {
 
-auto open_ft4222() -> std::expected<Ft4222Spi, std::string> {
+auto open_ft4222() -> std::expected<Ft4222Spi, Error> {
     return Ft4222Spi::open(
         Ft4222Config{
             .sys_clock = Ft4222SysClock::k60MHz,
@@ -23,19 +23,29 @@ auto open_ft4222() -> std::expected<Ft4222Spi, std::string> {
 }
 
 auto make_solver(const Config& config, const CaptureFormat& format)
-    -> std::expected<std::unique_ptr<AimSolver>, std::string> {
+    -> std::expected<std::unique_ptr<AimSolver>, Error> {
     auto solver = std::make_unique<AimSolver>(config, format.width, format.height);
     if (!solver->is_initialized()) {
-        return std::unexpected(solver->initialization_error());
+        const auto& msg = solver->initialization_error();
+        // Calib/data file loading failures are config issues; "disabled" is unavailable.
+        auto kind = ErrorKind::device;
+        if (msg.find("calibration") != std::string::npos
+            || msg.find("calib") != std::string::npos) {
+            kind = ErrorKind::config;
+        } else if (msg.find("disabled") != std::string::npos) {
+            kind = ErrorKind::unavailable;
+        }
+        return std::unexpected(make_error(kind, msg));
     }
     return solver;
 }
 
 auto make_executor(const Config& config, Ft4222Spi& spi)
-    -> std::expected<std::unique_ptr<GalvoExecutor>, std::string> {
+    -> std::expected<std::unique_ptr<GalvoExecutor>, Error> {
     auto executor = std::make_unique<GalvoExecutor>(config, spi);
     if (!executor->is_initialized()) {
-        return std::unexpected(executor->initialization_error());
+        return std::unexpected(
+            make_error(ErrorKind::device, executor->initialization_error()));
     }
     return executor;
 }
@@ -68,10 +78,10 @@ auto GuidanceSession::operator=(GuidanceSession&&) noexcept -> GuidanceSession& 
 GuidanceSession::~GuidanceSession() = default;
 
 auto GuidanceSession::create_auto(const Config& config, const CaptureFormat& format)
-    -> std::expected<GuidanceSession, std::string> {
+    -> std::expected<GuidanceSession, Error> {
     auto spi = open_ft4222();
     if (!spi) {
-        return std::unexpected("FT4222 open failed: " + spi.error());
+        return std::unexpected(spi.error());
     }
 
     auto spi_ptr = std::make_unique<Ft4222Spi>(std::move(*spi));
@@ -95,10 +105,10 @@ auto GuidanceSession::create_auto(const Config& config, const CaptureFormat& for
 auto GuidanceSession::create_manual(
     const Config& config, const CaptureFormat& format,
     std::shared_ptr<GuidanceCalibrationState> calibration_state)
-    -> std::expected<GuidanceSession, std::string> {
+    -> std::expected<GuidanceSession, Error> {
     auto spi = open_ft4222();
     if (!spi) {
-        return std::unexpected("FT4222 open failed: " + spi.error());
+        return std::unexpected(spi.error());
     }
 
     auto spi_ptr = std::make_unique<Ft4222Spi>(std::move(*spi));
@@ -146,7 +156,7 @@ auto GuidanceSession::execute(const TargetTrack& track) -> GuidanceFrameResult {
             return result;
         }
 
-        const auto telemetry = solver_->observe_target(selected);
+        const auto telemetry = solver_->observe_target(selected, track.dt_seconds);
         result.telemetry = GuidanceTelemetry{
             .measured_depth_mm = telemetry.measured_depth_mm,
             .active_depth_mm = telemetry.active_depth_mm,

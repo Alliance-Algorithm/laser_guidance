@@ -136,7 +136,9 @@ auto RuntimeOutputs::begin_recording(const CaptureFormat& format) -> void {
             .distance_tag = record_options_.distance_tag,
             .target_color = record_options_.target_color,
             .operator_note_present = false,
-        });
+            .h264_qp = record_options_.h264_qp,
+        },
+        record_options_.h264_qp);
     recording_start_ = std::chrono::steady_clock::now();
 }
 

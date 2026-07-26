@@ -60,10 +60,15 @@ auto h264_nvenc_available() -> bool {
     return status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+auto clamp_h264_qp(const int h264_qp) -> int {
+    return std::clamp(h264_qp, 0, 51);
+}
+
 auto build_recording_ffmpeg_command(
     const int width, const int height, const double framerate,
-    const std::filesystem::path& output_path) -> std::string {
+    const std::filesystem::path& output_path, const int h264_qp) -> std::string {
     const int gop = std::max(1, static_cast<int>(framerate > 0.0 ? framerate : 80.0));
+    const int qp = clamp_h264_qp(h264_qp);
     const std::string quoted_output_path = shell_quote(output_path.string());
 
     if (cuda_device_available() && h264_nvenc_available()) {
@@ -72,12 +77,12 @@ auto build_recording_ffmpeg_command(
             "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
             "-framerate {} -i pipe:0 "
             "-c:v h264_nvenc "
-            "-preset p1 -tune hq -rc constqp -qp 18 "
+            "-preset p4 -tune hq -rc constqp -qp {} "
             "-g {} -bf 0 -rc-lookahead 0 "
             "-spatial_aq 1 -temporal_aq 1 "
             "-profile:v high -pix_fmt yuv420p -movflags +faststart "
             "-f mp4 {}",
-            width, height, framerate, gop, quoted_output_path);
+            width, height, framerate, qp, gop, quoted_output_path);
     }
 
     std::println(
@@ -87,10 +92,10 @@ auto build_recording_ffmpeg_command(
         "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
         "-framerate {} -i pipe:0 "
         "-c:v libx264 "
-        "-preset ultrafast -crf 18 "
+        "-preset veryfast -crf {} "
         "-g {} -pix_fmt yuv420p -movflags +faststart "
         "-f mp4 {}",
-        width, height, framerate, gop, quoted_output_path);
+        width, height, framerate, qp, gop, quoted_output_path);
 }
 
 auto validate_video_session_metadata(const VideoSessionMetadata& metadata) -> void {
@@ -157,10 +162,11 @@ auto retime_video_in_place(const std::filesystem::path& video_path, const double
 } // namespace
 
 VideoSessionRecorder::VideoSessionRecorder(
-    std::filesystem::path output_root, VideoSessionMetadata metadata)
+    std::filesystem::path output_root, VideoSessionMetadata metadata, const int h264_qp)
     : metadata_(std::move(metadata)) {
     (void)std::signal(SIGPIPE, SIG_IGN);
     validate_video_session_metadata(metadata_);
+    metadata_.h264_qp = clamp_h264_qp(h264_qp);
 
     session_root_ = std::move(output_root) / metadata_.session_id;
     video_path_ = session_root_ / metadata_.relative_video_path;
@@ -172,12 +178,15 @@ VideoSessionRecorder::VideoSessionRecorder(
         std::filesystem::create_directories(video_path_.parent_path());
 
     const std::string command = build_recording_ffmpeg_command(
-        metadata_.width, metadata_.height, metadata_.framerate, video_path_);
+        metadata_.width, metadata_.height, metadata_.framerate, video_path_, metadata_.h264_qp);
     pipe_ = popen(command.c_str(), "w");
     if (!pipe_) {
         throw std::runtime_error(
             "failed to start recording ffmpeg: " + std::string(strerror(errno)));
     }
+    std::println(
+        stderr, "VideoSessionRecorder: {}x{} @ {:.1f}fps h264_qp={}", metadata_.width,
+        metadata_.height, metadata_.framerate, metadata_.h264_qp);
 }
 
 VideoSessionRecorder::~VideoSessionRecorder() {
