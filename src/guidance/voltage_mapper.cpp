@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -120,10 +121,7 @@ auto cubic_feature_basis(float u_norm, float v_norm, float log_area_norm) -> std
 }
 
 auto dot(const std::vector<float>& a, const std::vector<float>& b) -> float {
-    float sum = 0.0F;
-    for (std::size_t i = 0; i < a.size(); ++i)
-        sum += a[i] * b[i];
-    return sum;
+    return std::inner_product(a.begin(), a.end(), b.begin(), 0.0F);
 }
 
 } // namespace

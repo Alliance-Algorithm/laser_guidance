@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -39,13 +40,11 @@ auto format_tensor_metadata(const ModelTensorData& tensor) -> std::string {
 }
 
 auto tensor_shape_element_count(const std::vector<std::int64_t>& shape) -> std::size_t {
-    std::size_t count = 1;
     for (const auto dim : shape) {
         if (dim <= 0)
             throw std::runtime_error("tensor shape contains non-positive dimension");
-        count *= static_cast<std::size_t>(dim);
     }
-    return count;
+    return std::accumulate(shape.begin(), shape.end(), std::size_t{1}, std::multiplies<>{});
 }
 
 auto clip_box_to_frame(const cv::Rect2f& bbox, const Frame& frame) -> std::optional<cv::Rect2f> {
