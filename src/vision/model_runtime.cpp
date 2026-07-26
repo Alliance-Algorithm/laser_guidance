@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include <opencv2/imgproc.hpp>
+#include <opencv2/dnn.hpp>
 
 #include <onnxruntime/core/session/onnxruntime_cxx_api.h>
 
@@ -86,78 +86,14 @@ struct PreparedInput {
     ModelImageTransform transform{};
 };
 
-auto ensure_bgr_image(const cv::Mat& image) -> cv::Mat {
-    if (image.empty())
-        throw std::runtime_error("model runtime received an empty image");
-
-    if (image.channels() == 3)
-        return image;
-
-    cv::Mat converted;
-    if (image.channels() == 1) {
-        cv::cvtColor(image, converted, cv::COLOR_GRAY2BGR);
-        return converted;
-    }
-    if (image.channels() == 4) {
-        cv::cvtColor(image, converted, cv::COLOR_BGRA2BGR);
-        return converted;
-    }
-
-    throw std::runtime_error("model runtime received an unsupported image channel count");
-}
-
 auto prepare_input_tensor(const cv::Mat& image, const ModelValueInfo& input) -> PreparedInput {
-    const cv::Mat bgr = ensure_bgr_image(image);
-    const auto [input_height, input_width] = input_dimensions(input, bgr);
-
-    const float scale_x = static_cast<float>(input_width) / static_cast<float>(bgr.cols);
-    const float scale_y = static_cast<float>(input_height) / static_cast<float>(bgr.rows);
-    const float scale = std::min(scale_x, scale_y);
-    const int resized_width = std::max(1, static_cast<int>(std::lround(bgr.cols * scale)));
-    const int resized_height = std::max(1, static_cast<int>(std::lround(bgr.rows * scale)));
-    const int pad_x = (input_width - resized_width) / 2;
-    const int pad_y = (input_height - resized_height) / 2;
-
-    cv::Mat resized;
-    cv::resize(bgr, resized, cv::Size(resized_width, resized_height), 0.0, 0.0, cv::INTER_LINEAR);
-
-    cv::Mat letterboxed(input_height, input_width, CV_8UC3, cv::Scalar(114, 114, 114));
-    resized.copyTo(letterboxed(cv::Rect(pad_x, pad_y, resized_width, resized_height)));
-
-    cv::Mat rgb;
-    cv::cvtColor(letterboxed, rgb, cv::COLOR_BGR2RGB);
-    cv::Mat rgb_float;
-    rgb.convertTo(rgb_float, CV_32F, 1.0 / 255.0);
-
-    std::vector<cv::Mat> channels;
-    cv::split(rgb_float, channels);
-    if (channels.size() != 3)
-        throw std::runtime_error("failed to split model input into RGB channels");
-
-    PreparedInput prepared{
-        .values = std::vector<float>(
-            3ULL * static_cast<std::size_t>(input_height) * static_cast<std::size_t>(input_width)),
+    const auto [input_height, input_width] = input_dimensions(input, image);
+    auto [data, transform] = preprocess_blob(image, input_width, input_height);
+    return PreparedInput{
+        .values = std::move(data),
         .shape = {1, 3, input_height, input_width},
-        .transform =
-            ModelImageTransform{
-                .original_width = bgr.cols,
-                .original_height = bgr.rows,
-                .input_width = input_width,
-                .input_height = input_height,
-                .scale = scale,
-                .pad_x = static_cast<float>(pad_x),
-                .pad_y = static_cast<float>(pad_y),
-            },
+        .transform = transform,
     };
-
-    const std::size_t channel_size =
-        static_cast<std::size_t>(input_height) * static_cast<std::size_t>(input_width);
-    for (std::size_t index = 0; index < channels.size(); ++index) {
-        const auto* begin = channels[index].ptr<float>(0);
-        std::copy(begin, begin + channel_size, prepared.values.begin() + index * channel_size);
-    }
-
-    return prepared;
 }
 
 auto extract_tensor_data(const ModelValueInfo& metadata, const Ort::Value& value)
@@ -211,6 +147,34 @@ auto extract_tensor_data(const ModelValueInfo& metadata, const Ort::Value& value
 }
 
 } // namespace
+
+auto preprocess_blob(const cv::Mat& image, int input_w, int input_h)
+    -> std::pair<std::vector<float>, ModelImageTransform> {
+    const float scale_x = static_cast<float>(input_w) / static_cast<float>(image.cols);
+    const float scale_y = static_cast<float>(input_h) / static_cast<float>(image.rows);
+    const float scale = std::min(scale_x, scale_y);
+    const int resized_width = std::max(1, static_cast<int>(std::lround(image.cols * scale)));
+    const int resized_height = std::max(1, static_cast<int>(std::lround(image.rows * scale)));
+    const float pad_x = static_cast<float>((input_w - resized_width) / 2);
+    const float pad_y = static_cast<float>((input_h - resized_height) / 2);
+
+    cv::Mat blob = cv::dnn::blobFromImage(
+        image, 1.0 / 255.0, cv::Size(input_w, input_h), cv::Scalar(114, 114, 114), true, false);
+
+    std::vector<float> data(blob.ptr<float>(0), blob.ptr<float>(0) + blob.total());
+    return {
+        std::move(data),
+        ModelImageTransform{
+            .original_width = image.cols,
+            .original_height = image.rows,
+            .input_width = input_w,
+            .input_height = input_h,
+            .scale = scale,
+            .pad_x = pad_x,
+            .pad_y = pad_y,
+        },
+    };
+}
 
 struct ModelRuntime::Details {
     Details()

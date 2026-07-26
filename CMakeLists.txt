@@ -28,7 +28,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ---- dependencies -----------------------------------------------------------
-find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc videoio dnn)
 if(OpenCV_VERSION VERSION_GREATER_EQUAL "5.0")
   find_package(OpenCV REQUIRED COMPONENTS calib geometry)
 else()

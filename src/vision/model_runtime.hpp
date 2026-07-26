@@ -71,4 +71,7 @@ struct ModelRunResult {
 
 auto model_runtime_enabled_in_build() noexcept -> bool;
 
+auto preprocess_blob(const cv::Mat& image, int input_w, int input_h)
+    -> std::pair<std::vector<float>, ModelImageTransform>;
+
 } // namespace rmcs_laser_guidance
