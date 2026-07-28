@@ -38,7 +38,7 @@ runtime:
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
-  debug_max_fps: 0
+  debug_max_fps: 30
   record_enabled: false
   record_queue_size: 16
 inference:
@@ -106,9 +106,9 @@ guidance:
   t_x_mm: 85.5
   t_y_mm: 15.0
   t_z_mm: 0.0
-  r_x_deg: 0.31
-  r_y_deg: 0.05
-  r_z_deg: 1.82
+  r_x_deg: -1.54
+  r_y_deg: 0.08
+  r_z_deg: -179.17
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
@@ -119,9 +119,9 @@ guidance:
     x_minus_channel: 2
     y_plus_channel: 1
     y_minus_channel: 3
-  angle_offset_x_deg: 0.03
-  angle_offset_y_deg: -0.01
-  scan_mode: single
-  scan_width_deg: 0.06
-  scan_height_deg: 0.08
-  scan_grid_n: 6
+  angle_offset_x_deg: 0.0
+  angle_offset_y_deg: 0.0
+  scan_mode: rectangle
+  scan_width_deg: 0.8
+  scan_height_deg: 0.8
+  scan_grid_n: 5

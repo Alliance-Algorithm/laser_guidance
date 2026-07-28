@@ -208,10 +208,18 @@ auto AimSolver::solve_geometry(const AimInput& input) -> AimSolveResult {
         .telemetry = observe_target(selected, input.track.dt_seconds),
     };
 
-    // Direction-based: pixel → d_cam → R·d_cam → galvo angles.
-    // No depth needed; translation t is negligible at far field (⎹t| / D < 0.5%).
-    const auto angles = kinematics_->compute_from_direction(
-        input.track.aim_center, projection_->camera_matrix());
+    // Hybrid: prefer depth-based when depth filter is initialized
+    // (accounts for translation t), fall back to direction-based when
+    // depth is unavailable (pure ray matching, translation ignored).
+    GalvoAngles angles;
+    if (result.telemetry.active_depth_mm.has_value()) {
+        const auto P_c = projection_->project(
+            input.track.aim_center, *result.telemetry.active_depth_mm);
+        angles = kinematics_->compute(P_c);
+    } else {
+        angles = kinematics_->compute_from_direction(
+            input.track.aim_center, projection_->camera_matrix());
+    }
     if (!angles.valid) {
         result.aim_output.message = "kinematics failed";
         return result;

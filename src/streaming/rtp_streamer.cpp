@@ -72,7 +72,9 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
     details_->last_push = {};
 
     std::string encoder = details_->config.encoder;
-    if (encoder.find("nvenc") != std::string::npos && !cuda_device_available()) {
+    const bool want_nvenc = encoder.find("nvenc") != std::string::npos;
+    const bool use_cuda = want_nvenc && cuda_device_available();
+    if (want_nvenc && !use_cuda) {
         std::println(stderr,
                      "RTP streamer: nvenc unavailable (no CUDA device), using libx264");
         encoder = "libx264";
@@ -85,35 +87,69 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         "keyint={}:min-keyint={}:scenecut=0:repeat-headers=1:rc-lookahead=0:sync-lookahead=0:"
         "bframes=0:sliced-threads=1",
         low_latency_gop, low_latency_gop);
+
+    // CUDA path: CPU only does BGR→NV12 + H2D; encode stays on GPU (nvenc).
+    // Optional scale_cuda when preview max_width is set.
+    std::string hw_init;
+    std::string vf_opts;
     std::string encoder_opts;
-    if (encoder.find("nvenc") != std::string::npos) {
-        // p1 + ll; bufsize = bitrate keeps VBV shallow for low delay.
+    if (use_cuda) {
+        hw_init = "-init_hw_device cuda=cuda:0 -filter_hw_device cuda ";
+        if (details_->stream_width != width || details_->stream_height != height) {
+            vf_opts = std::format(
+                "-vf \"format=nv12,hwupload_cuda,scale_cuda={}:{}:format=nv12\" ",
+                details_->stream_width, details_->stream_height);
+        } else {
+            vf_opts = "-vf \"format=nv12,hwupload_cuda\" ";
+        }
         encoder_opts = std::format(
-            "-preset p1 -tune ll -rc cbr -b:v {} -maxrate {} -bufsize {} "
-            "-g {} -bf 0 -pix_fmt yuv420p -profile:v high "
-            "-zerolatency 1 -forced-idr 1",
+            "-c:v h264_nvenc -preset p1 -tune ll -rc cbr -b:v {} -maxrate {} -bufsize {} "
+            "-g {} -bf 0 -profile:v high -zerolatency 1 -forced-idr 1 -gpu 0 -delay 0 "
+            "-no-scenecut 1",
+            details_->config.bitrate, details_->config.bitrate, details_->config.bitrate,
+            low_latency_gop);
+        encoder = "h264_nvenc";
+    } else if (encoder.find("nvenc") != std::string::npos) {
+        encoder_opts = std::format(
+            "-c:v h264_nvenc -preset p1 -tune ll -rc cbr -b:v {} -maxrate {} -bufsize {} "
+            "-g {} -bf 0 -pix_fmt yuv420p -profile:v high -zerolatency 1 -forced-idr 1",
             details_->config.bitrate, details_->config.bitrate, details_->config.bitrate,
             low_latency_gop);
     } else {
         encoder_opts = std::format(
-            "-preset ultrafast -tune zerolatency -b:v {} -maxrate {} -bufsize {} "
-            "-g {} -pix_fmt yuv420p -profile:v high "
-            "-x264-params \"{}\"",
+            "-c:v libx264 -preset ultrafast -tune zerolatency -b:v {} -maxrate {} -bufsize {} "
+            "-g {} -pix_fmt yuv420p -profile:v high -x264-params \"{}\"",
             details_->config.bitrate, details_->config.bitrate, details_->config.bitrate,
             low_latency_gop, x264_ll);
     }
 
+    // Pipe always full source size; CUDA scale (if any) happens after upload.
+    const int pipe_w = use_cuda ? width : details_->stream_width;
+    const int pipe_h = use_cuda ? height : details_->stream_height;
+    details_->stream_width = pipe_w; // writer validates against pipe size when not scaling in push
+    details_->stream_height = pipe_h;
+    // Keep configured encode size for logging when CUDA scales.
+    const int encode_w =
+        details_->config.max_width > 0 && width > details_->config.max_width
+            ? details_->config.max_width
+            : width;
+    const int encode_h =
+        details_->config.max_width > 0 && width > details_->config.max_width
+            ? std::max(2, (height * details_->config.max_width / width) & ~1)
+            : height;
+
     const std::string command = std::format(
         "ffmpeg -loglevel error "
+        "{}"
         "-fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 "
         "-f rawvideo -pixel_format bgr24 -video_size {}x{} "
         "-framerate {} -i pipe:0 "
-        "-c:v {} {} "
+        "{}"
+        "{} "
         "-flush_packets 1 -flags:v +global_header+low_delay "
         "-f rtp -pkt_size {} -sdp_file \"{}\" \"rtp://{}:{}\"",
-        details_->stream_width, details_->stream_height, stream_fps, encoder, encoder_opts,
-        kRtpPktSize, details_->config.sdp_path.string(), details_->config.host,
-        details_->config.port);
+        hw_init, pipe_w, pipe_h, stream_fps, vf_opts, encoder_opts, kRtpPktSize,
+        details_->config.sdp_path.string(), details_->config.host, details_->config.port);
 
     details_->pipe = popen(command.c_str(), "w");
     if (!details_->pipe) {
@@ -123,10 +159,11 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
     setvbuf(details_->pipe, nullptr, _IONBF, 0);
 
     std::println(
-        "RTP streaming started: {}x{}@{} -> {}x{}@{} rtp://{}:{}, SDP={}, encoder={}, bitrate={}",
-        width, height, framerate, details_->stream_width, details_->stream_height, stream_fps,
-        details_->config.host, details_->config.port, details_->config.sdp_path.string(), encoder,
-        details_->config.bitrate);
+        "RTP streaming started: {}x{}@{} -> {}x{}@{} rtp://{}:{}, SDP={}, encoder={}, "
+        "bitrate={}, cuda={}",
+        width, height, framerate, encode_w, encode_h, stream_fps, details_->config.host,
+        details_->config.port, details_->config.sdp_path.string(), encoder,
+        details_->config.bitrate, use_cuda);
 
     details_->running = true;
     details_->writer = std::jthread([this] {

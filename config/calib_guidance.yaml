@@ -97,9 +97,9 @@ guidance:
   t_x_mm: 85.5
   t_y_mm: 15.0
   t_z_mm: 0.0
-  r_x_deg: 0.31
-  r_y_deg: 0.05
-  r_z_deg: 1.82
+  r_x_deg: -1.54
+  r_y_deg: 0.08
+  r_z_deg: -179.17
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
