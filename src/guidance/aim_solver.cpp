@@ -213,7 +213,12 @@ auto AimSolver::solve_geometry(const AimInput& input) -> AimSolveResult {
         return result;
     }
 
-    const auto P_c = projection_->project(input.track.aim_center, *result.telemetry.active_depth_mm);
+    // Use detection center for projection (same pixel where depth was estimated),
+    // fall back to aim_center when detection is absent (cached depth).
+    const cv::Point2f proj_pixel = (selected != nullptr)
+        ? selected->center
+        : input.track.aim_center;
+    const auto P_c = projection_->project(proj_pixel, *result.telemetry.active_depth_mm);
     const auto angles = kinematics_->compute(P_c);
     if (!angles.valid) {
         result.aim_output.message = "kinematics failed";
