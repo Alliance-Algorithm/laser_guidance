@@ -89,17 +89,19 @@ auto format_voltage_record(
         top.score, top.class_id, manual_vx, manual_vy);
 }
 
-auto format_geometry_record(float angle_x_deg, float angle_y_deg, const cv::Point3f& point)
+auto format_geometry_record(float angle_x_deg, float angle_y_deg,
+                             float pixel_x, float pixel_y, float depth_mm)
     -> std::string {
     return std::format(
-        "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n", angle_x_deg, angle_y_deg, point.x, point.y, point.z);
+        "{:.3f},{:.3f},{:.3f},{:.3f},{:.1f}\n",
+        angle_x_deg, angle_y_deg, pixel_x, pixel_y, depth_mm);
 }
 
 auto should_record_hit_edge(
     const HitState previous_state, const HitState current_state, const Detection& top,
     const bool detected) -> bool {
     return current_state == HitState::Confirmed && previous_state != HitState::Confirmed && detected
-        && top.class_id == 0 && top.score >= 0.25F;
+        && top.class_id == 2 && top.score >= 0.25F;
 }
 
 } // namespace
@@ -339,12 +341,12 @@ auto GuidanceOpsApp::handle_key(const int key, const ControlLoopFrame& frame) ->
             ">>> VOLTAGE RECORD: V=({:.3f}V,{:.3f}V) center=({:.1f},{:.1f}) area={:.1f}",
             calibration_state_->voltage_x, calibration_state_->voltage_y, top.center.x,
             top.center.y, area);
-    } else if (frame.guidance.telemetry.selected_target_point.has_value()) {
-        const auto& point = *frame.guidance.telemetry.selected_target_point;
+    } else {
+        const auto& aim = frame.track.aim_center;
         std::println(
-            ">>> RECORD: θ=({:.2f}°,{:.2f}°) P_c=({:.1f},{:.1f},{:.1f})mm",
-            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg, point.x, point.y,
-            point.z);
+            ">>> RECORD: θ=({:.2f}°,{:.2f}°) pixel=({:.1f},{:.1f})",
+            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg,
+            aim.x, aim.y);
     }
 }
 
@@ -359,17 +361,18 @@ auto GuidanceOpsApp::maybe_record_calibration(const ControlLoopFrame& frame) -> 
         return;
     }
 
-    if (frame.guidance.telemetry.selected_target_point.has_value() && calibration_file_) {
+    if (calibration_file_) {
+        const float depth = frame.guidance.telemetry.active_depth_mm.value_or(0.0F);
         calibration_file_ << format_geometry_record(
             calibration_state_->angle_x_deg, calibration_state_->angle_y_deg,
-            *frame.guidance.telemetry.selected_target_point);
+            frame.track.aim_center.x, frame.track.aim_center.y, depth);
         calibration_file_.flush();
     }
 }
 
 auto GuidanceOpsApp::maybe_record_hit_edge(const ControlLoopFrame& frame) -> void {
     const auto* top = frame.detection.detections.empty() ? nullptr : &frame.detection.detections.front();
-    const bool is_purple = frame.detection.detected && top != nullptr && top->class_id == 0
+    const bool is_purple = frame.detection.detected && top != nullptr && top->class_id == 2
                         && top->score >= 0.25F;
     const auto hit_state = hit_state_machine_.update(is_purple);
     const auto previous = last_hit_state_;
@@ -377,18 +380,20 @@ auto GuidanceOpsApp::maybe_record_hit_edge(const ControlLoopFrame& frame) -> voi
 
     if (config_.guidance.calib_mode || top == nullptr
         || !should_record_hit_edge(previous, hit_state, *top, frame.detection.detected)
-        || !frame.guidance.aim_output.output_angles.has_value()
-        || !frame.guidance.telemetry.selected_target_point.has_value()) {
+        || !frame.guidance.aim_output.output_angles.has_value()) {
         return;
     }
 
     const auto& hit_angles = *frame.guidance.aim_output.output_angles;
-    const auto& point = *frame.guidance.telemetry.selected_target_point;
+    const float depth = frame.guidance.telemetry.active_depth_mm.value_or(0.0F);
     std::println(
-        ">>> HIT-CALIB RECORD: θ=({:.2f}°,{:.2f}°) P_c=({:.1f},{:.1f},{:.1f})mm class=purple",
-        hit_angles.x, hit_angles.y, point.x, point.y, point.z);
+        ">>> HIT-CALIB RECORD: θ=({:.2f}°,{:.2f}°) pixel=({:.1f},{:.1f}) depth={:.0f}mm",
+        hit_angles.x, hit_angles.y,
+        frame.track.aim_center.x, frame.track.aim_center.y, depth);
     if (hit_file_) {
-        hit_file_ << format_geometry_record(hit_angles.x, hit_angles.y, point);
+        hit_file_ << format_geometry_record(
+            hit_angles.x, hit_angles.y,
+            frame.track.aim_center.x, frame.track.aim_center.y, depth);
         hit_file_.flush();
     }
 }

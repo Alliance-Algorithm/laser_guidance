@@ -22,12 +22,13 @@ using namespace rmcs_laser_guidance;
 constexpr float kDegToRad = 3.14159265358979323846F / 180.0F;
 constexpr float kRadToDeg = 180.0F / 3.14159265358979323846F;
 
-// CSV: theta_x_deg, theta_y_deg, pixel_x, pixel_y
+// CSV: theta_x_deg, theta_y_deg, pixel_x, pixel_y [, depth_mm]
 struct CalibRecord {
     float theta_x_deg = 0.0F;
     float theta_y_deg = 0.0F;
     float pixel_x = 0.0F;
     float pixel_y = 0.0F;
+    float depth_mm = 0.0F;   // optional, 0 = unknown
 };
 
 auto load_records(const std::string& path) -> std::vector<CalibRecord> {
@@ -40,6 +41,7 @@ auto load_records(const std::string& path) -> std::vector<CalibRecord> {
         std::istringstream ss(line);
         CalibRecord r;
         ss >> r.theta_x_deg >> r.theta_y_deg >> r.pixel_x >> r.pixel_y;
+        if (ss >> r.depth_mm) { /* optional 5th column */ }
         recs.push_back(r);
     }
     return recs;
@@ -107,6 +109,62 @@ auto solve_wahba(const std::vector<Eigen::Vector3f>& d_cam,
     return R;
 }
 
+// Translation from coplanarity: det([t, R·d_cam, d_gal]) = 0, t_z=0.
+// Returns direction (t_x, t_y) as unit vector. Magnitude indeterminate.
+// If known_depth_mm > 0, uses it to fix scale: |t| ≈ known_depth * RMS angular error.
+auto solve_translation_coplanar(const std::vector<Eigen::Vector3f>& d_cam,
+                                const std::vector<Eigen::Vector3f>& d_gal,
+                                const Eigen::Matrix3f& R,
+                                float known_depth_mm) -> Eigen::Vector2f {
+    if (d_cam.size() < 2) return {0.0F, 0.0F};
+
+    // Build constraint: t · n_i = 0  where n = cross(R*d_cam, d_gal)
+    Eigen::MatrixXf A(d_cam.size(), 2);
+    for (size_t i = 0; i < d_cam.size(); ++i) {
+        Eigen::Vector3f n = (R * d_cam[i]).cross(d_gal[i]);
+        // Normalize to unit weight per observation
+        float nr = n.norm();
+        if (nr > 1e-9F) { n /= nr; }
+        A(i, 0) = n.x();
+        A(i, 1) = n.y();
+    }
+
+    // SVD of A: least-squares solution to A·[tx,ty]ᵀ = 0
+    Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeFullV);
+    Eigen::Vector2f dir = svd.matrixV().col(1);  // smallest singular vector
+
+    // Fix sign: t should put camera at physically measured position.
+    // Use majority sign agreement from cross products.
+    Eigen::Vector2f sign_ref{0.0F, 0.0F};
+    for (size_t i = 0; i < d_cam.size(); ++i) {
+        Eigen::Vector3f n = (R * d_cam[i]).cross(d_gal[i]).normalized();
+        // t·n = 0, the direction of t is perpendicular to n
+        // Use the sign from cross product projection
+        Eigen::Vector2f ni(n.x(), n.y());
+        sign_ref += ni;
+    }
+    if (dir.dot(sign_ref) < 0.0F) dir = -dir;
+
+    // Estimate magnitude from known depth if available.
+    // Approximate: |t| ≈ mean(|n_z|) * mean_depth / mean(|n_xy|)
+    float scale = 10.0F;  // default order-of-magnitude: 10cm
+    if (known_depth_mm > 0.0F) {
+        float mean_nxy = 0.0F;
+        float mean_nz = 0.0F;
+        for (size_t i = 0; i < d_cam.size(); ++i) {
+            Eigen::Vector3f n = (R * d_cam[i]).cross(d_gal[i]).normalized();
+            mean_nxy += std::sqrt(n.x()*n.x() + n.y()*n.y());
+            mean_nz += std::abs(n.z());
+        }
+        mean_nxy /= d_cam.size();
+        mean_nz /= d_cam.size();
+        if (mean_nxy > 1e-6F && mean_nz > 1e-6F)
+            scale = known_depth_mm * mean_nz / mean_nxy;
+    }
+
+    return dir * scale;
+}
+
 auto rotation_to_euler(const Eigen::Matrix3f& R)
     -> std::tuple<float, float, float> {
     // R = Rz(-rz) * Ry(-rx) * Rx(-ry)  (camera→galvo convention)
@@ -165,14 +223,24 @@ int main(int argc, char** argv) {
     std::println("r_z_deg: {:.2f}", rz);
     std::println("q: ({:.6f}, {:.6f}, {:.6f}, {:.6f})", q.w(), q.x(), q.y(), q.z());
 
-    // Load translation from config (fixed, not optimized)
+    // Translation from coplanarity: estimate (t_x, t_y) direction + magnitude.
+    // t_z = 0 (physical constraint: camera and galvo on same horizontal plane).
+    // Use mean depth from records if available, otherwise use physical prior.
+    float known_depth = 0.0F;
+    for (const auto& r : recs)
+        if (r.depth_mm > 0.0F) known_depth = r.depth_mm;
+    if (known_depth == 0.0F)
+        known_depth = 5000.0F;  // 5m default
+
+    Eigen::Vector2f t_xy = solve_translation_coplanar(d_cam, d_gal, R, known_depth);
+
     auto config = load_config(config_path);
     auto init = config.guidance;
     std::println("");
-    std::println("=== FIXED TRANSLATION (from config) ===");
-    std::println("t_x_mm: {:.1f}", init.t_x_mm);
-    std::println("t_y_mm: {:.1f}", init.t_y_mm);
-    std::println("t_z_mm: {:.1f}", init.t_z_mm);
+    std::println("=== TRANSLATION (coplanar SVD, t_z=0) ===");
+    std::println("t_x_mm: {:.1f}", t_xy.x());
+    std::println("t_y_mm: {:.1f}", t_xy.y());
+    std::println("t_z_mm: 0.0");
 
     // Compute direction-matching error
     double dir_err = 0.0;
