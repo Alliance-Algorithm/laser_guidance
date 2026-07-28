@@ -422,7 +422,8 @@ auto ControlLoop::run_loop() -> void {
         }
 
         frame.track = select_target_track(
-            frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms);
+            frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms,
+            frame.frame.timestamp);
         if (guidance_) {
             frame.guidance = guidance_->execute(frame.track);
         }
@@ -450,8 +451,6 @@ auto ControlLoop::run_loop() -> void {
         outputs_.apply_requests(
             streaming_requested, recording_requested, negotiated_format_);
         outputs_.record_current(frame.display);
-        // Publish current overlay frame (not previous) so UI/RTP lag is not +1 frame.
-        outputs_.publish_previous(frame.display);
         const auto output_status = outputs_.status();
 
         RuntimeSnapshot latest_snapshot;
@@ -462,26 +461,33 @@ auto ControlLoop::run_loop() -> void {
         }
         outputs_.publish_snapshot(latest_snapshot);
 
-        if (ros_bridge_ && ros_bridge_->ready()) {
+        // ROS spin can stall the UI loop; keep it off the hot path while streaming.
+        if (ros_bridge_ && ros_bridge_->ready() && !output_status.streaming_active) {
             ros_bridge_->publish_snapshot(latest_snapshot);
             ros_bridge_->spin();
+        } else if (ros_bridge_ && ros_bridge_->ready()) {
+            ros_bridge_->publish_snapshot(latest_snapshot);
         }
 
-        // Local OpenCV window is a second full-res present path; prefer RTP/ffplay for
-        // low-latency UI when streaming is on (avoids double 5MP blit).
-        if (show_window() && !output_status.streaming_active) {
-            cv::imshow(window_name(), frame.display);
-            const int key = cv::waitKey(1);
-            // OpenCV QT backend throws if the window was closed / never created.
-            bool window_visible = true;
-            try {
-                window_visible =
-                    cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
-            } catch (const cv::Exception&) {
-                window_visible = false;
-            }
-            if (should_exit_from_key(key) || !window_visible) {
-                request_stop();
+        // Streaming UI is ffplay: move the overlay mat into RTP (no second 5MP clone).
+        // Local OpenCV window only when not streaming.
+        if (output_status.streaming_active) {
+            outputs_.publish_frame(std::move(frame.display));
+        } else {
+            outputs_.publish_frame(frame.display);
+            if (show_window()) {
+                cv::imshow(window_name(), frame.display);
+                const int key = cv::waitKey(1);
+                bool window_visible = true;
+                try {
+                    window_visible =
+                        cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
+                } catch (const cv::Exception&) {
+                    window_visible = false;
+                }
+                if (should_exit_from_key(key) || !window_visible) {
+                    request_stop();
+                }
             }
         }
     }

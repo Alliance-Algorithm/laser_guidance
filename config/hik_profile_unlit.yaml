@@ -76,7 +76,7 @@ ekf:
   initial_vel_std: 100.0
   initial_acc_std: 35.0
   max_missed_frames: 5
-  lookahead_ms: 30.0
+  lookahead_ms: 10.0
 guidance:
   enabled: true
   command_model: geometry

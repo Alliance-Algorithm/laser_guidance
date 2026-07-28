@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <optional>
 
@@ -40,7 +42,8 @@ struct ControlLoopFrame {
 // filtered position/velocity.
 inline auto select_target_track(
     const DetectionBatch& batch, const std::optional<EkfState>& ekf_state, const bool ekf_enabled,
-    const double ekf_lookahead_ms) -> TargetTrack {
+    const double ekf_lookahead_ms,
+    const Clock::time_point display_time = Clock::time_point{}) -> TargetTrack {
     TargetTrack track;
     track.detected = batch.detected;
     track.ekf_enabled = ekf_enabled;
@@ -58,7 +61,19 @@ inline auto select_target_track(
         track.velocity = ekf_state->velocity;
         track.ekf_acceleration = ekf_state->acceleration;
         if (ekf_enabled && ekf_state->initialized && !ekf_state->lost) {
-            const float latency_s = static_cast<float>(ekf_lookahead_ms * 0.001);
+            // Advance filter state from detection capture time to the frame being shown,
+            // then add configured lookahead (guidance / stream glass-to-glass).
+            float age_s = 0.0F;
+            if (display_time != Clock::time_point{}
+                && batch.capture_time != Clock::time_point{}) {
+                age_s = std::chrono::duration<float>(display_time - batch.capture_time).count();
+                if (age_s < 0.0F) {
+                    age_s = 0.0F;
+                }
+                // Clamp runaway age if inference stalls (avoid flying boxes).
+                age_s = std::min(age_s, 0.15F);
+            }
+            const float latency_s = age_s + static_cast<float>(ekf_lookahead_ms * 0.001);
             track.aim_center = cv::Point2f{
                 ekf_state->position.x + ekf_state->velocity.x * latency_s,
                 ekf_state->position.y + ekf_state->velocity.y * latency_s,

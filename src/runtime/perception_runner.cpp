@@ -247,6 +247,7 @@ auto PerceptionRunner::run() -> void {
             }
 
             auto batch = to_detection_batch(*infer_result);
+            batch.capture_time = queued_frame.capture_time;
             EnemyColor enemy_color = EnemyColor::auto_select;
             {
                 std::scoped_lock lock(state_mutex_);

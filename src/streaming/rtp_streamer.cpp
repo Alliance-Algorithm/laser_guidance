@@ -8,11 +8,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <format>
 #include <mutex>
 #include <print>
 #include <string>
 #include <thread>
+#include <unistd.h>
 
 #include <opencv2/imgproc.hpp>
 
@@ -157,6 +159,13 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
         return false;
     }
     setvbuf(details_->pipe, nullptr, _IONBF, 0);
+    // Non-blocking pipe: if ffmpeg/GPU can't keep up, drop frames instead of blocking UI.
+    if (const int fd = fileno(details_->pipe); fd >= 0) {
+        const int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) {
+            (void)fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+    }
 
     std::println(
         "RTP streaming started: {}x{}@{} -> {}x{}@{} rtp://{}:{}, SDP={}, encoder={}, "
@@ -186,11 +195,36 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
                 details_->written_seq = details_->frame_seq;
             }
 
-            const std::size_t size = frame.total() * frame.elemSize();
-            if (std::fwrite(frame.data, 1, size, details_->pipe) != size) {
+            const auto* data = static_cast<const std::uint8_t*>(frame.data);
+            std::size_t remaining = frame.total() * frame.elemSize();
+            bool dropped = false;
+            while (remaining > 0) {
+                const auto written = std::fwrite(data, 1, remaining, details_->pipe);
+                if (written == remaining) {
+                    remaining = 0;
+                    break;
+                }
+                if (written > 0) {
+                    data += written;
+                    remaining -= written;
+                    continue;
+                }
+                // EAGAIN / full pipe: drop this frame (latest-frame semantics).
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    dropped = true;
+                    clearerr(details_->pipe);
+                    break;
+                }
                 std::println(stderr, "RTP streamer: pipe write failed (ffmpeg exited?)");
                 details_->running = false;
+                remaining = 0;
                 break;
+            }
+            if (!details_->running.load()) {
+                break;
+            }
+            if (dropped) {
+                continue;
             }
             std::fflush(details_->pipe);
             frame_count++;

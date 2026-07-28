@@ -65,6 +65,8 @@ struct DetectionBatch {
     std::vector<Detection> detections{};
     bool detected = false;
     cv::Point2f selected_center{-1.0F, -1.0F};
+    // Capture time of the image that produced this batch (for display lag compensation).
+    Clock::time_point capture_time{};
 };
 
 struct TargetTrack {

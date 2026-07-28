@@ -39,7 +39,7 @@ auto RuntimeOutputs::apply_requests(
     }
 }
 
-auto RuntimeOutputs::publish_previous(cv::Mat& frame) -> void {
+auto RuntimeOutputs::publish_frame(const cv::Mat& frame) -> void {
     if (frame.empty()) {
         return;
     }
@@ -53,6 +53,21 @@ auto RuntimeOutputs::publish_previous(cv::Mat& frame) -> void {
 
     if (rtp_active) {
         rtp_publisher_.publish(frame);
+    }
+}
+
+auto RuntimeOutputs::publish_frame(cv::Mat&& frame) -> void {
+    if (frame.empty()) {
+        return;
+    }
+
+    const bool rtp_active = capabilities_.allow_rtp && rtp_publisher_.is_active();
+    if (capabilities_.allow_shm && shm_active_ && !rtp_active) {
+        shm_publisher_.publish(frame);
+    }
+
+    if (rtp_active) {
+        rtp_publisher_.publish(std::move(frame));
     }
 }
 

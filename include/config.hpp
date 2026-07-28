@@ -88,7 +88,7 @@ struct EkfConfig {
     double initial_vel_std = 100.0;
     double initial_acc_std = 50.0;
     int max_missed_frames = 5;
-    double lookahead_ms = 12.0;
+    double lookahead_ms = 10.0;
 };
 
 enum class GalvoWiringMode : int {

@@ -197,7 +197,11 @@ auto GuidanceOpsApp::teardown() -> void {
     }
     capture_.close();
     if (window_open_ && config_.debug.show_window) {
-        cv::destroyWindow(kWindowName);
+        try {
+            cv::destroyWindow(kWindowName);
+        } catch (const cv::Exception&) {
+            // QT highgui can throw if the window was already closed.
+        }
         window_open_ = false;
     }
     guidance_.reset();
@@ -283,7 +287,8 @@ auto GuidanceOpsApp::run_loop() -> void {
         }
 
         frame.track = select_target_track(
-            frame.detection, frame.ekf_state, config_.ekf.enabled, config_.ekf.lookahead_ms);
+            frame.detection, frame.ekf_state, config_.ekf.enabled, config_.ekf.lookahead_ms,
+            frame.frame.timestamp);
         if (guidance_) {
             frame.guidance = guidance_->execute(frame.track);
         }
