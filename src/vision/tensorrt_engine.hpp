@@ -21,7 +21,11 @@ public:
     auto operator=(TensorRTEngine&&) noexcept -> TensorRTEngine&;
 
     static auto load(const std::string& path) -> std::expected<TensorRTEngine, std::string>;
-    auto run(const std::vector<float>& input, std::vector<float>& output)
+    auto run(
+        const std::vector<float>& input,
+        const std::vector<std::int64_t>& input_shape,
+        std::vector<float>& output,
+        std::vector<std::int64_t>& output_shape)
         -> std::expected<void, std::string>;
     auto meta() const -> const TensorRTMeta&;
 
@@ -37,6 +41,9 @@ struct TensorRTMeta {
     struct TensorInfo {
         std::string name{};
         std::vector<std::int64_t> shape{};
+        std::vector<std::int64_t> min_shape{};
+        std::vector<std::int64_t> opt_shape{};
+        std::vector<std::int64_t> max_shape{};
     };
 
     std::vector<TensorInfo> inputs{};

@@ -39,18 +39,20 @@ auto RuntimeOutputs::apply_requests(
     }
 }
 
-auto RuntimeOutputs::publish_previous(cv::Mat& previous_output) -> void {
-    if (previous_output.empty()) {
+auto RuntimeOutputs::publish_previous(cv::Mat& frame) -> void {
+    if (frame.empty()) {
         return;
     }
 
-    if (capabilities_.allow_shm && shm_active_) {
-        shm_publisher_.publish(previous_output);
+    const bool rtp_active = capabilities_.allow_rtp && rtp_publisher_.is_active();
+    // Full-res SHM memcpy (~15MB@5MP) on the main thread adds UI lag; skip when RTP
+    // already carries the preview (make stream / ffplay path).
+    if (capabilities_.allow_shm && shm_active_ && !rtp_active) {
+        shm_publisher_.publish(frame);
     }
 
-    if (capabilities_.allow_rtp && rtp_publisher_.is_active()) {
-        rtp_publisher_.publish(std::move(previous_output));
-        // cv::Mat move leaves source empty — no explicit reset needed
+    if (rtp_active) {
+        rtp_publisher_.publish(frame);
     }
 }
 

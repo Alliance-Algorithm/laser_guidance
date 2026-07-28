@@ -82,7 +82,6 @@ private:
     int active_hik_profile_difficulty_ = 1;
     std::optional<CaptureFormat> negotiated_format_{};
     OverlayRenderer overlay_{};
-    cv::Mat previous_output_{};
     bool window_open_ = false;
     std::jthread main_thread_{};
 };

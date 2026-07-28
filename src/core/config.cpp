@@ -164,10 +164,11 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.inference.model_path = inference["model_path"].as<std::string>();
         if (inference["enemy_color"]) {
             const auto ec = to_lower(inference["enemy_color"].as<std::string>());
+            // enemy_color selects the armor class we attack (model ids: 0=red, 1=blue).
             if (ec == "red")
-                config.inference.enemy_class_id = 1;
+                config.inference.enemy_class_id = 0;
             else if (ec == "blue")
-                config.inference.enemy_class_id = 2;
+                config.inference.enemy_class_id = 1;
             else if (ec == "auto")
                 config.inference.enemy_class_id = -1;
             else
@@ -189,6 +190,10 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.rtp.encoder = streaming["encoder"].as<std::string>();
         if (streaming["bitrate"])
             config.rtp.bitrate = streaming["bitrate"].as<std::string>();
+        if (streaming["max_width"])
+            config.rtp.max_width = streaming["max_width"].as<int>();
+        if (streaming["max_fps"])
+            config.rtp.max_fps = streaming["max_fps"].as<int>();
     }
 
     if (const YAML::Node udp_cfg = yaml["udp"]) {

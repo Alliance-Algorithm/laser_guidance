@@ -38,7 +38,9 @@ streaming:
   port: 5004
   sdp_path: /tmp/laser_guidance.sdp
   encoder: h264_nvenc
-  bitrate: 12M
+  bitrate: "16M"
+  max_width: 0
+  max_fps: 0
 udp:
   enabled: true
   host: 127.0.0.1

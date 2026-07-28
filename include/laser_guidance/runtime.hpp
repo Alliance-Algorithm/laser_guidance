@@ -18,10 +18,11 @@
 #include "types.hpp"
 namespace rmcs_laser_guidance {
 
+// Values match model armor class ids we attack: 0=Red, 1=Blue (Purple HIT is always 2).
 enum class EnemyColor : std::int32_t {
     auto_select = -1,
-    red = 1,
-    blue = 2,
+    red = 0,
+    blue = 1,
 };
 
 enum class RuntimeBackend : std::uint8_t {

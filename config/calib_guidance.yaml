@@ -1,3 +1,17 @@
+# Geometry extrinsic calibration (WASD + space).
+# Capture: Hik industrial camera (same as competition stage-1 lit profile).
+capture_backend: hikcamera
+hik:
+  device_id: ''
+  timeout_ms: 1000
+  exposure_us: 500
+  framerate: 80.0
+  gain: 10
+  invert_image: false
+  software_sync: false
+  trigger_mode: false
+  fixed_framerate: true
+
 v4l2:
   device_path: /dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0
   width: 1920
@@ -13,9 +27,9 @@ debug:
 runtime:
   max_input_age_ms: 25
   max_observation_age_ms: 35
-  max_infer_fps: 60
+  max_infer_fps: 80
   warmup_frames: 30
-  engine_path: "models/exp.engine"
+  engine_path: models/exp-2.engine
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
@@ -24,8 +38,9 @@ runtime:
   record_queue_size: 16
 
 inference:
-  backend: model
-  model_path: models/exp.onnx
+  backend: tensorrt
+  model_path: models/exp-2.engine
+  enemy_color: auto
 
 streaming:
   enabled: false
@@ -33,7 +48,9 @@ streaming:
   port: 5004
   sdp_path: "/tmp/laser_guidance.sdp"
   encoder: "h264_nvenc"
-  bitrate: "12M"
+  bitrate: "16M"
+  max_width: 0
+  max_fps: 0
 
 udp:
   enabled: false
@@ -41,6 +58,7 @@ udp:
   port: 5001
 
 ekf:
+  enabled: false
   process_noise_q: 0.05
   measurement_noise_r: 0.5
   initial_pos_std: 100.0
@@ -65,6 +83,9 @@ guidance:
     - class_id: 2
       width_mm: 50.0
       height_mm: 72.0
+    - class_id: 3
+      width_mm: 50.0
+      height_mm: 72.0
   camera_calib_path: "config/camera_calib.yaml"
   depth_filter_enabled: true
   depth_process_noise_q: 400.0
@@ -72,6 +93,7 @@ guidance:
   depth_initial_pos_std: 5000.0
   depth_initial_vel_std: 2000.0
   depth_max_missed_frames: 5
+  depth_scale: 0.955
   t_x_mm: 85.5
   t_y_mm: 15.0
   t_z_mm: 0.0

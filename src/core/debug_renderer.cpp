@@ -17,18 +17,20 @@ constexpr float kMinScore = 0.25F;
 
 auto class_color(int class_id) -> cv::Scalar {
     switch (class_id) {
-    case 0: return {255, 0, 255}; // purple
-    case 1: return {0, 0, 255};   // red
-    case 2: return {255, 0, 0};   // blue
+    case 0: return {0, 0, 255};     // red (BGR)
+    case 1: return {255, 0, 0};     // blue
+    case 2: return {255, 0, 255};   // purple
+    case 3: return {180, 180, 180}; // colorless
     default: return {0, 255, 0};
     }
 }
 
 auto class_name(int class_id) -> std::string {
     switch (class_id) {
-    case 0: return "purple";
-    case 1: return "red";
-    case 2: return "blue";
+    case 0: return "red";
+    case 1: return "blue";
+    case 2: return "purple";
+    case 3: return "colorless";
     default: return "?";
     }
 }
@@ -126,8 +128,8 @@ auto draw_status_bar(
     if (recording)
         line += " [REC]";
     switch (enemy_class_id) {
-    case 1: line += " [RED]"; break;
-    case 2: line += " [BLUE]"; break;
+    case 0: line += " [ENEMY RED]"; break;
+    case 1: line += " [ENEMY BLUE]"; break;
     default: break;
     }
     if (line.empty())

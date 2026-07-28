@@ -4,13 +4,15 @@ namespace rmcs_laser_guidance {
 
 /// @brief 空中机器人被激光瞄准进度计算器 (RoboMaster 2026 规则 §5.6.3)
 ///
-/// 阶段与 P0 阈值:
-///   Stage 0 (初始): P0 = 50,  检测区域无缩减
-///   Stage 1 (已锁定1次): P0 = 100, 检测区域纵向缩减为 3/5
-///   Stage 2 (已锁定2次): P0 = 100, 检测区域纵向缩减为 3/5
-///   Stage 3 (已锁定3次): P0 = 100, 检测区域纵向缩减为 1/5, 不再主动发光
-///   Stage 4 (已锁定4次): P0 = 100, 检测区域纵向缩减为 1/5, 不再主动发光
-///   锁定5次后: 耗尽, 不再计算
+/// 阶段 / difficulty / 相机参数:
+///   Stage 0  第一次反制前: difficulty=1, P0=50,  检测区无缩减, 发光 → 相机 lit (第一套)
+///   Stage 1  第二次反制前: difficulty=2, P0=100, 纵向 3/5, 发光 → 相机 lit (第一套)
+///   Stage 2  第三次反制前: difficulty=2, P0=100, 纵向 3/5, 发光 → 相机 lit (第一套)
+///   Stage 3  第四次反制前: difficulty=3, P0=100, 纵向 1/5, 不发光 → 相机 unlit (第二套)
+///   Stage 4  第五次反制前: difficulty=3, P0=100, 纵向 1/5, 不发光 → 相机 unlit (第二套)
+///   锁定 5 次后: 耗尽, 不再计算
+///
+/// 进度由本地视觉 Purple HIT (class_id==2) 驱动, 非裁判系统。
 ///
 /// P 值规则:
 ///   - 未命中时: P 以 0.5/s 衰减至 0, t/n 归零
@@ -21,7 +23,7 @@ public:
     HitProgress() = default;
 
     /// 每帧更新
-    /// @param is_hit  当前帧目标是否为紫色 (class_id == 0)
+    /// @param is_hit  当前帧目标是否为紫色 (class_id == 2)
     /// @param dt_s    帧间隔 (秒)
     void update(bool is_hit, float dt_s);
 

@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/rtp-common.sh"
 source "$SCRIPT_DIR/host-runtime-env.sh"
 laser_prepare_host_runtime_env
 CONFIG="${1:-}"
-[ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/default.yaml")"
+[ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/hik_competition.yaml")"
 if [[ "$CONFIG" != /* ]]; then
     CONFIG="$REPO_ROOT/$CONFIG"
 fi
@@ -64,10 +64,11 @@ launch_ffplay() {
     fi
     ffplay -hide_banner -loglevel warning -nostats \
         -protocol_whitelist file,rtp,udp \
-        -fflags discardcorrupt \
+        -fflags nobuffer+discardcorrupt \
         -flags low_delay \
-        -probesize 2000000 \
-        -analyzeduration 2000000 \
+        -framedrop \
+        -probesize 32768 \
+        -analyzeduration 0 \
         -sync ext \
         "$SDP"
 }

@@ -57,8 +57,8 @@ int main(int argc, char** argv) {
             const auto& c = result.candidates[i];
             std::println(
                 "  [{}] score={:.3f} class={} bbox=[{:.1f},{:.1f},{:.1f},{:.1f}] center=[{:.1f},{:.1f}]",
-                i, c.score, c.class_id, c.bbox.x, c.bbox.y, c.bbox.width, c.bbox.height, c.center.x,
-                c.center.y);
+                i, c.score, class_name(c.class_id), c.bbox.x, c.bbox.y, c.bbox.width, c.bbox.height,
+                c.center.x, c.center.y);
         }
 
         cv::Mat annotated = image.clone();

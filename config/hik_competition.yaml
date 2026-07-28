@@ -2,13 +2,15 @@ capture_backend: hikcamera
 hik:
   device_id: ''
   timeout_ms: 1000
-  exposure_us: 1000
+  # lit (第一套): HitProgress difficulty 1/2 — 模块仍发光
+  exposure_us: 500
   framerate: 80.0
   gain: 10
   invert_image: false
   software_sync: false
   trigger_mode: false
   fixed_framerate: true
+  # unlit (第二套): difficulty 3 — 模块不主动发光, 依赖本地 hit 切换
   profile_unlit:
     exposure_us: 1000
     gain: 10.0
@@ -32,16 +34,16 @@ runtime:
   max_observation_age_ms: 35
   max_infer_fps: 80
   warmup_frames: 30
-  engine_path: models/exp.engine
+  engine_path: models/exp-2.engine
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
-  debug_max_fps: 30
+  debug_max_fps: 0
   record_enabled: false
   record_queue_size: 16
 inference:
   backend: tensorrt
-  model_path: models/exp.engine
+  model_path: models/exp-2.engine
   enemy_color: auto
 record:
   output_root: ./videos
@@ -57,7 +59,9 @@ streaming:
   port: 5004
   sdp_path: /tmp/laser_guidance.sdp
   encoder: h264_nvenc
-  bitrate: 12M
+  bitrate: "16M"
+  max_width: 0
+  max_fps: 0
 udp:
   enabled: true
   host: 127.0.0.1
@@ -96,7 +100,7 @@ guidance:
   depth_initial_pos_std: 5000.0
   depth_initial_vel_std: 2000.0
   depth_max_missed_frames: 5
-  depth_scale: 1.0
+  depth_scale: 0.955
   voltage_gain_x: 1.0
   voltage_gain_y: 1.35
   t_x_mm: 85.5

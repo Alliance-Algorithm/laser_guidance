@@ -18,36 +18,38 @@ auto apply_calibration_key(GuidanceCalibrationState& state, const GuidanceConfig
     -> std::optional<std::string> {
     const bool voltage_mode = config.command_model == GuidanceCommandModelKind::direct_voltage;
     switch (key) {
+    // WASD moves the laser spot in image-view sense: W up, S down, A left, D right.
+    // Hardware optical angle sign is opposite that view convention on this rig.
     case 'w':
     case 'W':
-        if (voltage_mode) {
-            state.voltage_y -= state.voltage_step_v;
-        } else {
-            state.angle_y_deg -= state.angle_step_deg;
-        }
-        break;
-    case 's':
-    case 'S':
         if (voltage_mode) {
             state.voltage_y += state.voltage_step_v;
         } else {
             state.angle_y_deg += state.angle_step_deg;
         }
         break;
+    case 's':
+    case 'S':
+        if (voltage_mode) {
+            state.voltage_y -= state.voltage_step_v;
+        } else {
+            state.angle_y_deg -= state.angle_step_deg;
+        }
+        break;
     case 'a':
     case 'A':
         if (voltage_mode) {
-            state.voltage_x -= state.voltage_step_v;
+            state.voltage_x += state.voltage_step_v;
         } else {
-            state.angle_x_deg -= state.angle_step_deg;
+            state.angle_x_deg += state.angle_step_deg;
         }
         break;
     case 'd':
     case 'D':
         if (voltage_mode) {
-            state.voltage_x += state.voltage_step_v;
+            state.voltage_x -= state.voltage_step_v;
         } else {
-            state.angle_x_deg += state.angle_step_deg;
+            state.angle_x_deg -= state.angle_step_deg;
         }
         break;
     case ',':
@@ -306,8 +308,14 @@ auto GuidanceOpsApp::run_loop() -> void {
         if (config_.debug.show_window) {
             cv::imshow(kWindowName, frame.display);
             key = cv::waitKey(1);
-            const bool window_visible =
-                cv::getWindowProperty(kWindowName, cv::WND_PROP_VISIBLE) >= 1.0;
+            // OpenCV QT backend throws if the window was closed / never created.
+            bool window_visible = true;
+            try {
+                window_visible =
+                    cv::getWindowProperty(kWindowName, cv::WND_PROP_VISIBLE) >= 1.0;
+            } catch (const cv::Exception&) {
+                window_visible = false;
+            }
             if (should_exit_from_key(key) || !window_visible) {
                 stop_requested_ = true;
             }

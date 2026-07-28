@@ -20,8 +20,8 @@ constexpr const char* kPreviewWindowName = "laser_guidance_preview";
 
 auto to_enemy_color(const int class_id) -> EnemyColor {
     switch (class_id) {
-    case 1: return EnemyColor::red;
-    case 2: return EnemyColor::blue;
+    case 0: return EnemyColor::red;
+    case 1: return EnemyColor::blue;
     default: return EnemyColor::auto_select;
     }
 }
@@ -230,7 +230,6 @@ auto ControlLoop::make_output_capabilities(const CompetitionProfile profile)
 }
 
 auto ControlLoop::initialize_components() -> std::expected<void, Error> {
-    previous_output_ = cv::Mat{};
     negotiated_format_.reset();
     guidance_.reset();
 
@@ -368,8 +367,6 @@ auto ControlLoop::run_loop() -> void {
         // Capture delivers BGR8 (Hik ConvertPixelType). One clone for overlay writes only.
         frame.display = frame.frame.image.clone();
 
-        outputs_.publish_previous(previous_output_);
-
         const auto perception_result = perception_.poll();
         frame.detection = perception_result.detection;
         frame.ekf_state = perception_result.ekf_state;
@@ -453,6 +450,8 @@ auto ControlLoop::run_loop() -> void {
         outputs_.apply_requests(
             streaming_requested, recording_requested, negotiated_format_);
         outputs_.record_current(frame.display);
+        // Publish current overlay frame (not previous) so UI/RTP lag is not +1 frame.
+        outputs_.publish_previous(frame.display);
         const auto output_status = outputs_.status();
 
         RuntimeSnapshot latest_snapshot;
@@ -468,17 +467,23 @@ auto ControlLoop::run_loop() -> void {
             ros_bridge_->spin();
         }
 
-        if (show_window()) {
+        // Local OpenCV window is a second full-res present path; prefer RTP/ffplay for
+        // low-latency UI when streaming is on (avoids double 5MP blit).
+        if (show_window() && !output_status.streaming_active) {
             cv::imshow(window_name(), frame.display);
             const int key = cv::waitKey(1);
-            const bool window_visible =
-                cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
+            // OpenCV QT backend throws if the window was closed / never created.
+            bool window_visible = true;
+            try {
+                window_visible =
+                    cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
+            } catch (const cv::Exception&) {
+                window_visible = false;
+            }
             if (should_exit_from_key(key) || !window_visible) {
                 request_stop();
             }
         }
-
-        previous_output_ = frame.display;
     }
 
     teardown_components();
@@ -505,7 +510,6 @@ auto ControlLoop::teardown_components() -> void {
 
     negotiated_format_.reset();
     guidance_.reset();
-    previous_output_ = cv::Mat{};
 }
 
 auto ControlLoop::request_stop() -> void {
@@ -551,8 +555,9 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
         return;
     }
     const auto* top_detection = detection.detections.empty() ? nullptr : &detection.detections.front();
-    const bool is_purple = detection.detected && top_detection != nullptr && top_detection->class_id == 0
-                        && top_detection->score >= 0.25F;
+    // Model contract: Purple HIT is class_id 2.
+    const bool is_purple = detection.detected && top_detection != nullptr
+                        && top_detection->class_id == 2 && top_detection->score >= 0.25F;
     const float frame_dt_s = negotiated_format_->framerate > 0.0
                                ? 1.0F / static_cast<float>(negotiated_format_->framerate)
                                : 1.0F / 60.0F;
@@ -570,6 +575,7 @@ auto ControlLoop::maybe_switch_hik_profile() -> void {
         return;
     }
 
+    // Local HitProgress difficulty (RM2026 §5.6.3): 1/2 → lit (set 1), 3 → unlit (set 2).
     const int difficulty = hit_progress_.difficulty();
     const bool want_unlit = difficulty >= 3;
     const int target = want_unlit ? 3 : 1;

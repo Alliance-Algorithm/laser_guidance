@@ -17,31 +17,21 @@ namespace rmcs_laser_guidance {
 
 namespace {
 
-constexpr int kInputWidth = 640;
-constexpr int kInputHeight = 640;
+constexpr int kDeploymentInputSize = 1280;
 
-auto build_tensorrt_run_result(
-    const ModelRunResult& base, const std::vector<float>& output, std::int32_t input_w,
-    std::int32_t input_h, float scale, float pad_x, float pad_y) -> ModelRunResult {
-    ModelRunResult result;
-    result.success = true;
-    result.transform = ModelImageTransform{
-        .original_width = input_w,
-        .original_height = input_h,
-        .input_width = kInputWidth,
-        .input_height = kInputHeight,
-        .scale = scale,
-        .pad_x = pad_x,
-        .pad_y = pad_y,
-    };
-    result.outputs.push_back(
-        ModelTensorData{
-            .name = "output0",
-            .shape = {1, 300, 6},
-            .element_type = "float32",
-            .values = output,
-        });
-    return result;
+auto model_value_infos(const std::vector<TensorRTMeta::TensorInfo>& tensors)
+    -> std::vector<ModelValueInfo> {
+    std::vector<ModelValueInfo> values;
+    values.reserve(tensors.size());
+    for (const auto& tensor : tensors) {
+        values.push_back(
+            ModelValueInfo{
+                .name = tensor.name,
+                .shape = tensor.shape,
+                .element_type = "float32",
+            });
+    }
+    return values;
 }
 
 } // namespace
@@ -90,29 +80,59 @@ struct ModelInfer::Details {
     }
 
     auto make_base_result() const -> ModelInferResult {
+        std::vector<ModelValueInfo> inputs;
+        std::vector<ModelValueInfo> outputs;
+        if (tensorrt_engine) {
+            const auto& meta = tensorrt_engine->meta();
+            inputs = model_value_infos(meta.inputs);
+            outputs = model_value_infos(meta.outputs);
+        } else {
+            inputs = runtime.input_values();
+            outputs = runtime.output_values();
+        }
         return {
             .enabled = runtime_enabled,
             .success = false,
             .contract_supported = false,
             .observation = {},
             .candidates = {},
-            .inputs = runtime.input_values(),
-            .outputs = runtime.output_values(),
+            .inputs = std::move(inputs),
+            .outputs = std::move(outputs),
             .message = message,
         };
     }
 
     auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
-        auto [input_data, transform] = preprocess_blob(frame.image, kInputWidth, kInputHeight);
-        std::vector<float> output(300 * 6);
-        auto run_result = tensorrt_engine->run(input_data, output);
+        auto [input_data, transform] = preprocess_blob(
+            frame.image, kDeploymentInputSize, kDeploymentInputSize);
+        const auto& meta = tensorrt_engine->meta();
+        if (meta.outputs.size() != 1 || meta.outputs.front().name != "output0") {
+            result.message = "TensorRT output contract requires exactly one output named output0";
+            return result;
+        }
+        std::vector<float> output;
+        std::vector<std::int64_t> output_shape;
+        const std::vector<std::int64_t> input_shape{
+            1, 3, kDeploymentInputSize, kDeploymentInputSize};
+        auto run_result = tensorrt_engine->run(input_data, input_shape, output, output_shape);
         if (!run_result) {
             result.message = "TensorRT inference: " + run_result.error();
             return result;
         }
-        auto run_model = build_tensorrt_run_result(
-            {}, output, frame.image.cols, frame.image.rows, transform.scale,
-            transform.pad_x, transform.pad_y);
+        if (output_shape != std::vector<std::int64_t>{1, 300, 6}) {
+            result.message = "TensorRT output contract requires resolved shape {1, 300, 6}";
+            return result;
+        }
+        ModelRunResult run_model;
+        run_model.success = true;
+        run_model.transform = transform;
+        run_model.outputs.push_back(
+            ModelTensorData{
+                .name = meta.outputs.front().name,
+                .shape = std::move(output_shape),
+                .element_type = "float32",
+                .values = output,
+            });
         auto adapter_result = adapt_yolo_outputs(frame, run_model);
         result.success = adapter_result.success;
         result.contract_supported = adapter_result.contract_supported;

@@ -62,7 +62,10 @@ struct RtpConfig {
     int port = 5002;
     std::filesystem::path sdp_path = "/tmp/laser_guidance.sdp";
     std::string encoder = "h264_nvenc";
-    std::string bitrate = "12M";
+    std::string bitrate = "16M";
+    // 0 = full source resolution / camera rate (no downscale or fps cap).
+    int max_width = 0;
+    int max_fps = 0;
 };
 
 struct UdpConfig {
