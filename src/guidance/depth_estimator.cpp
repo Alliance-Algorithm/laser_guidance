@@ -11,7 +11,8 @@ DepthEstimator::DepthEstimator(const GuidanceConfig& config, const cv::Mat& came
 
 auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::optional<float> {
     const float fx = static_cast<float>(camera_matrix_.at<double>(0, 0));
-    if (fx <= 0.0F)
+    const float fy = static_cast<float>(camera_matrix_.at<double>(1, 1));
+    if (fx <= 0.0F || fy <= 0.0F)
         return std::nullopt;
 
     const int class_id = candidate.class_id;
@@ -26,40 +27,20 @@ auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::opt
         }
     }
 
-    // The laser detection module is an octagonal prism mounted coaxially on a
-    // vertical rigid pole (RM2026 rulebook S189/S191/S192: cannot move relative
-    // to the airframe, cannot be inverted). Its axis stays vertical in world
-    // space, so the horizontal pixel extent (bbox.width) tracks the module's
-    // ~50mm outer diameter and is only affected by yaw/azimuth (±~19% across
-    // the 8 faces). The vertical extent (bbox.height, module's 72mm height)
-    // shortens with camera pitch/elevation via standard foreshortening, so
-    // using it (or max(w,h), which picks height at low pitch) as the depth
-    // divisor overestimates depth as pitch increases. Always use bbox.width.
-    const float pixel_size = candidate.bbox.width;
-    if (pixel_size <= 0.0F)
+    // Area-based depth: depth² = fx·fy·W·H / (w·h)
+    // Uses both bbox dimensions as a product → ~30% lower relative noise
+    // than width-only. Pitch-induced bias at 30° is ~7% (vs 0% for width-only
+    // but 15% for height-only); at typical long-range pitch this is negligible
+    // compared to the detection noise reduction.
+    const float bbox_area = candidate.bbox.width * candidate.bbox.height;
+    if (bbox_area <= 0.0F)
         return std::nullopt;
 
-    const float depth_mm = fx * physical_width_mm / pixel_size;
-    if (depth_mm <= 0.0F)
+    const float depth_sq = fx * fy * physical_width_mm * physical_height_mm / bbox_area;
+    if (depth_sq <= 0.0F)
         return std::nullopt;
 
-    // Aspect-ratio sanity gate: if w/h deviates strongly from expected
-    // physical ratio, the target may be at a steep pitch angle where width
-    // also begins to foreshorten. In that regime, inflate the variance
-    // annotation so the depth filter can assign lower confidence.
-    const float bw = candidate.bbox.width;
-    const float bh = candidate.bbox.height;
-    if (bh > 0.0F && physical_height_mm > 0.0F) {
-        const float expected_ratio = physical_width_mm / physical_height_mm;
-        const float observed_ratio = bw / bh;
-        const float ratio_err = std::abs(observed_ratio - expected_ratio) / expected_ratio;
-        if (ratio_err > 0.3F) {
-            // Severe aspect mismatch: halve confidence via depth_scale
-            return depth_mm * config_.depth_scale * 0.7F;
-        }
-    }
-
-    return depth_mm * config_.depth_scale;
+    return std::sqrt(depth_sq) * config_.depth_scale;
 }
 
 } // namespace rmcs_laser_guidance

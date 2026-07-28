@@ -50,10 +50,8 @@ void test_depth_basic() {
     std::println("  depth_basic: {}mm (expected ~{}mm)", *depth, expected);
 }
 
-void test_depth_bidirectional() {
-    // Width-only estimator: bbox.height ignored by design (pitch invariant).
-    // When aspect ratio deviates strongly (w=10,h=30 vs expected 1:1),
-    // the aspect gate applies a 0.7x penalty via depth_scale fallback.
+void test_depth_area() {
+    // Area-based depth: depth = sqrt(fx·fy·W·H / (w·h))
     auto cfg = make_test_config(150.0F);
     auto K = make_k_matrix(2000.0, 2000.0);
     DepthEstimator estimator(cfg, K);
@@ -61,14 +59,14 @@ void test_depth_bidirectional() {
     ModelCandidate candidate;
     candidate.class_id = 0;
     candidate.bbox = cv::Rect2f{0, 0, 10.0F, 30.0F};
-    float depth_w = 2000.0F * 150.0F / 10.0F;
-    float expected = depth_w * 0.7F;  // aspect gate penalty for severe w/h mismatch
+    // depth = sqrt(2000*2000*150*150 / (10*30)) = sqrt(3e8) ≈ 17320.5
+    float expected = 17320.508F;
 
     auto depth = estimator.estimate(candidate);
-    require(depth.has_value(), "depth_bidirectional: expected a value");
-    require_near(*depth, expected, 1.0F, "depth_bidirectional");
+    require(depth.has_value(), "depth_area: expected a value");
+    require_near(*depth, expected, 1.0F, "depth_area");
 
-    std::println("  depth_bidirectional: {}mm (depth_w={}, penalized)", *depth, depth_w);
+    std::println("  depth_area: {}mm", *depth);
 }
 
 void test_depth_unknown_class() {
@@ -144,7 +142,7 @@ void test_depth_large_distance() {
 int main() {
     std::println("depth_estimator_test:");
     test_depth_basic();
-    test_depth_bidirectional();
+    test_depth_area();
     test_depth_unknown_class();
     test_depth_zero_size();
     test_depth_invalid_fx();
