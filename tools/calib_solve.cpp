@@ -223,9 +223,10 @@ int main(int argc, char** argv) {
     std::println("r_z_deg: {:.2f}", rz);
     std::println("q: ({:.6f}, {:.6f}, {:.6f}, {:.6f})", q.w(), q.x(), q.y(), q.z());
 
-    // Translation from coplanarity: estimate (t_x, t_y) direction + magnitude.
-    // t_z = 0 (physical constraint: camera and galvo on same horizontal plane).
-    // Use mean depth from records if available, otherwise use physical prior.
+    // Translation from coplanarity: estimate (t_x, t_y) only.
+    // Runtime uses measured mount: t = galvo in camera frame (mm), e.g. t_z=20
+    // when the camera sits 20mm behind the galvo. This solver still forces t_z=0
+    // and is weak on |t|; prefer hand-measured t_x/t_y/t_z for geometry mode.
     float known_depth = 0.0F;
     for (const auto& r : recs)
         if (r.depth_mm > 0.0F) known_depth = r.depth_mm;
@@ -237,10 +238,10 @@ int main(int argc, char** argv) {
     auto config = load_config(config_path);
     auto init = config.guidance;
     std::println("");
-    std::println("=== TRANSLATION (coplanar SVD, t_z=0) ===");
-    std::println("t_x_mm: {:.1f}", t_xy.x());
-    std::println("t_y_mm: {:.1f}", t_xy.y());
-    std::println("t_z_mm: 0.0");
+    std::println("=== TRANSLATION (coplanar SVD; t_z fixed 0 — prefer measured mount) ===");
+    std::println("t_x_mm: {:.1f}  (runtime prior t_x={:.1f})", t_xy.x(), init.t_x_mm);
+    std::println("t_y_mm: {:.1f}  (runtime prior t_y={:.1f})", t_xy.y(), init.t_y_mm);
+    std::println("t_z_mm: 0.0  (runtime prior t_z={:.1f} mm)", init.t_z_mm);
 
     // Compute direction-matching error
     double dir_err = 0.0;

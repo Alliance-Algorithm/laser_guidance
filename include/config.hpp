@@ -126,13 +126,14 @@ struct GuidanceConfig {
     std::vector<TargetGeometry> target_geometry{};
     std::filesystem::path camera_calib_path{};
     std::filesystem::path voltage_model_path{};
+    // t_*_mm: galvo origin in camera frame (mm). r_*_deg: Euler for R=Rz(-rz)Ry(-rx)Rx(-ry).
     float t_x_mm = 0.0F;
     float t_y_mm = 0.0F;
     float t_z_mm = 0.0F;
     float r_x_deg = 0.0F;
     float r_y_deg = 0.0F;
     float r_z_deg = 0.0F;
-    float mirror_separation_mm = 15.0F;
+    float mirror_separation_mm = 15.0F;  // dual-mirror axial gap (mm)
     float max_optical_angle_deg = 30.0F;
     float input_voltage_range_v = 5.0F;
     float dac_voltage_range_v = 10.0F;
