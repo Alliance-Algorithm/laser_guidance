@@ -21,10 +21,6 @@ public:
 
     auto solve_angles(Eigen::Vector3f P_camera) const -> GalvoAngles;
 
-    // Direction-based (no depth): d_cam = normalized camera ray direction.
-    // Equivalent to placing target at infinity → translation has zero effect.
-    auto solve_angles_from_direction(Eigen::Vector3f d_cam) const -> GalvoAngles;
-
     [[nodiscard]] auto rotation() const -> const Eigen::Quaternionf& { return rot_; }
     [[nodiscard]] auto translation() const -> const Eigen::Vector3f& { return trans_; }
     [[nodiscard]] auto mirror_sep() const -> float { return mirror_sep_mm_; }

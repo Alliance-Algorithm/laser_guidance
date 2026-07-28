@@ -47,24 +47,4 @@ auto CameraGalvoGeometry::solve_angles(Eigen::Vector3f P_camera) const -> GalvoA
     };
 }
 
-auto CameraGalvoGeometry::solve_angles_from_direction(Eigen::Vector3f d_cam) const -> GalvoAngles {
-    if (d_cam.z() <= 0.0F)
-        return {};
-
-    // d_gal = direction in galvo frame (far-field: translation negligible)
-    Eigen::Vector3f d_gal = rot_ * d_cam.normalized();
-
-    if (d_gal.z() <= 0.0F)
-        return {};
-
-    // Direction → optical angles.
-    // Mirror model: θ_opt = atan2(Y, Z+d) = atan2(d_y, d_z) for d/λ→0.
-    constexpr float kRadToDeg = 180.0F / 3.14159265358979323846F;
-    return {
-        .theta_x_optical_deg = kRadToDeg * std::atan2(d_gal.x(), std::sqrt(d_gal.y() * d_gal.y() + d_gal.z() * d_gal.z())),
-        .theta_y_optical_deg = kRadToDeg * std::atan2(d_gal.y(), d_gal.z()),
-        .valid = true,
-    };
-}
-
 } // namespace rmcs_laser_guidance
