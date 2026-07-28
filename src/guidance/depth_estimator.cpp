@@ -16,10 +16,12 @@ auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::opt
 
     const int class_id = candidate.class_id;
     float physical_width_mm = 150.0F;
+    float physical_height_mm = 150.0F;
 
     for (const auto& geom : config_.target_geometry) {
         if (geom.class_id == class_id) {
             physical_width_mm = geom.width_mm;
+            physical_height_mm = geom.height_mm;
             break;
         }
     }
@@ -40,6 +42,22 @@ auto DepthEstimator::estimate(const ModelCandidate& candidate) const -> std::opt
     const float depth_mm = fx * physical_width_mm / pixel_size;
     if (depth_mm <= 0.0F)
         return std::nullopt;
+
+    // Aspect-ratio sanity gate: if w/h deviates strongly from expected
+    // physical ratio, the target may be at a steep pitch angle where width
+    // also begins to foreshorten. In that regime, inflate the variance
+    // annotation so the depth filter can assign lower confidence.
+    const float bw = candidate.bbox.width;
+    const float bh = candidate.bbox.height;
+    if (bh > 0.0F && physical_height_mm > 0.0F) {
+        const float expected_ratio = physical_width_mm / physical_height_mm;
+        const float observed_ratio = bw / bh;
+        const float ratio_err = std::abs(observed_ratio - expected_ratio) / expected_ratio;
+        if (ratio_err > 0.3F) {
+            // Severe aspect mismatch: halve confidence via depth_scale
+            return depth_mm * config_.depth_scale * 0.7F;
+        }
+    }
 
     return depth_mm * config_.depth_scale;
 }

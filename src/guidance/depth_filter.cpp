@@ -35,7 +35,7 @@ struct DepthFilter::Details {
     }
 
     auto build_q(const double dt) const -> cv::Mat {
-        const double q = std::max(config.depth_process_noise_q, 1e-12);
+        const double q = std::max(config.depth_process_noise_q * adaptive_q_scale, 1e-12);
         const double dt2 = dt * dt;
         const double dt3 = dt2 * dt;
         const double dt4 = dt3 * dt;
@@ -48,11 +48,25 @@ struct DepthFilter::Details {
         return q * q_mat;
     }
 
+    auto update_adaptive_q(const double innovation, const double innovation_cov) -> void {
+        if (innovation_cov <= 0.0) return;
+        const double nu = std::abs(innovation) / std::sqrt(innovation_cov);
+        // Maneuver threshold: 3-sigma. Scale Q when innovation exceeds this.
+        constexpr double kThreshold = 2.5;
+        constexpr double kGain = 0.15;       // how aggressive the adaptation is
+        constexpr double kDecay = 0.95;       // per-frame decay toward nominal
+        if (nu > kThreshold) {
+            adaptive_q_scale = 1.0 + kGain * (nu - kThreshold) * (nu - kThreshold);
+        }
+        adaptive_q_scale = 1.0 + (adaptive_q_scale - 1.0) * kDecay;
+    }
+
     GuidanceConfig config;
     cv::Mat x;
     cv::Mat p;
     bool initialized = false;
     int missed_frames = 0;
+    double adaptive_q_scale = 1.0;
 };
 
 DepthFilter::DepthFilter(GuidanceConfig config)
@@ -91,6 +105,9 @@ auto DepthFilter::update(const float measured_depth_mm) -> void {
     const double r = std::max(details_->config.depth_measurement_noise_r, 1e-9);
     const double innovation = static_cast<double>(measured_depth_mm) - details_->x.at<double>(0, 0);
     const double s = details_->p.at<double>(0, 0) + r;
+
+    details_->update_adaptive_q(innovation, s);
+
     const double k0 = details_->p.at<double>(0, 0) / s;
     const double k1 = details_->p.at<double>(1, 0) / s;
 
