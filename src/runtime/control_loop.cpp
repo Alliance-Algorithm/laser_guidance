@@ -365,6 +365,7 @@ auto ControlLoop::run_loop() -> void {
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
+        // Capture delivers BGR8 (Hik ConvertPixelType). One clone for overlay writes only.
         frame.display = frame.frame.image.clone();
 
         outputs_.publish_previous(previous_output_);

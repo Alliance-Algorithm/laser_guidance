@@ -82,7 +82,7 @@ auto to_capture_format(
         .framerate = format.framerate,
         .format_name = format.pixel_format_name,
         .device_path = device_info.device_id,
-        .pixel_encoding = "BGR8",
+        .pixel_encoding = format.pixel_format_name,
     };
 }
 
