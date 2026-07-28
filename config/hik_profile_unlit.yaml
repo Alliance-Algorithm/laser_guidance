@@ -69,7 +69,7 @@ zmq:
   host: 127.0.0.1
   port: 5555
 ekf:
-  enabled: false
+  enabled: true
   process_noise_q: 0.35
   measurement_noise_r: 0.015
   initial_pos_std: 100.0
@@ -103,7 +103,7 @@ guidance:
   voltage_gain_y: 1.35
   t_x_mm: 85.5
   t_y_mm: 15.0
-  t_z_mm: 0.0
+  t_z_mm: 20.0
   r_x_deg: -1.54
   r_y_deg: 0.08
   r_z_deg: -179.17

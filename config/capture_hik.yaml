@@ -125,7 +125,7 @@ guidance:
   depth_max_missed_frames: 5
   t_x_mm: 85.5
   t_y_mm: 15.0
-  t_z_mm: 0.0
+  t_z_mm: 20.0
   r_x_deg: 0.31
   r_y_deg: 0.05
   r_z_deg: 1.82

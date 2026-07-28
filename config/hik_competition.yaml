@@ -71,14 +71,14 @@ zmq:
   host: 127.0.0.1
   port: 5555
 ekf:
-  enabled: false
+  enabled: true
   process_noise_q: 0.35
   measurement_noise_r: 0.015
   initial_pos_std: 100.0
   initial_vel_std: 100.0
   initial_acc_std: 35.0
   max_missed_frames: 5
-  lookahead_ms: 30.0
+  lookahead_ms: 25.0
 guidance:
   enabled: true
   command_model: geometry
@@ -105,7 +105,7 @@ guidance:
   voltage_gain_y: 1.35
   t_x_mm: 85.5
   t_y_mm: 15.0
-  t_z_mm: 0.0
+  t_z_mm: 20.0
   r_x_deg: -1.54
   r_y_deg: 0.08
   r_z_deg: -179.17
@@ -121,7 +121,7 @@ guidance:
     y_minus_channel: 3
   angle_offset_x_deg: 0.0
   angle_offset_y_deg: 0.0
-  scan_mode: rectangle
+  scan_mode: single
   scan_width_deg: 0.8
   scan_height_deg: 0.8
   scan_grid_n: 5
