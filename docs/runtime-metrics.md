@@ -38,7 +38,7 @@
 | Field | Description |
 |-------|-------------|
 | `detected` | `true/false` |
-| `class_id` | `0=Red, 1=Blue, 2=Purple` |
+| `class_id` | `0=Red, 1=Blue, 2=Purple, 3=Colorless` |
 | `confidence` | Detection confidence |
 | `center_x`, `center_y` | Bbox center (pixels) |
 | `bbox_x1`, `bbox_y1`, `bbox_x2`, `bbox_y2` | Bbox corners (pixels) |

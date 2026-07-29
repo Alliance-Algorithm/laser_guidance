@@ -57,6 +57,7 @@ int main() {
             require(format.height == 1080, "hik height mismatch");
             require_near(static_cast<float>(format.framerate), 119.88F, 1e-3F, "hik framerate");
             require(format.format_name == "BGR8", "hik format name mismatch");
+            require(format.pixel_encoding == "BGR8", "hik pixel encoding mismatch");
         }
 
         {

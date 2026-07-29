@@ -53,7 +53,7 @@ image_path,category,expected_detected,expected_color_state,notes,source_session_
 | `image_path` | Relative path to the validation image |
 | `category` | One of the required hard-case categories below |
 | `expected_detected` | `true` or `false` |
-| `expected_color_state` | `Red`, `Blue`, `Purple`, `Unknown`, or `None` |
+| `expected_color_state` | `Red`, `Blue`, `Purple`, `Colorless`, `Unknown`, or `None` |
 | `notes` | Free-form context for edge cases |
 | `source_session_id` | Source session directory name, e.g. `20260502T093007` |
 | `source_timestamp_ms` | Timestamp of the frame in the original recording |
@@ -119,14 +119,17 @@ The full extracted `dataset/train/images/` directory remains training/labeling m
 This manifest is used to check:
 
 1. whether ONNX and TensorRT both detect the same frames
-2. whether `Red/Blue/Purple` class decisions are stable
+2. whether `Red/Blue/Purple/Colorless` class decisions are stable
 3. whether no-target frames remain empty
 4. whether runtime postprocess and Purple/HIT logic behave as expected
 
 ## Current Notes
 
-- Training contract is currently `Red(0)`, `Blue(1)`, `Purple(2)`.
+- Training / ONNX contract (`exp-2` metadata `names`): `Red(0)`, `Blue(1)`, `Purple(2)`, `Colorless(3)`.
+- Purple HIT uses **class id 2**, not 0.
+- Colorless (3) is background / no-color and must not be treated as a team target or HIT.
 - Purple is a model class, not a separate ROI color classifier in v1.
-- `match_color` filtering still applies at runtime:
-  - `match_color=red` → accept `Blue` + `Purple`
-  - `match_color=blue` → accept `Red` + `Purple`
+- Enemy-color filtering still applies at runtime (`enemy_color` = armor to attack):
+  - `enemy_color=red` → accept `Red(0)` + `Purple(2)`; reject `Blue(1)` + `Colorless(3)`
+  - `enemy_color=blue` → accept `Blue(1)` + `Purple(2)`; reject `Red(0)` + `Colorless(3)`
+  - `enemy_color=auto` → keep Red/Blue/Purple; reject `Colorless(3)`

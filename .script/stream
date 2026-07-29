@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/rtp-common.sh"
 source "$SCRIPT_DIR/host-runtime-env.sh"
 laser_prepare_host_runtime_env
 CONFIG="${1:-}"
-[ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/default.yaml")"
+[ -z "$CONFIG" ] && CONFIG="$(cat "$STORE" 2>/dev/null || echo "$REPO_ROOT/config/hik_competition.yaml")"
 if [[ "$CONFIG" != /* ]]; then
     CONFIG="$REPO_ROOT/$CONFIG"
 fi
@@ -62,13 +62,21 @@ launch_ffplay() {
         echo "warning: ffplay not found; daemon keeps running, but local playback is skipped"
         return 0
     fi
+    # Prefer CUDA decode when available (full-res UI stays smooth on GPU).
+    local dec_args=()
+    if ffmpeg -hide_banner -decoders 2>/dev/null | grep -q h264_cuvid; then
+        dec_args=(-hwaccel cuda -c:v h264_cuvid)
+    fi
     ffplay -hide_banner -loglevel warning -nostats \
         -protocol_whitelist file,rtp,udp \
-        -fflags discardcorrupt \
+        -fflags nobuffer+discardcorrupt \
         -flags low_delay \
-        -probesize 2000000 \
-        -analyzeduration 2000000 \
+        -framedrop \
+        -infbuf \
+        -probesize 32 \
+        -analyzeduration 0 \
         -sync ext \
+        "${dec_args[@]}" \
         "$SDP"
 }
 

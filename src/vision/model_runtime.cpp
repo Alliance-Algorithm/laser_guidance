@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <onnxruntime/core/session/onnxruntime_cxx_api.h>
 
@@ -58,19 +58,24 @@ auto extract_value_info(
     return values;
 }
 
-auto input_dimensions(const ModelValueInfo& input, const cv::Mat& image) -> std::pair<int, int> {
+auto input_dimensions(const ModelValueInfo& input, const cv::Mat& /*image*/) -> std::pair<int, int> {
     if (input.shape.size() != 4)
         throw std::runtime_error("model input must be a 4D tensor");
     if (input.shape[1] != 3)
         throw std::runtime_error("model input must use NCHW with 3 channels");
 
     constexpr int kYoloStride = 32;
+    constexpr int kDefaultDynamicSize = 1216;
+    static_assert(kDefaultDynamicSize % kYoloStride == 0, "default dynamic size must be a multiple of YOLO stride");
     const int input_height =
         input.shape[2] > 0 ? static_cast<int>(input.shape[2])
-                           : ((image.rows + kYoloStride - 1) / kYoloStride * kYoloStride);
+                           : kDefaultDynamicSize;
     const int input_width =
         input.shape[3] > 0 ? static_cast<int>(input.shape[3])
-                           : ((image.cols + kYoloStride - 1) / kYoloStride * kYoloStride);
+                           : kDefaultDynamicSize;
+    if (input_height % kYoloStride != 0 || input_width % kYoloStride != 0)
+        throw std::runtime_error(
+            "model input dimensions must be multiples of " + std::to_string(kYoloStride));
     if (input_height <= 0 || input_width <= 0)
         throw std::runtime_error("model input height/width must resolve to positive values");
 
@@ -155,13 +160,38 @@ auto preprocess_blob(const cv::Mat& image, int input_w, int input_h)
     const float scale = std::min(scale_x, scale_y);
     const int resized_width = std::max(1, static_cast<int>(std::lround(image.cols * scale)));
     const int resized_height = std::max(1, static_cast<int>(std::lround(image.rows * scale)));
-    const float pad_x = static_cast<float>((input_w - resized_width) / 2);
-    const float pad_y = static_cast<float>((input_h - resized_height) / 2);
+    const int pad_left = (input_w - resized_width) / 2;
+    const int pad_top = (input_h - resized_height) / 2;
+    const float pad_x = static_cast<float>(pad_left);
+    const float pad_y = static_cast<float>(pad_top);
 
-    cv::Mat blob = cv::dnn::blobFromImage(
-        image, 1.0 / 255.0, cv::Size(input_w, input_h), cv::Scalar(114, 114, 114), true, false);
+    // Normal path: capture already delivers BGR8. Mono is defensive only (e.g. gray V4L2).
+    cv::Mat bgr;
+    if (image.channels() == 1) {
+        cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
+    } else {
+        bgr = image;
+    }
 
-    std::vector<float> data(blob.ptr<float>(0), blob.ptr<float>(0) + blob.total());
+    cv::Mat resized;
+    cv::resize(bgr, resized, cv::Size(resized_width, resized_height), 0.0, 0.0, cv::INTER_LINEAR);
+
+    cv::Mat padded(input_h, input_w, CV_8UC3, cv::Scalar(114, 114, 114));
+    resized.copyTo(padded(cv::Rect(pad_left, pad_top, resized_width, resized_height)));
+
+    padded.convertTo(padded, CV_32FC3, 1.0 / 255.0);
+
+    std::vector<float> data(3 * input_w * input_h);
+    for (int c = 0; c < 3; ++c) {
+        const int src_channel = 2 - c; // BGR→RGB swap during packing
+        for (int y = 0; y < input_h; ++y) {
+            const float* row = padded.ptr<float>(y);
+            for (int x = 0; x < input_w; ++x) {
+                data[c * input_w * input_h + y * input_w + x] = row[x * 3 + src_channel];
+            }
+        }
+    }
+
     return {
         std::move(data),
         ModelImageTransform{

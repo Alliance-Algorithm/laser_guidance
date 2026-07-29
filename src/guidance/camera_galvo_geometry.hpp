@@ -11,6 +11,10 @@ struct GalvoAngles {
     bool valid = false;
 };
 
+// Camera/galvo frames: OpenCV camera (X right, Y down, Z forward), mm / deg.
+// t = galvo origin expressed in the camera frame (not camera-in-galvo).
+// Example: camera 85.5mm right, 15.5mm below, 20mm behind galvo
+//   → t = (-85.5, -15.5, +20) mm. Rotation: R = Rz(-rz) Ry(-rx) Rx(-ry).
 class CameraGalvoGeometry {
 public:
     CameraGalvoGeometry(float t_x_mm, float t_y_mm, float t_z_mm,

@@ -37,7 +37,10 @@ public:
     auto apply_requests(
         bool streaming_requested, bool recording_requested,
         const std::optional<CaptureFormat>& negotiated_format) -> void;
-    auto publish_previous(cv::Mat& previous_output) -> void;
+    // Publishes UI frame to SHM/RTP. Prefer rvalue when the caller no longer needs the mat
+    // (streaming path) to avoid an extra full-frame clone.
+    auto publish_frame(const cv::Mat& frame) -> void;
+    auto publish_frame(cv::Mat&& frame) -> void;
     auto record_current(const cv::Mat& frame) -> void;
     auto publish_snapshot(const RuntimeSnapshot& snapshot) -> void;
     auto stop() -> void;

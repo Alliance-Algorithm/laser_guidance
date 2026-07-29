@@ -122,8 +122,9 @@ void test_geometry_positive_x() {
 }
 
 void test_geometry_extrinsic_offset() {
-    CameraGalvoGeometry geom(85.5F, 15.0F, 0.0F, 0.0F, 0.0F, 0.0F, 15.0F);
-    auto a = geom.solve_angles({85.5F, 15.0F, 10000.0F});
+    // t = galvo in camera frame: camera right/below/behind → negative t_x/t_y, +t_z
+    CameraGalvoGeometry geom(-85.5F, -15.5F, 20.0F, 0.0F, 0.0F, 0.0F, 15.0F);
+    auto a = geom.solve_angles({-85.5F, -15.5F, 10020.0F});
     CHECK(a.valid);
     CHECK(std::abs(a.theta_x_optical_deg) < kEps);
     CHECK(std::abs(a.theta_y_optical_deg) < kEps);

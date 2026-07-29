@@ -30,11 +30,31 @@ auto to_enemy_class_id(const EnemyColor color) -> int { return static_cast<int>(
 } // namespace
 
 auto OverlayRenderer::render(ControlLoopFrame& frame, const OverlayRenderContext& context) const -> void {
-    if (frame.detection.detected || !frame.detection.detections.empty()) {
+    // Draw detections shifted onto the current display frame using track.aim_center
+    // (age-compensated EKF). Raw async boxes look "stuck" on a smooth video stream.
+    if (frame.track.detected && frame.track.selected_detection.has_value()) {
+        const auto& src = *frame.track.selected_detection;
+        const cv::Point2f shift = frame.track.aim_center - src.center;
+        ModelCandidate drawn{
+            .score = src.score,
+            .class_id = src.class_id,
+            .bbox =
+                cv::Rect2f{
+                    src.bbox.x + shift.x, src.bbox.y + shift.y, src.bbox.width, src.bbox.height},
+            .center = frame.track.aim_center,
+        };
+        draw_candidates(frame.display, {drawn});
+    } else if (frame.detection.detected || !frame.detection.detections.empty()) {
         draw_candidates(frame.display, to_model_candidates(frame.detection));
     }
-    if (frame.ekf_state.has_value()) {
-        draw_ekf_state(frame.display, *frame.ekf_state);
+    if (frame.ekf_state.has_value() && frame.track.ekf_enabled) {
+        // Show age-compensated aim, not the stale filter position alone.
+        EkfState draw_state = *frame.ekf_state;
+        if (frame.track.initialized && !frame.track.lost) {
+            draw_state.position = frame.track.aim_center;
+            draw_state.velocity = frame.track.velocity;
+        }
+        draw_ekf_state(frame.display, draw_state);
     }
 
     if (context.calibration_mode && context.guidance_ready && context.calibration_state != nullptr) {

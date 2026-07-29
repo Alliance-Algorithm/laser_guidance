@@ -10,8 +10,8 @@ auto to_enemy_class_id(const EnemyColor color) -> int { return static_cast<int>(
 
 auto to_enemy_color(const int class_id) -> EnemyColor {
     switch (class_id) {
-    case 1: return EnemyColor::red;
-    case 2: return EnemyColor::blue;
+    case 0: return EnemyColor::red;
+    case 1: return EnemyColor::blue;
     default: return EnemyColor::auto_select;
     }
 }
@@ -29,16 +29,23 @@ auto to_detection(const ModelCandidate& candidate) -> Detection {
     };
 }
 
+// Model ids: 0=Red, 1=Blue, 2=Purple(HIT), 3=Colorless(reject).
+// Keep only the selected enemy armor color and purple hits.
 auto filter_detections(std::vector<Detection>& detections, const EnemyColor enemy_color) -> void {
     const int enemy_class_id = to_enemy_class_id(enemy_color);
     if (enemy_class_id < 0) {
+        detections.erase(
+            std::remove_if(
+                detections.begin(), detections.end(),
+                [](const Detection& detection) { return detection.class_id == 3; }),
+            detections.end());
         return;
     }
     detections.erase(
         std::remove_if(
             detections.begin(), detections.end(),
             [enemy_class_id](const Detection& detection) {
-                return detection.class_id != 0 && detection.class_id != enemy_class_id;
+                return detection.class_id != 2 && detection.class_id != enemy_class_id;
             }),
         detections.end());
 }
@@ -227,8 +234,20 @@ auto PerceptionRunner::run() -> void {
             if (!infer_result.has_value()) {
                 continue;
             }
+            if (!infer_result->success) {
+                std::scoped_lock lock(state_mutex_);
+                last_error_ = "perception inference failed: " + infer_result->message;
+                continue;
+            }
+            {
+                std::scoped_lock lock(state_mutex_);
+                if (last_error_.starts_with("perception inference failed: ")) {
+                    last_error_.clear();
+                }
+            }
 
             auto batch = to_detection_batch(*infer_result);
+            batch.capture_time = queued_frame.capture_time;
             EnemyColor enemy_color = EnemyColor::auto_select;
             {
                 std::scoped_lock lock(state_mutex_);
