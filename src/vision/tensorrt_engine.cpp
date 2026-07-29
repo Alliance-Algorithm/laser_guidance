@@ -460,16 +460,14 @@ auto TensorRTEngine::run(
         return std::unexpected(oss.str());
     }
 
+    // ensure_buffer: capacity and required are always in BYTES (same unit as run_from_bgr).
     auto ensure_buffer = [&](void*& device_ptr, std::size_t& capacity, const std::size_t required,
                              const std::string_view label) -> std::expected<void, std::string> {
         if (capacity >= required)
             return {};
-        if (required > std::numeric_limits<std::size_t>::max() / sizeof(float))
-            return std::unexpected("TensorRT device buffer size overflow");
         cleanup_cuda(device_ptr);
         capacity = 0;
-        if (const cudaError_t status = cudaMalloc(&device_ptr, required * sizeof(float));
-            status != cudaSuccess) {
+        if (const cudaError_t status = cudaMalloc(&device_ptr, required); status != cudaSuccess) {
             return std::unexpected(cuda_error_message(status, std::string("cudaMalloc(") +
                                                                      std::string(label) + ")"));
         }
@@ -478,12 +476,12 @@ auto TensorRTEngine::run(
     };
 
     if (const auto result = ensure_buffer(
-            impl_->device_input, impl_->input_capacity, *input_elements, "input");
+            impl_->device_input, impl_->input_capacity, *input_elements * sizeof(float), "input");
         !result) {
         return std::unexpected(result.error());
     }
     if (const auto result = ensure_buffer(
-            impl_->device_output, impl_->output_capacity, *output_elements, "output");
+            impl_->device_output, impl_->output_capacity, *output_elements * sizeof(float), "output");
         !result) {
         return std::unexpected(result.error());
     }

@@ -1,6 +1,7 @@
 #include "vision/model_infer.hpp"
 
 #include "vision/cuda_check.hpp"
+#include <opencv2/imgproc.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -115,12 +116,20 @@ struct ModelInfer::Details {
         const int out_size = kDeploymentInputSize;
 
         // Fast GPU path: bypass CPU preprocess_blob entirely.
-        // The fused CUDA kernel uploads the raw uint8 frame, runs letterbox
-        // resize + normalize + CHW repack on GPU, and writes directly into the
-        // TRT device input buffer — no float host buffer involved.
+        // Require continuous CV_8UC3 BGR; normalize if needed.
+        cv::Mat bgr = frame.image;
+        if (bgr.channels() == 1) {
+            cv::cvtColor(bgr, bgr, cv::COLOR_GRAY2BGR);
+        } else if (bgr.channels() == 4) {
+            cv::cvtColor(bgr, bgr, cv::COLOR_BGRA2BGR);
+        }
+        if (!bgr.isContinuous() || bgr.type() != CV_8UC3) {
+            bgr = bgr.clone();
+        }
+
         auto run_result = tensorrt_engine->run_from_bgr(
-            frame.image.data,
-            frame.image.cols, frame.image.rows,
+            bgr.data,
+            bgr.cols, bgr.rows,
             out_size, out_size,
             output, output_shape);
 
