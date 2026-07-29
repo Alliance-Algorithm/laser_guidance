@@ -101,22 +101,22 @@ guidance:
   depth_scale: 0.955
   voltage_gain_x: 1.0
   voltage_gain_y: 1.35
-  t_x_mm: -85.5
-  t_y_mm: -15.5
+  t_x_mm: 85.5
+  t_y_mm: 15.0
   t_z_mm: 20.0
-  r_x_deg: 0.0
-  r_y_deg: 0.0
-  r_z_deg: 0.0
+  r_x_deg: 0.6
+  r_y_deg: 0.82
+  r_z_deg: 0.31
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
   dac_voltage_range_v: 10.0
   wiring:
     mode: differential
-    x_plus_channel: 0
-    x_minus_channel: 2
-    y_plus_channel: 1
-    y_minus_channel: 3
+    x_plus_channel: 2
+    x_minus_channel: 0
+    y_plus_channel: 3
+    y_minus_channel: 1
   angle_offset_x_deg: 0.0
   angle_offset_y_deg: 0.0
   scan_mode: single

@@ -2,7 +2,6 @@ capture_backend: hikcamera
 hik:
   device_id: ''
   timeout_ms: 1000
-  # lit (第一套): HitProgress difficulty 1/2 — 模块仍发光
   exposure_us: 500
   framerate: 80.0
   gain: 10
@@ -10,7 +9,6 @@ hik:
   software_sync: false
   trigger_mode: false
   fixed_framerate: true
-  # unlit (第二套): difficulty 3 — 模块不主动发光, 依赖本地 hit 切换
   profile_unlit:
     exposure_us: 1000
     gain: 10.0
@@ -34,7 +32,7 @@ runtime:
   max_observation_age_ms: 35
   max_infer_fps: 80
   warmup_frames: 30
-  engine_path: models/exp-2.engine
+  engine_path: models/exp-900-901.engine
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
@@ -43,7 +41,7 @@ runtime:
   record_queue_size: 16
 inference:
   backend: tensorrt
-  model_path: models/exp-2.engine
+  model_path: models/exp-900-901.engine
   enemy_color: auto
 record:
   output_root: ./videos
@@ -59,7 +57,7 @@ streaming:
   port: 5004
   sdp_path: /tmp/laser_guidance.sdp
   encoder: h264_nvenc
-  bitrate: "16M"
+  bitrate: 16M
   max_width: 0
   max_fps: 0
 udp:
@@ -103,22 +101,22 @@ guidance:
   depth_scale: 0.955
   voltage_gain_x: 1.0
   voltage_gain_y: 1.35
-  t_x_mm: -85.5
-  t_y_mm: -15.5
+  t_x_mm: 85.5
+  t_y_mm: 15.0
   t_z_mm: 20.0
-  r_x_deg: 0.0
-  r_y_deg: 0.0
-  r_z_deg: 0.0
+  r_x_deg: 0.6
+  r_y_deg: 0.82
+  r_z_deg: 0.31
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
   dac_voltage_range_v: 10.0
   wiring:
     mode: differential
-    x_plus_channel: 0
-    x_minus_channel: 2
-    y_plus_channel: 1
-    y_minus_channel: 3
+    x_plus_channel: 2
+    x_minus_channel: 0
+    y_plus_channel: 3
+    y_minus_channel: 1
   angle_offset_x_deg: 0.0
   angle_offset_y_deg: 0.0
   scan_mode: single

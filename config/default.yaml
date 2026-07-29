@@ -1,4 +1,4 @@
-capture_backend: v4l2    # v4l2 | hikcamera
+capture_backend: hikcamera    # v4l2 | hikcamera
 
 v4l2:
   device_path: /dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0
@@ -17,17 +17,17 @@ runtime:
   max_observation_age_ms: 35
   max_infer_fps: 60
   warmup_frames: 30
-  engine_path: "models/exp.engine"
+  engine_path: "models/exp-900-901.engine"
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
-  debug_max_fps: 0
+  debug_max_fps: 90
   record_enabled: true
   record_queue_size: 16
 
 inference:
-  backend: model
-  model_path: models/exp.onnx
+  backend: tensorrt
+  model_path: models/exp-900-901.onnx
 
 streaming:
   enabled: true

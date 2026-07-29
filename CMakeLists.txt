@@ -1,9 +1,18 @@
 cmake_minimum_required(VERSION 3.20)
-project(laser_guidance LANGUAGES CXX)
+project(laser_guidance LANGUAGES CXX CUDA)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+
+# CUDA: target the deployment GPU (Ada / sm_89). Adjust if the target changes.
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 89)
+endif()
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+# nvcc-generated host stubs trip -Wpedantic (# line directives); silence for CUDA only.
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-pedantic")
 
 option(LASER_LTO        "Enable link-time optimization" OFF)
 option(LASER_UNITY      "Enable unity (jumbo) builds"  OFF)
@@ -205,7 +214,7 @@ set(laser_guidance_support_SOURCES
   src/runtime/support.cpp
   src/runtime/runtime_command.cpp)
 file(GLOB_RECURSE laser_guidance_tracking_SOURCES CONFIGURE_DEPENDS src/tracking/*.cpp)
-file(GLOB_RECURSE laser_guidance_vision_SOURCES   CONFIGURE_DEPENDS src/vision/*.cpp)
+file(GLOB_RECURSE laser_guidance_vision_SOURCES   CONFIGURE_DEPENDS src/vision/*.cpp src/vision/*.cu)
 file(GLOB_RECURSE laser_guidance_guidance_SOURCES CONFIGURE_DEPENDS src/guidance/*.cpp)
 file(GLOB_RECURSE laser_guidance_bridges_SOURCES  CONFIGURE_DEPENDS src/streaming/*.cpp src/bridges/*.cpp)
 

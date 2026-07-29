@@ -364,50 +364,6 @@ auto ControlLoop::run_loop() -> void {
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
-        // Capture delivers BGR8 (Hik ConvertPixelType). One clone for overlay writes only.
-        frame.display = frame.frame.image.clone();
-
-        const auto perception_result = perception_.poll();
-        frame.detection = perception_result.detection;
-        frame.ekf_state = perception_result.ekf_state;
-        frame.dropped_frames = perception_.overwrite_count();
-
-        // Periodic detection log (~1 Hz)
-        {
-            static auto last_log = Clock::now();
-            const auto now = Clock::now();
-            if (now - last_log >= std::chrono::milliseconds(500)) {
-                last_log = now;
-                if (frame.detection.detected && !frame.detection.detections.empty()) {
-                    const auto& top = frame.detection.detections.front();
-                    std::println(
-                        std::clog,
-                        "[DETECT] score={:.3f} class_id={} bbox=[{:.0f}, {:.0f}, {:.0f}, {:.0f}]",
-                        top.score, top.class_id, top.bbox.x, top.bbox.y, top.bbox.width,
-                        top.bbox.height);
-                } else if (!frame.detection.detections.empty()) {
-                    const auto& top = frame.detection.detections.front();
-                    std::println(
-                        std::clog,
-                        "[DETECT] below_threshold top_score={:.4f} candidates={}",
-                        top.score, frame.detection.detections.size());
-                } else {
-                    std::println(std::clog, "[DETECT] no_candidates");
-                }
-            }
-        }
-        if (const auto error = perception_.last_error(); !error.empty()) {
-            sync_last_error(error);
-        }
-
-        if (perception_.degraded()) {
-            frame.detection = {};
-            frame.ekf_state.reset();
-        } else if (!perception_.submit(frame.frame)) {
-            sync_last_error(perception_.last_error());
-            request_stop();
-            break;
-        }
 
         bool ekf_enabled = false;
         EnemyColor enemy_color = EnemyColor::auto_select;
@@ -421,6 +377,18 @@ auto ControlLoop::run_loop() -> void {
             recording_requested = state_.recording_requested;
         }
 
+        // Poll latest inference result and push current frame to the worker.
+        {
+            const auto perception_result = perception_.poll();
+            frame.detection = perception_result.detection;
+            frame.ekf_state = perception_result.ekf_state;
+            frame.dropped_frames = perception_.overwrite_count();
+        }
+        if (!perception_.degraded()) {
+            perception_.submit(frame.frame);
+        }
+
+        // Compute track and guidance before overlay so boxes use the age-compensated position.
         frame.track = select_target_track(
             frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms,
             frame.frame.timestamp);
@@ -430,7 +398,13 @@ auto ControlLoop::run_loop() -> void {
 
         update_hit_progress(frame.detection);
         maybe_switch_hik_profile();
-        const auto pre_output_status = outputs_.status();
+
+        outputs_.apply_requests(
+            streaming_requested, recording_requested, negotiated_format_);
+        const auto output_status = outputs_.status();
+
+        // One clone for overlay draw + encode; render overlay in all modes (local + stream).
+        frame.display = frame.frame.image.clone();
         overlay_.render(
             frame,
             OverlayRenderContext{
@@ -441,17 +415,14 @@ auto ControlLoop::run_loop() -> void {
                 .calibration_state = nullptr,
                 .hit_progress =
                     options_.profile == CompetitionProfile::main ? &hit_progress_ : nullptr,
-                .streaming_active = pre_output_status.streaming_active,
-                .recording_active = pre_output_status.recording_active,
+                .streaming_active = output_status.streaming_active,
+                .recording_active = output_status.recording_active,
                 .enemy_color = enemy_color,
                 .using_tensorrt =
                     perception_.active_backend() == RuntimeBackend::tensorrt,
             });
 
-        outputs_.apply_requests(
-            streaming_requested, recording_requested, negotiated_format_);
         outputs_.record_current(frame.display);
-        const auto output_status = outputs_.status();
 
         RuntimeSnapshot latest_snapshot;
         {

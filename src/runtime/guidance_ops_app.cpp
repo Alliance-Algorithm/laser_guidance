@@ -18,38 +18,39 @@ auto apply_calibration_key(GuidanceCalibrationState& state, const GuidanceConfig
     -> std::optional<std::string> {
     const bool voltage_mode = config.command_model == GuidanceCommandModelKind::direct_voltage;
     switch (key) {
-    // WASD moves the laser spot in image-view sense: W up, S down, A left, D right.
-    // Hardware optical angle sign is opposite that view convention on this rig.
+    // WASD moves the laser spot in image-view sense.
+    // With X+/Y+ aligned to camera-right/down, angle controls are natural:
+    // W = up, S = down, A = left, D = right.
     case 'w':
     case 'W':
-        if (voltage_mode) {
-            state.voltage_y += state.voltage_step_v;
-        } else {
-            state.angle_y_deg += state.angle_step_deg;
-        }
-        break;
-    case 's':
-    case 'S':
         if (voltage_mode) {
             state.voltage_y -= state.voltage_step_v;
         } else {
             state.angle_y_deg -= state.angle_step_deg;
         }
         break;
+    case 's':
+    case 'S':
+        if (voltage_mode) {
+            state.voltage_y += state.voltage_step_v;
+        } else {
+            state.angle_y_deg += state.angle_step_deg;
+        }
+        break;
     case 'a':
     case 'A':
         if (voltage_mode) {
-            state.voltage_x += state.voltage_step_v;
+            state.voltage_x -= state.voltage_step_v;
         } else {
-            state.angle_x_deg += state.angle_step_deg;
+            state.angle_x_deg -= state.angle_step_deg;
         }
         break;
     case 'd':
     case 'D':
         if (voltage_mode) {
-            state.voltage_x -= state.voltage_step_v;
+            state.voltage_x += state.voltage_step_v;
         } else {
-            state.angle_x_deg -= state.angle_step_deg;
+            state.angle_x_deg += state.angle_step_deg;
         }
         break;
     case ',':
@@ -268,6 +269,7 @@ auto GuidanceOpsApp::run_loop() -> void {
         }
 
         retry_policy_.on_read_success();
+        const auto t_capture = Clock::now();
 
         ControlLoopFrame frame;
         frame.frame = std::move(*frame_result);
@@ -277,6 +279,31 @@ auto GuidanceOpsApp::run_loop() -> void {
         frame.detection = perception_result.detection;
         frame.ekf_state = perception_result.ekf_state;
         frame.dropped_frames = perception_.overwrite_count();
+
+        // ~2 Hz detection status for calib diagnosis
+        {
+            static auto last_det_log = Clock::now();
+            const auto now = Clock::now();
+            if (now - last_det_log >= std::chrono::milliseconds(500)) {
+                last_det_log = now;
+                if (perception_.degraded()) {
+                    std::println(stderr, "[DETECT] degraded: {}", perception_.last_error());
+                } else if (frame.detection.detected && !frame.detection.detections.empty()) {
+                    const auto& top = frame.detection.detections.front();
+                    std::println(
+                        "[DETECT] score={:.3f} class_id={} bbox=[{:.0f}, {:.0f}, {:.0f}, {:.0f}]",
+                        top.score, top.class_id, top.bbox.x, top.bbox.y, top.bbox.width,
+                        top.bbox.height);
+                } else if (!frame.detection.detections.empty()) {
+                    const auto& top = frame.detection.detections.front();
+                    std::println(
+                        "[DETECT] below_threshold top_score={:.4f} candidates={}", top.score,
+                        frame.detection.detections.size());
+                } else {
+                    std::println("[DETECT] no_candidates");
+                }
+            }
+        }
 
         if (perception_.degraded()) {
             frame.detection = {};
@@ -308,11 +335,14 @@ auto GuidanceOpsApp::run_loop() -> void {
                 .using_tensorrt =
                     perception_.active_backend() == RuntimeBackend::tensorrt,
             });
+        const auto t_after_overlay = Clock::now();
 
         int key = -1;
+        auto t_after_imshow = t_after_overlay;
         if (config_.debug.show_window) {
             cv::imshow(kWindowName, frame.display);
             key = cv::waitKey(1);
+            t_after_imshow = Clock::now();
             // OpenCV QT backend throws if the window was closed / never created.
             bool window_visible = true;
             try {
@@ -324,6 +354,33 @@ auto GuidanceOpsApp::run_loop() -> void {
             if (should_exit_from_key(key) || !window_visible) {
                 stop_requested_ = true;
             }
+        }
+
+        // ~5 Hz latency diagnostic
+        {
+            static auto s_last_log  = Clock::now();
+            static auto s_last_cap  = Clock::time_point{};
+            if (t_capture - s_last_log >= std::chrono::milliseconds(200)) {
+                s_last_log = t_capture;
+                const float loop_ms = s_last_cap != Clock::time_point{}
+                    ? std::chrono::duration<float, std::milli>(t_capture - s_last_cap).count()
+                    : 0.0f;
+                const float overlay_ms =
+                    std::chrono::duration<float, std::milli>(t_after_overlay - t_capture).count();
+                const float imshow_ms =
+                    std::chrono::duration<float, std::milli>(t_after_imshow - t_after_overlay).count();
+                const float detect_age_ms =
+                    frame.detection.capture_time != Clock::time_point{}
+                    ? std::chrono::duration<float, std::milli>(
+                          t_capture - frame.detection.capture_time).count()
+                    : -1.0f;
+                std::println(
+                    stderr,
+                    "[PERF] loop={:.1f}ms ({:.0f}fps)  detect_age={:.1f}ms  overlay={:.2f}ms  imshow={:.2f}ms",
+                    loop_ms, loop_ms > 0.0f ? 1000.0f / loop_ms : 0.0f,
+                    detect_age_ms, overlay_ms, imshow_ms);
+            }
+            s_last_cap = t_capture;
         }
 
         handle_key(key, frame);
@@ -346,40 +403,53 @@ auto GuidanceOpsApp::handle_key(const int key, const ControlLoopFrame& frame) ->
     }
 
     maybe_record_calibration(frame);
-    if (config_.guidance.command_model == GuidanceCommandModelKind::direct_voltage
-        && frame.detection.detected && !frame.detection.detections.empty()) {
-        const auto& top = frame.detection.detections.front();
-        const auto area = top.bbox.width * top.bbox.height;
-        std::println(
-            ">>> VOLTAGE RECORD: V=({:.3f}V,{:.3f}V) center=({:.1f},{:.1f}) area={:.1f}",
-            calibration_state_->voltage_x, calibration_state_->voltage_y, top.center.x,
-            top.center.y, area);
-    } else {
-        const auto& aim = frame.track.aim_center;
-        std::println(
-            ">>> RECORD: θ=({:.2f}°,{:.2f}°) pixel=({:.1f},{:.1f})",
-            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg,
-            aim.x, aim.y);
-    }
 }
 
 auto GuidanceOpsApp::maybe_record_calibration(const ControlLoopFrame& frame) -> void {
     if (config_.guidance.command_model == GuidanceCommandModelKind::direct_voltage) {
         if (frame.detection.detected && !frame.detection.detections.empty() && voltage_file_) {
+            const auto& top = frame.detection.detections.front();
             voltage_file_ << format_voltage_record(
-                frame.frame.timestamp, frame.detection.detections.front(), calibration_state_->voltage_x,
+                frame.frame.timestamp, top, calibration_state_->voltage_x,
                 calibration_state_->voltage_y);
             voltage_file_.flush();
+            const auto area = top.bbox.width * top.bbox.height;
+            std::println(
+                ">>> VOLTAGE RECORD: V=({:.3f}V,{:.3f}V) center=({:.1f},{:.1f}) area={:.1f}",
+                calibration_state_->voltage_x, calibration_state_->voltage_y, top.center.x,
+                top.center.y, area);
+        } else {
+            std::println(stderr, ">>> RECORD skipped: no detection (need target bbox for voltage calib)");
         }
+        return;
+    }
+
+    // Geometry calib needs a real image pixel; aim_center is (-1,-1) when undetected.
+    const auto aim = frame.track.aim_center;
+    const bool has_pixel = frame.detection.detected && aim.x >= 0.0F && aim.y >= 0.0F
+                        && !frame.detection.detections.empty();
+    if (!has_pixel) {
+        std::println(
+            stderr,
+            ">>> RECORD skipped: no valid detection pixel (aim=({:.1f},{:.1f}) detected={} n={}). "
+            "Wait for bbox on target, then press space.",
+            aim.x, aim.y, frame.detection.detected, frame.detection.detections.size());
         return;
     }
 
     if (calibration_file_) {
         const float depth = frame.guidance.telemetry.active_depth_mm.value_or(0.0F);
+        const auto& top = frame.detection.detections.front();
+        // Prefer raw detection center (not EKF-extrapolated aim) for extrinsic solve.
+        const float px = top.center.x;
+        const float py = top.center.y;
         calibration_file_ << format_geometry_record(
-            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg,
-            frame.track.aim_center.x, frame.track.aim_center.y, depth);
+            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg, px, py, depth);
         calibration_file_.flush();
+        std::println(
+            ">>> RECORD: θ=({:.2f}°,{:.2f}°) pixel=({:.1f},{:.1f}) depth={:.0f}mm class={} score={:.2f}",
+            calibration_state_->angle_x_deg, calibration_state_->angle_y_deg, px, py, depth,
+            top.class_id, top.score);
     }
 }
 

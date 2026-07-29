@@ -1,5 +1,3 @@
-# Geometry extrinsic calibration (WASD + space).
-# Capture: Hik industrial camera (same as competition stage-1 lit profile).
 capture_backend: hikcamera
 hik:
   device_id: ''
@@ -11,7 +9,6 @@ hik:
   software_sync: false
   trigger_mode: false
   fixed_framerate: true
-
 v4l2:
   device_path: /dev/v4l/by-id/usb-UGREEN_UGREEN_95348_20250910-video-index0
   width: 1920
@@ -19,44 +16,38 @@ v4l2:
   framerate: 60.0
   pixel_format: mjpeg
   invert_image: false
-
 debug:
   show_window: true
   draw_overlay: true
-
 runtime:
   max_input_age_ms: 25
   max_observation_age_ms: 35
   max_infer_fps: 80
   warmup_frames: 30
-  engine_path: models/exp-2.engine
+  engine_path: models/exp-900-901.engine
   hit_confirm_frames: 3
   hit_release_frames: 5
   debug_enabled: true
   debug_max_fps: 30
   record_enabled: false
   record_queue_size: 16
-
 inference:
   backend: tensorrt
-  model_path: models/exp-2.engine
+  model_path: models/exp-900-901.engine
   enemy_color: auto
-
 streaming:
   enabled: false
-  host: "127.0.0.1"
+  host: 127.0.0.1
   port: 5004
-  sdp_path: "/tmp/laser_guidance.sdp"
-  encoder: "h264_nvenc"
-  bitrate: "16M"
+  sdp_path: /tmp/laser_guidance.sdp
+  encoder: h264_nvenc
+  bitrate: 16M
   max_width: 0
   max_fps: 0
-
 udp:
   enabled: false
-  host: "127.0.0.1"
+  host: 127.0.0.1
   port: 5001
-
 ekf:
   enabled: true
   process_noise_q: 0.05
@@ -66,7 +57,6 @@ ekf:
   initial_acc_std: 50.0
   max_missed_frames: 5
   lookahead_ms: 10.0
-
 guidance:
   enabled: true
   command_model: geometry
@@ -74,19 +64,19 @@ guidance:
   calib_angle_x_deg: 0.0
   calib_angle_y_deg: 0.0
   target_geometry:
-    - class_id: 0
-      width_mm: 50.0
-      height_mm: 72.0
-    - class_id: 1
-      width_mm: 50.0
-      height_mm: 72.0
-    - class_id: 2
-      width_mm: 50.0
-      height_mm: 72.0
-    - class_id: 3
-      width_mm: 50.0
-      height_mm: 72.0
-  camera_calib_path: "config/camera_calib.yaml"
+  - class_id: 0
+    width_mm: 50.0
+    height_mm: 72.0
+  - class_id: 1
+    width_mm: 50.0
+    height_mm: 72.0
+  - class_id: 2
+    width_mm: 50.0
+    height_mm: 72.0
+  - class_id: 3
+    width_mm: 50.0
+    height_mm: 72.0
+  camera_calib_path: config/camera_calib.yaml
   depth_filter_enabled: true
   depth_process_noise_q: 400.0
   depth_measurement_noise_r: 4000000.0
@@ -94,26 +84,28 @@ guidance:
   depth_initial_vel_std: 2000.0
   depth_max_missed_frames: 5
   depth_scale: 0.955
-  t_x_mm: -85.5
-  t_y_mm: -15.5
+  t_x_mm: 85.5
+  t_y_mm: 15.0
   t_z_mm: 20.0
-  r_x_deg: 0.0
-  r_y_deg: 0.0
-  r_z_deg: 0.0
+  r_x_deg: 0.6
+  r_y_deg: 0.82
+  r_z_deg: 0.31
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
   dac_voltage_range_v: 10.0
-  voltage_model_path: "models/vision_voltage_lut.example.yaml"
+  voltage_model_path: models/vision_voltage_lut.example.yaml
   voltage_use_ekf_center: true
   voltage_limit_v: 5.0
   wiring:
     mode: differential
-    x_plus_channel: 0
-    x_minus_channel: 2
-    y_plus_channel: 1
-    y_minus_channel: 3
+    x_plus_channel: 2
+    x_minus_channel: 0
+    y_plus_channel: 3
+    y_minus_channel: 1
   scan_mode: single
   scan_width_deg: 0.5
   scan_height_deg: 0.4
   scan_grid_n: 10
+  angle_offset_x_deg: 0.0
+  angle_offset_y_deg: 0.0

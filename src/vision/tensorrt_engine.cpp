@@ -1,6 +1,7 @@
 
 #include "vision/tensorrt_engine.hpp"
 
+#include "vision/preprocess_cuda.hpp"
 #include <cuda_runtime_api.h>
 
 #include <NvInfer.h>
@@ -141,6 +142,7 @@ struct TensorRTEngine::Impl {
     auto cleanup() noexcept -> void {
         cleanup_cuda(device_input);
         cleanup_cuda(device_output);
+        cleanup_cuda(device_src_bgr);
 
         if (stream != nullptr) {
             cudaStreamDestroy(stream);
@@ -168,8 +170,10 @@ struct TensorRTEngine::Impl {
     cudaStream_t stream{nullptr};
     void* device_input{nullptr};
     void* device_output{nullptr};
+    void* device_src_bgr{nullptr};   // uint8 BGR source upload buffer (GPU preprocess path)
     std::size_t input_capacity{0};
     std::size_t output_capacity{0};
+    std::size_t src_bgr_capacity{0}; // bytes
 };
 
 TensorRTEngine::~TensorRTEngine() = default;
@@ -516,6 +520,119 @@ auto TensorRTEngine::run(
     if (const cudaError_t status = cudaStreamSynchronize(impl_->stream); status != cudaSuccess) {
         return std::unexpected(cuda_error_message(status, "cudaStreamSynchronize"));
     }
+
+    output_shape = *resolved_output_result;
+    return {};
+}
+
+auto TensorRTEngine::run_from_bgr(
+    const unsigned char* src_bgr,
+    int src_w, int src_h,
+    int out_w, int out_h,
+    std::vector<float>& output,
+    std::vector<std::int64_t>& output_shape)
+    -> std::expected<void, std::string> {
+    if (impl_ == nullptr || impl_->context == nullptr || impl_->stream == nullptr)
+        return std::unexpected("TensorRT engine is not loaded");
+    if (src_bgr == nullptr || src_w <= 0 || src_h <= 0)
+        return std::unexpected("run_from_bgr: invalid source image");
+    if (out_w <= 0 || out_h <= 0 || out_w % 32 != 0 || out_h % 32 != 0)
+        return std::unexpected("run_from_bgr: output dims must be positive and divisible by 32");
+
+    output_shape.clear();
+    const auto& meta = impl_->meta;
+    const auto& input_info = meta.inputs.front();
+    const auto& output_info = meta.outputs.front();
+
+    const std::vector<std::int64_t> input_shape{1, 3, out_h, out_w};
+    for (std::size_t index = 0; index < input_shape.size(); ++index) {
+        if (input_shape[index] < input_info.min_shape[index]
+            || input_shape[index] > input_info.max_shape[index]) {
+            std::ostringstream oss;
+            oss << "run_from_bgr: input shape " << tensor_shape_string(input_shape)
+                << " outside profile bounds " << tensor_shape_string(input_info.min_shape)
+                << ".." << tensor_shape_string(input_info.max_shape);
+            return std::unexpected(oss.str());
+        }
+    }
+
+    nvinfer1::Dims input_dims{};
+    input_dims.nbDims = static_cast<int32_t>(input_shape.size());
+    for (int index = 0; index < input_dims.nbDims; ++index)
+        input_dims.d[index] = input_shape[static_cast<std::size_t>(index)];
+    if (!impl_->context->setInputShape(input_info.name.c_str(), input_dims))
+        return std::unexpected("run_from_bgr: setInputShape failed");
+
+    const auto resolved_output_result = dims_to_shape(
+        impl_->context->getTensorShape(output_info.name.c_str()), "resolved output");
+    if (!resolved_output_result || *resolved_output_result != kOutputShape)
+        return std::unexpected("run_from_bgr: output shape did not resolve to expected contract");
+
+    const std::size_t input_elements =
+        static_cast<std::size_t>(1) * 3 * static_cast<std::size_t>(out_h) * out_w;
+    const auto output_elements = tensor_element_count(*resolved_output_result);
+    if (!output_elements)
+        return std::unexpected(output_elements.error());
+
+    auto ensure_buffer = [&](void*& device_ptr, std::size_t& capacity, const std::size_t required,
+                             const std::string_view label) -> std::expected<void, std::string> {
+        if (capacity >= required)
+            return {};
+        cleanup_cuda(device_ptr);
+        capacity = 0;
+        if (const cudaError_t status = cudaMalloc(&device_ptr, required); status != cudaSuccess)
+            return std::unexpected(cuda_error_message(status, std::string("cudaMalloc(") +
+                                                              std::string(label) + ")"));
+        capacity = required;
+        return {};
+    };
+
+    // device buffers: uint8 source, float input, float output
+    const std::size_t src_bytes = static_cast<std::size_t>(src_w) * src_h * 3;
+    if (const auto r = ensure_buffer(impl_->device_src_bgr, impl_->src_bgr_capacity, src_bytes,
+                                     "src_bgr"); !r)
+        return std::unexpected(r.error());
+    if (const auto r = ensure_buffer(impl_->device_input, impl_->input_capacity,
+                                     input_elements * sizeof(float), "input"); !r)
+        return std::unexpected(r.error());
+    if (const auto r = ensure_buffer(impl_->device_output, impl_->output_capacity,
+                                     *output_elements * sizeof(float), "output"); !r)
+        return std::unexpected(r.error());
+
+    if (!impl_->context->setTensorAddress(input_info.name.c_str(), impl_->device_input))
+        return std::unexpected("run_from_bgr: failed to bind input buffer");
+    if (!impl_->context->setTensorAddress(output_info.name.c_str(), impl_->device_output))
+        return std::unexpected("run_from_bgr: failed to bind output buffer");
+
+    output.resize(*output_elements);
+
+    // 1. upload uint8 BGR source (smaller than a float CHW blob)
+    if (const cudaError_t status = cudaMemcpyAsync(
+            impl_->device_src_bgr, src_bgr, src_bytes, cudaMemcpyHostToDevice, impl_->stream);
+        status != cudaSuccess)
+        return std::unexpected(cuda_error_message(status, "cudaMemcpyAsync(src H2D)"));
+
+    // 2. fused preprocess kernel writes directly into the TRT input buffer
+    if (const int kerr = preprocess_cuda_bgr_to_chw(
+            static_cast<const unsigned char*>(impl_->device_src_bgr), src_w, src_h,
+            static_cast<float*>(impl_->device_input), out_w, out_h, impl_->stream);
+        kerr != cudaSuccess)
+        return std::unexpected(cuda_error_message(static_cast<cudaError_t>(kerr),
+                                                  "preprocess_cuda_bgr_to_chw"));
+
+    // 3. inference
+    if (!impl_->context->enqueueV3(impl_->stream))
+        return std::unexpected("run_from_bgr: enqueueV3 failed");
+
+    // 4. download output
+    if (const cudaError_t status = cudaMemcpyAsync(
+            output.data(), impl_->device_output, *output_elements * sizeof(float),
+            cudaMemcpyDeviceToHost, impl_->stream);
+        status != cudaSuccess)
+        return std::unexpected(cuda_error_message(status, "cudaMemcpyAsync(D2H)"));
+
+    if (const cudaError_t status = cudaStreamSynchronize(impl_->stream); status != cudaSuccess)
+        return std::unexpected(cuda_error_message(status, "cudaStreamSynchronize"));
 
     output_shape = *resolved_output_result;
     return {};

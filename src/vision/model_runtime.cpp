@@ -65,7 +65,7 @@ auto input_dimensions(const ModelValueInfo& input, const cv::Mat& /*image*/) -> 
         throw std::runtime_error("model input must use NCHW with 3 channels");
 
     constexpr int kYoloStride = 32;
-    constexpr int kDefaultDynamicSize = 1280;
+    constexpr int kDefaultDynamicSize = 1216;
     static_assert(kDefaultDynamicSize % kYoloStride == 0, "default dynamic size must be a multiple of YOLO stride");
     const int input_height =
         input.shape[2] > 0 ? static_cast<int>(input.shape[2])

@@ -10,6 +10,7 @@
 
 #include "vision/model_adapter.hpp"
 #include "vision/model_runtime.hpp"
+#include "vision/preprocess_cuda.hpp"
 
 #include "vision/tensorrt_engine.hpp"
 
@@ -17,7 +18,7 @@ namespace rmcs_laser_guidance {
 
 namespace {
 
-constexpr int kDeploymentInputSize = 1280;
+constexpr int kDeploymentInputSize = 1216;
 
 auto model_value_infos(const std::vector<TensorRTMeta::TensorInfo>& tensors)
     -> std::vector<ModelValueInfo> {
@@ -103,29 +104,53 @@ struct ModelInfer::Details {
     }
 
     auto infer_tensorrt(const Frame& frame, ModelInferResult result) const -> ModelInferResult {
-        auto [input_data, transform] = preprocess_blob(
-            frame.image, kDeploymentInputSize, kDeploymentInputSize);
         const auto& meta = tensorrt_engine->meta();
         if (meta.outputs.size() != 1 || meta.outputs.front().name != "output0") {
             result.message = "TensorRT output contract requires exactly one output named output0";
             return result;
         }
+
         std::vector<float> output;
         std::vector<std::int64_t> output_shape;
-        const std::vector<std::int64_t> input_shape{
-            1, 3, kDeploymentInputSize, kDeploymentInputSize};
-        auto run_result = tensorrt_engine->run(input_data, input_shape, output, output_shape);
+        const int out_size = kDeploymentInputSize;
+
+        // Fast GPU path: bypass CPU preprocess_blob entirely.
+        // The fused CUDA kernel uploads the raw uint8 frame, runs letterbox
+        // resize + normalize + CHW repack on GPU, and writes directly into the
+        // TRT device input buffer — no float host buffer involved.
+        auto run_result = tensorrt_engine->run_from_bgr(
+            frame.image.data,
+            frame.image.cols, frame.image.rows,
+            out_size, out_size,
+            output, output_shape);
+
         if (!run_result) {
-            result.message = "TensorRT inference: " + run_result.error();
+            result.message = "TensorRT inference (GPU preprocess): " + run_result.error();
             return result;
         }
         if (output_shape != std::vector<std::int64_t>{1, 300, 6}) {
             result.message = "TensorRT output contract requires resolved shape {1, 300, 6}";
             return result;
         }
+
+        // Compute the transform that maps model coords back to original image.
+        int scaled_w{}, scaled_h{}, pad_left{}, pad_top{};
+        preprocess_cuda_letterbox_params(
+            frame.image.cols, frame.image.rows, out_size, out_size,
+            scaled_w, scaled_h, pad_left, pad_top);
+        const float scale = static_cast<float>(scaled_w) / static_cast<float>(frame.image.cols);
+
         ModelRunResult run_model;
         run_model.success = true;
-        run_model.transform = transform;
+        run_model.transform = ModelImageTransform{
+            .original_width  = frame.image.cols,
+            .original_height = frame.image.rows,
+            .input_width     = out_size,
+            .input_height    = out_size,
+            .scale           = scale,
+            .pad_x           = static_cast<float>(pad_left),
+            .pad_y           = static_cast<float>(pad_top),
+        };
         run_model.outputs.push_back(
             ModelTensorData{
                 .name = meta.outputs.front().name,

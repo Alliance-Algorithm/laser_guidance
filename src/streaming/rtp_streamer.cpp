@@ -195,35 +195,54 @@ auto RtpStreamer::start(const int width, const int height, const float framerate
                 details_->written_seq = details_->frame_seq;
             }
 
+            // rawvideo has no framing: never leave a partial frame in the pipe.
+            // Drop only before any byte of this frame is written.
+            if (!frame.isContinuous()) {
+                frame = frame.clone();
+            }
             const auto* data = static_cast<const std::uint8_t*>(frame.data);
-            std::size_t remaining = frame.total() * frame.elemSize();
+            const std::size_t frame_bytes = frame.total() * frame.elemSize();
+            std::size_t remaining = frame_bytes;
             bool dropped = false;
+            bool must_finish = false;
+            const int pipe_fd = fileno(details_->pipe);
+            int saved_flags = -1;
+            if (pipe_fd >= 0) {
+                saved_flags = fcntl(pipe_fd, F_GETFL, 0);
+            }
+
             while (remaining > 0) {
                 const auto written = std::fwrite(data, 1, remaining, details_->pipe);
-                if (written == remaining) {
-                    remaining = 0;
-                    break;
-                }
                 if (written > 0) {
                     data += written;
                     remaining -= written;
+                    if (remaining > 0 && !must_finish && pipe_fd >= 0 && saved_flags >= 0
+                        && (saved_flags & O_NONBLOCK) != 0) {
+                        // Started this frame under backpressure: finish blocking.
+                        (void)fcntl(pipe_fd, F_SETFL, saved_flags & ~O_NONBLOCK);
+                        must_finish = true;
+                    }
                     continue;
                 }
-                // EAGAIN / full pipe: drop this frame (latest-frame semantics).
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    dropped = true;
                     clearerr(details_->pipe);
-                    break;
+                    if (!must_finish && remaining == frame_bytes) {
+                        dropped = true; // nothing written yet
+                        break;
+                    }
+                    continue;
                 }
                 std::println(stderr, "RTP streamer: pipe write failed (ffmpeg exited?)");
                 details_->running = false;
-                remaining = 0;
                 break;
+            }
+            if (must_finish && pipe_fd >= 0 && saved_flags >= 0) {
+                (void)fcntl(pipe_fd, F_SETFL, saved_flags);
             }
             if (!details_->running.load()) {
                 break;
             }
-            if (dropped) {
+            if (dropped || remaining > 0) {
                 continue;
             }
             std::fflush(details_->pipe);
