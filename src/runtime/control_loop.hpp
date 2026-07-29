@@ -65,6 +65,7 @@ private:
     [[nodiscard]] auto allows_streaming() const -> bool;
     [[nodiscard]] auto allows_recording() const -> bool;
     [[nodiscard]] auto guidance_enabled_in_profile() const -> bool;
+    auto start_guidance_init_thread() -> void;
     [[nodiscard]] auto assemble_snapshot(
         const ControlLoopFrame& frame, const RuntimeOutputsStatus& output_status) const
         -> RuntimeSnapshot;
@@ -78,6 +79,7 @@ private:
     RuntimeOutputs outputs_;
     std::unique_ptr<RosBridge> ros_bridge_{};
     std::optional<GuidanceSession> guidance_{};
+    std::jthread guidance_init_thread_{};
     HitProgress hit_progress_{};
     int active_hik_profile_difficulty_ = 1;
     std::optional<CaptureFormat> negotiated_format_{};

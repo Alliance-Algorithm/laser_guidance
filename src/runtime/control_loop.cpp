@@ -248,16 +248,8 @@ auto ControlLoop::initialize_components() -> std::expected<void, Error> {
     }
     perception_.set_enemy_color(state_.enemy_color);
 
-    if (guidance_enabled_in_profile() && negotiated_format_.has_value()) {
-                auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
-        if (!guidance) {
-            std::println(
-                stderr, "guidance init failed: {}, guidance disabled", format_error(guidance.error()));
-            sync_last_error(format_error(guidance.error()));
-        } else {
-            guidance_ = std::move(*guidance);
-        }
-    }
+    if (guidance_enabled_in_profile() && negotiated_format_.has_value())
+        start_guidance_init_thread();
 
     if (negotiated_format_.has_value()) {
         outputs_.start(
@@ -306,7 +298,7 @@ auto ControlLoop::run_loop() -> void {
                         std::scoped_lock lock(state_mutex_);
                         guidance_.reset();
                     }
-                    retry_policy.arm_guidance_retry(Clock::now());
+                    start_guidance_init_thread();
                 }
 
                 retry_policy.on_reconnect_succeeded();
@@ -317,24 +309,6 @@ auto ControlLoop::run_loop() -> void {
                 retry_policy.on_reconnect_failed(Clock::now());
             }
             continue;
-        }
-
-        if (guidance_enabled_in_profile() && !guidance_ && negotiated_format_.has_value()) {
-            const auto now = Clock::now();
-            if (retry_policy.guidance_retry_due(now)) {
-        auto guidance = try_create_guidance_session(config_, *negotiated_format_, nullptr);
-                if (guidance) {
-                    {
-                        std::scoped_lock lock(state_mutex_);
-                        guidance_ = std::move(*guidance);
-                    }
-                    retry_policy.clear_guidance_retry();
-                    std::println("guidance initialized");
-                } else {
-                    std::println(stderr, "guidance retry failed: {}", format_error(guidance.error()));
-                    retry_policy.defer_guidance_retry(now);
-                }
-            }
         }
 
         auto frame_result = capture_.read_frame();
@@ -467,6 +441,10 @@ auto ControlLoop::run_loop() -> void {
 }
 
 auto ControlLoop::teardown_components() -> void {
+    // Stop the background guidance-init thread before touching guidance_ so the
+    // thread never races with the reset below.
+    guidance_init_thread_ = {};
+
     perception_.stop();
     if (guidance_) {
         guidance_->shutdown();
@@ -595,6 +573,47 @@ auto ControlLoop::allows_recording() const -> bool {
 auto ControlLoop::guidance_enabled_in_profile() const -> bool {
     return options_.profile == CompetitionProfile::main && config_.guidance.enabled
         && !config_.guidance.calib_mode;
+}
+
+// Starts (or restarts) a background thread that keeps attempting to create
+// GuidanceSession until it succeeds or the loop shuts down.  The hot loop
+// never blocks on FT4222 open again — it just reads guidance_ which the
+// thread fills in once hardware is available.
+auto ControlLoop::start_guidance_init_thread() -> void {
+    // Stop any previous attempt (jthread destructor requests stop + joins).
+    guidance_init_thread_ = {};
+
+    if (!guidance_enabled_in_profile() || !negotiated_format_.has_value())
+        return;
+
+    const CaptureFormat format = *negotiated_format_;
+    guidance_init_thread_ = std::jthread([this, format](std::stop_token st) {
+        constexpr auto kRetryDelay = std::chrono::seconds(1);
+        constexpr auto kSleepSlice = std::chrono::milliseconds(100);
+
+        while (!st.stop_requested()) {
+            auto guidance = try_create_guidance_session(config_, format, nullptr);
+            if (guidance) {
+                {
+                    std::scoped_lock lock(state_mutex_);
+                    guidance_ = std::move(*guidance);
+                }
+                std::println("guidance initialized");
+                return;
+            }
+            std::println(
+                stderr, "guidance init failed: {}, retrying in {}s",
+                format_error(guidance.error()),
+                std::chrono::duration_cast<std::chrono::seconds>(kRetryDelay).count());
+
+            // Sleep in small slices so stop_requested() is checked promptly.
+            for (auto slept = std::chrono::nanoseconds(0);
+                 slept < kRetryDelay && !st.stop_requested();
+                 slept += kSleepSlice) {
+                std::this_thread::sleep_for(kSleepSlice);
+            }
+        }
+    });
 }
 
 auto ControlLoop::assemble_snapshot(

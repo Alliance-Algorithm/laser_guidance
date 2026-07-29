@@ -109,7 +109,6 @@ auto pixel_to_direction(float px, float py, const CameraIntrinsics& K) -> Eigen:
 auto galvo_angles_to_direction(float theta_x_opt_deg, float theta_y_opt_deg) -> Eigen::Vector3f {
     float thx = theta_x_opt_deg * kDegToRad;
     float thy = theta_y_opt_deg * kDegToRad;
-    float cx = std::cos(thx);
     float cy = std::cos(thy);
     // d_gal = (tan(θx)/cos(θy), tan(θy), 1) normalized
     Eigen::Vector3f d(std::tan(thx) / cy, std::tan(thy), 1.0F);
