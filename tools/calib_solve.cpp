@@ -11,6 +11,9 @@
 #include <Eigen/Geometry>
 #include <Eigen/SVD>
 
+#include <opencv2/calib3d.hpp>
+#include <opencv2/core.hpp>
+
 #include <yaml-cpp/yaml.h>
 
 #include "config.hpp"
@@ -50,6 +53,8 @@ auto load_records(const std::string& path) -> std::vector<CalibRecord> {
 // Load camera intrinsics from OpenCV-format YAML
 struct CameraIntrinsics {
     float fx = 0.0F, fy = 0.0F, cx = 0.0F, cy = 0.0F;
+    cv::Mat camera_matrix{};   // CV_64F 3x3, for cv::undistortPoints
+    cv::Mat dist_coeffs{};     // CV_64F 1xN, empty = no distortion
 };
 
 auto load_intrinsics(const std::string& path) -> CameraIntrinsics {
@@ -63,14 +68,36 @@ auto load_intrinsics(const std::string& path) -> CameraIntrinsics {
     k.fy = mat[1][1].as<float>();
     k.cx = mat[0][2].as<float>();
     k.cy = mat[1][2].as<float>();
+
+    k.camera_matrix = cv::Mat::eye(3, 3, CV_64F);
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c)
+            k.camera_matrix.at<double>(r, c) = mat[r][c].as<double>();
+
+    const auto dc = calib["dist_coeffs"];
+    if (dc && dc.size() > 0) {
+        k.dist_coeffs = cv::Mat::zeros(1, static_cast<int>(dc.size()), CV_64F);
+        for (int i = 0; i < static_cast<int>(dc.size()); ++i)
+            k.dist_coeffs.at<double>(i) = dc[i].as<double>();
+    }
     return k;
 }
 
-// Back-project pixel to unit direction in camera frame (no distortion correction)
+// Back-project pixel to unit direction in camera frame.
+// Applies distortion correction (matching CameraProjection::project at runtime)
+// so the calibrated R is consistent with how the runtime uses pixels.
 auto pixel_to_direction(float px, float py, const CameraIntrinsics& K) -> Eigen::Vector3f {
+    float ux = px, uy = py;
+    if (!K.dist_coeffs.empty()) {
+        std::vector<cv::Point2f> src{{px, py}}, dst;
+        cv::undistortPoints(src, dst, K.camera_matrix, K.dist_coeffs,
+                            cv::noArray(), K.camera_matrix);
+        ux = dst[0].x;
+        uy = dst[0].y;
+    }
     Eigen::Vector3f d;
-    d.x() = (px - K.cx) / K.fx;
-    d.y() = (py - K.cy) / K.fy;
+    d.x() = (ux - K.cx) / K.fx;
+    d.y() = (uy - K.cy) / K.fy;
     d.z() = 1.0F;
     d.normalize();
     return d;
