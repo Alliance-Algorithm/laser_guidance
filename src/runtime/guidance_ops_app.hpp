@@ -1,16 +1,16 @@
 #pragma once
 
+#include <chrono>
 #include <expected>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <optional>
-#include <chrono>
 
 #include "capture/capture_device.hpp"
 #include "config.hpp"
-#include "runtime/control_loop_types.hpp"
 #include "runtime/capture_retry_policy.hpp"
+#include "runtime/control_loop_types.hpp"
 #include "runtime/guidance_calibration.hpp"
 #include "runtime/guidance_session.hpp"
 #include "runtime/overlay_renderer.hpp"
@@ -20,7 +20,7 @@
 namespace rmcs_laser_guidance::runtime_internal {
 
 struct GuidanceRecorderPaths {
-    std::filesystem::path geometry_path = "test_data/calib/geometry_calib_records.csv";
+    std::filesystem::path geometry_path = "test_data/calib/rotation_calib_records.csv";
     std::filesystem::path hit_path = "test_data/calib/geometry_hit_calib_records.csv";
     std::filesystem::path voltage_path = "test_data/calib/voltage_records.csv";
 };

@@ -17,6 +17,7 @@
 - 推理后端初始化采用"先首选择后降级"策略，`PerceptionRunner::degraded()` 反映后端实际可用性；ONNX/TensorRT 初始化不再同时无条件构造。
 - `HitProgress` 按 RoboMaster 2026 空中机器人反制规则计算 5 次锁定与 1/2/3 难度阶段。
 - 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
+- 旋转外参标定固定机械平移与镜距，只接受七列有深度记录，并通过 Ceres `QuaternionManifold` 优化 `R_GC`；Wahba 只用于诊断或备用初值。
 - `build-laser` (构建)、`clean-laser` (清理)、`docker-build-laser` (镜像)、`foxglove-laser` (桥接) 为统一构建入口，容器内任意路径可调用。
 - 运行时日志写入 `logs/<timestamp>/laser_daemon.log` / `laser_competition.log`。
 

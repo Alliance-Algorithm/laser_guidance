@@ -36,6 +36,7 @@
 - `PerceptionRunner::degraded()` 反映后端实际可用性。
 - `HitProgress` 按 RoboMaster 2026 空中机器人反制规则计算 5 次锁定与 1/2/3 难度阶段。
 - 推流 encoder 在无 CUDA 设备时自动从 `h264_nvenc` 回退到 `libx264`。
+- 旋转外参标定由工具级 `laser_guidance_calibration` 承担：固定机械平移与镜距，只接受七列有深度记录，并通过 Ceres `QuaternionManifold` 优化 `R_GC`；Wahba 只用于诊断或备用初值。
 - 运行时日志写入 `logs/<timestamp>/laser_daemon.log`（stream）和 `logs/<timestamp>/laser_competition.log`（competition）。
 
 ## 目录职责

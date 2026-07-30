@@ -93,6 +93,14 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 
 `tool_guidance` 的标定键盘、CSV 记录、purple hit edge 记录都在 `GuidanceOpsApp` 内部处理。
 
+旋转外参标定采用以下边界：
+
+- `tool_guidance` 新建几何标定文件时写入七列表头，并记录 `theta_x/y`、原始像素、正深度、`depth_source` 和 `depth_sigma_mm`。
+- 自动深度记录标记为 `bbox`；手持测距数据由操作者标记为 `rangefinder`。
+- `tool_calib_solve` 固定配置中的机械平移和镜距，外参标定期间强制 angle offset 为零，只在 Ceres `QuaternionManifold` 上优化相机到振镜旋转。
+- 最终残差使用与运行时一致的近场模型 `p_G = R_GC * (p_C - t)`；Wahba 只作诊断或显式备用初值。
+- 四列无深度和历史五列格式不再作为有效外参标定输入。
+
 ## 配置边界
 
 当前有效配置包括：

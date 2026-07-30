@@ -49,6 +49,28 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 - FT4222 为主入口工具级运行时依赖；缺库或缺板卡时只影响 guidance，主流程继续。
 - `tool_guidance` 的校准记录和 hit edge 记录都在独立 app 内完成。
 
+### 旋转外参标定
+
+1. 相机必须使用与 `camera_calib.yaml` 相同的分辨率、ROI 和翻转方式。
+2. 确认配置中的 `t_x_mm/t_y_mm/t_z_mm` 是机械测量值；标定期间 angle offset 按零处理。
+3. 使用 `tool_guidance` 采集覆盖视场和多个距离的记录，默认写入 `test_data/calib/rotation_calib_records.csv`。新文件格式为：
+
+```text
+theta_x_deg,theta_y_deg,pixel_x,pixel_y,depth_mm,depth_source,depth_sigma_mm
+```
+
+4. 自动框深度使用 `bbox`；手持测距仪的斜距使用 `rangefinder`，并填写包含手持起点误差的标准差。
+5. 求解命令示例：
+
+```bash
+./build/tool_calib_solve records.csv config/calib.yaml config/camera_calib.yaml \
+  --image-width 2448 --image-height 2048
+```
+
+6. 工具固定平移和镜距，只优化旋转；四列无深度和历史五列 CSV 会被拒绝。
+7. 用未参与拟合的点验证 RMS、P95 和最大角误差后，再复制高精度 `r_x/r_y/r_z`。
+8. 锁定旋转后，使用独立中心靶从零开始调整 `angle_offset_x/y_deg`。
+
 ### 推理后端降级
 - `PerceptionRunner::initialize_backends()` 按"先首选择后降级"策略初始化；ONNX/TensorRT 不再同时无条件构造。
 - `PerceptionRunner::degraded()` 返回 true 时（无可用后端或推理未启用），主循环跳过推理，不退出进程。
@@ -71,4 +93,4 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 - `main` profile 允许录制，`preview` profile 不允许录制。
 - FIFO 多行、半行、非法命令后可以恢复。
 - `RuntimeSnapshot` 保持值语义安全。
-- `tool_guidance` 仍能完成标定和 CSV 落盘。
+- `tool_guidance` 能写入七列深度标定 CSV，`tool_calib_solve` 能完成固定平移的 SO(3) 旋转优化。
