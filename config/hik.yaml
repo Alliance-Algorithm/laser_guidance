@@ -13,10 +13,6 @@ hik:
     exposure_us: 20000
     gain: 16.9
     framerate: 50.0
-    white_balance_auto: 'off'
-    white_balance_ratio_red: 1450
-    white_balance_ratio_green: 900
-    white_balance_ratio_blue: 2300
 v4l2:
   device_path: /dev/v4l/by-id/usb-MACROSILICON_Hagibis_20210623-video-index0
   width: 1920
