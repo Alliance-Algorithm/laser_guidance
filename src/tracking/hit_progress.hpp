@@ -31,7 +31,7 @@ public:
 
     // Compatibility for existing non-competition diagnostics that model a hit
     // as both the illumination and completion signal.
-    void update(bool is_purple, float dt_s) { update(is_purple, is_purple, dt_s); }
+    void update(bool is_purple, float dt_s);
 
     [[nodiscard]] float progress() const noexcept { return p_; }
     [[nodiscard]] float progress_ratio() const noexcept;

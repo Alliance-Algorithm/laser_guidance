@@ -31,28 +31,20 @@ This document defines the model contract for the deployable target-detection mod
 | Bbox format   | Model input space, then unletterboxed to original frame pixels | |
 | Confidence    | Float                                | |
 
-> **Important**: Single model with 4 classes. Purple is class id **2** (HIT). Colorless is class id **3** and is always rejected. `enemy_color` selects which armor color to attack: `red` → Red(0), `blue` → Blue(1); Purple(2) is accepted for both.
+> **Important**: Single model with 4 classes. Purple is class id **2** (HIT), and Colorless is class id **3**. The runtime preserves all four classes for continuous guidance. In competition mode, Purple and Colorless are additionally consumed by the countermeasure state machine; they are not rejected from guidance.
 
-## Runtime Color Filter
+## Runtime Guidance Classes
 
 ```text
-config: enemy_color = red | blue | auto
-
-enemy_color=red  (attack red armor):
-  class=Red(0)       → accept (target)
-  class=Blue(1)      → reject
-  class=Purple(2)    → accept (HIT)
-  class=Colorless(3) → reject
-
-enemy_color=blue (attack blue armor):
-  class=Blue(1)      → accept (target)
-  class=Red(0)       → reject
-  class=Purple(2)    → accept (HIT)
-  class=Colorless(3) → reject
-
-enemy_color=auto:
-  no team filter on Red/Blue; Colorless(3) still rejected
+class=Red(0)       → retain for guidance
+class=Blue(1)      → retain for guidance
+class=Purple(2)    → retain for guidance and countermeasure progress
+class=Colorless(3) → retain for guidance and countermeasure confirmation/progress
 ```
+
+`enemy_color` remains available as a runtime control value, but it does not
+remove model detections from the physical guidance path. Target selection and
+countermeasure state consume the same retained detection batch.
 
 ## Runtime Artifact
 
@@ -98,7 +90,10 @@ Before a model is accepted for runtime deployment:
 Purple is a model output class (**id=2**). HIT state uses temporal hysteresis on consecutive Purple detections:
 
 - Purple (`class_id == 2`) triggers candidate HIT state.
-- Colorless (`class_id == 3`) never counts as HIT.
+- Colorless (`class_id == 3`) does not add Purple progress. During the first
+  three countermeasure stages it confirms a countermeasure only after the
+  Purple `HitProgress` threshold is reached; during difficulty-3 stages it is
+  the continuing illumination class used for progress.
 - **Hysteresis defaults** (`HitStateMachine` / runtime config):
   - `hit_confirm_frames = 3`
   - `hit_release_frames = 5`

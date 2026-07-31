@@ -30,6 +30,10 @@ auto HitProgress::progress_ratio() const noexcept -> float {
     return std::clamp(p_ / p0_, 0.0F, 1.0F);
 }
 
+void HitProgress::update(bool is_purple, float dt_s) {
+    update(is_purple, is_purple, dt_s);
+}
+
 void HitProgress::update(bool is_purple, bool is_colorless, float dt_s) {
     if (exhausted_)
         return;
