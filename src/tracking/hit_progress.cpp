@@ -30,7 +30,11 @@ auto HitProgress::progress_ratio() const noexcept -> float {
     return std::clamp(p_ / p0_, 0.0F, 1.0F);
 }
 
-void HitProgress::update(bool is_hit, float dt_s) {
+void HitProgress::update(bool is_purple, float dt_s) {
+    update(is_purple, is_purple, dt_s);
+}
+
+void HitProgress::update(bool is_purple, bool is_colorless, float dt_s) {
     if (exhausted_)
         return;
 
@@ -47,7 +51,15 @@ void HitProgress::update(bool is_hit, float dt_s) {
         return;
     }
 
-    if (!is_hit) {
+    if (awaiting_colorless_) {
+        hitting_ = false;
+        if (is_colorless)
+            trigger_lock();
+        return;
+    }
+
+    const bool is_hitting_target = is_purple || (difficulty_ >= 3 && is_colorless);
+    if (!is_hitting_target) {
         hitting_ = false;
         p_ = std::max(0.0F, p_ - kProgressDecayPerSecond * dt_s);
         t_ = 0.0F;
@@ -68,7 +80,12 @@ void HitProgress::update(bool is_hit, float dt_s) {
     }
 
     if (p_ >= p0_) {
-        trigger_lock();
+        if (difficulty_ >= 3) {
+            trigger_lock();
+        } else {
+            awaiting_colorless_ = true;
+            hitting_ = false;
+        }
     }
 }
 
@@ -80,6 +97,7 @@ void HitProgress::trigger_lock() {
     t_ = 0.0F;
     n_ = 0;
     hitting_ = false;
+    awaiting_colorless_ = false;
     advance_stage();
 }
 

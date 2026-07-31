@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <print>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -509,14 +510,17 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
     if (options_.profile != CompetitionProfile::main || !negotiated_format_) {
         return;
     }
-    const auto* top_detection = detection.detections.empty() ? nullptr : &detection.detections.front();
-    // Model contract: Purple HIT is class_id 2.
-    const bool is_purple = detection.detected && top_detection != nullptr
-                        && top_detection->class_id == 2 && top_detection->score >= 0.25F;
+    const auto has_class = [&detection](const int class_id) {
+        return std::ranges::any_of(detection.detections, [class_id](const Detection& item) {
+            return item.class_id == class_id && item.score >= 0.25F;
+        });
+    };
+    const bool is_purple = has_class(2);
+    const bool is_colorless = has_class(3);
     const float frame_dt_s = negotiated_format_->framerate > 0.0
                                ? 1.0F / static_cast<float>(negotiated_format_->framerate)
                                : 1.0F / 60.0F;
-    hit_progress_.update(is_purple, frame_dt_s);
+    hit_progress_.update(is_purple, is_colorless, frame_dt_s);
 }
 
 auto ControlLoop::maybe_switch_hik_profile() -> void {
