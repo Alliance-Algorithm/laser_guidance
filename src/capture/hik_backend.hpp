@@ -12,6 +12,9 @@ namespace rmcs_laser_guidance {
 
 struct CaptureFormat;
 
+auto select_startup_profile(
+    const HikCameraConfig& config, HikProfileKind kind) -> std::expected<HikRuntimeProfile, Error>;
+
 auto to_capture_format(
     const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
     -> CaptureFormat;

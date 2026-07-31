@@ -10,8 +10,8 @@ hik:
   trigger_mode: false
   fixed_framerate: true
   profile_unlit:
-    exposure_us: 1000
-    gain: 10.0
+    exposure_us: 20000
+    gain: 16.9
     framerate: 50.0
     white_balance_auto: 'off'
     white_balance_ratio_red: 1450

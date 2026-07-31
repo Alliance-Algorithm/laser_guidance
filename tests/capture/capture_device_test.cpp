@@ -61,6 +61,44 @@ int main() {
         }
 
         {
+            rmcs_laser_guidance::HikCameraConfig config;
+            config.exposure_us = 500.0F;
+            config.framerate = 80.0F;
+            config.gain = 10.0F;
+            config.has_unlit_profile = true;
+            config.unlit.exposure_us = 1000.0F;
+            config.unlit.framerate = 50.0F;
+            config.unlit.gain = 10.0F;
+            config.unlit.set_white_balance = true;
+            config.unlit.white_balance_ratio_red = 1450;
+            config.unlit.white_balance_ratio_green = 900;
+            config.unlit.white_balance_ratio_blue = 2300;
+
+            const auto lit =
+                rmcs_laser_guidance::select_startup_profile(config, rmcs_laser_guidance::HikProfileKind::lit);
+            require(lit.has_value(), "lit profile selection should succeed");
+            require_near(lit->exposure_us, 500.0F, 1e-3F, "lit profile exposure");
+            require_near(lit->framerate, 80.0F, 1e-3F, "lit profile framerate");
+            require(!lit->set_white_balance, "lit profile uses auto white balance");
+
+            const auto unlit = rmcs_laser_guidance::select_startup_profile(
+                config, rmcs_laser_guidance::HikProfileKind::unlit);
+            require(unlit.has_value(), "unlit profile selection should succeed");
+            require_near(unlit->exposure_us, 1000.0F, 1e-3F, "unlit profile exposure");
+            require_near(unlit->framerate, 50.0F, 1e-3F, "unlit profile framerate");
+            require(unlit->set_white_balance, "unlit profile uses manual white balance");
+            require(unlit->white_balance_ratio_red == 1450, "unlit profile wb red");
+        }
+
+        {
+            rmcs_laser_guidance::HikCameraConfig config;
+            config.has_unlit_profile = false;
+            const auto unlit = rmcs_laser_guidance::select_startup_profile(
+                config, rmcs_laser_guidance::HikProfileKind::unlit);
+            require(!unlit.has_value(), "unlit selection should fail without profile_unlit");
+        }
+
+        {
             const std::vector<hikcamera::DeviceInfo> devices{
                 {
                     .device_id = "cam-a",

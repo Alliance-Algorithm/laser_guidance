@@ -172,6 +172,8 @@ struct HikRuntimeProfile {
     int white_balance_ratio_blue = 1024;
 };
 
+enum class HikProfileKind { lit, unlit };
+
 struct HikCameraConfig {
     std::string device_id{};
     unsigned int timeout_ms = 2000;
@@ -184,6 +186,7 @@ struct HikCameraConfig {
     bool fixed_framerate = true;
     bool has_unlit_profile = false;
     HikRuntimeProfile unlit{};
+    HikProfileKind startup_profile_kind = HikProfileKind::lit;
 
     [[nodiscard]] auto lit_profile() const -> HikRuntimeProfile {
         return HikRuntimeProfile{

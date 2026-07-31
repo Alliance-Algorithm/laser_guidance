@@ -71,6 +71,21 @@ auto apply_hik_runtime_profile(hikcamera::Camera& camera, const HikRuntimeProfil
 
 } // namespace
 
+auto select_startup_profile(
+    const HikCameraConfig& config, const HikProfileKind kind) -> std::expected<HikRuntimeProfile, Error> {
+    switch (kind) {
+    case HikProfileKind::lit:
+        return config.lit_profile();
+    case HikProfileKind::unlit:
+        if (!config.has_unlit_profile) {
+            return std::unexpected(
+                make_error(ErrorKind::config, "hik.profile_unlit is not configured"));
+        }
+        return config.unlit;
+    }
+    __builtin_unreachable();
+}
+
 auto to_capture_format(
     const hikcamera::DeviceInfo& device_info, const hikcamera::StreamFormat& format)
     -> CaptureFormat {
@@ -102,8 +117,13 @@ auto HikBackend::open() -> std::expected<CaptureFormat, Error> {
         return std::unexpected(
             make_error(ErrorKind::device, "Hik camera connected but stream format is unavailable"));
     }
-    if (auto applied = apply_hik_runtime_profile(camera, config.lit_profile()); !applied) {
-        std::println(stderr, "Hik lit profile apply: {}", format_error(applied.error()));
+    auto startup = select_startup_profile(config, config.startup_profile_kind);
+    if (!startup) {
+        std::println(stderr, "Hik startup profile: {}", format_error(startup.error()));
+        return std::unexpected(startup.error());
+    }
+    if (auto applied = apply_hik_runtime_profile(camera, *startup); !applied) {
+        std::println(stderr, "Hik startup profile apply: {}", format_error(applied.error()));
     }
     return to_capture_format(*camera.device_info(), *camera.stream_format());
 }
