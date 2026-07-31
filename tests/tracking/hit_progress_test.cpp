@@ -12,8 +12,11 @@ auto drive_until_locked(rmcs_laser_guidance::HitProgress& hp, const int expected
     -> void {
     using rmcs_laser_guidance::tests::require;
 
-    for (int i = 0; i < 64 && !hp.is_locked(); ++i)
-        hp.update(true, kTick);
+    for (int i = 0; i < 64 && !hp.is_awaiting_colorless() && !hp.is_locked(); ++i)
+        hp.update(true, false, kTick);
+
+    if (hp.is_awaiting_colorless())
+        hp.update(false, true, kTick);
 
     require(hp.is_locked(), "expected lock to trigger");
     require(hp.lock_count() == expected_lock_count, "unexpected lock count after trigger");
@@ -51,6 +54,28 @@ int main() {
             HitProgress hp;
             hp.update(false, 2.0F);
             require(hp.progress() == 0.0F, "decay clamped at 0");
+        }
+
+        {
+            HitProgress hp;
+            hp.update(false, true, kTick);
+            hp.update(false, true, kTick);
+            require(hp.lock_count() == 0, "colorless alone must not lock");
+            require(!hp.is_locked(), "colorless alone must not enter locked state");
+        }
+
+        {
+            HitProgress hp;
+            for (int i = 0; i < 13; ++i)
+                hp.update(true, false, kTick);
+            require(hp.progress() >= hp.p0(), "purple should reach the first threshold");
+            require(hp.lock_count() == 0, "threshold alone must not lock");
+            require(hp.is_awaiting_colorless(), "threshold should await colorless");
+            hp.update(false, false, kTick);
+            require(hp.lock_count() == 0, "non-colorless must not confirm the lock");
+            hp.update(false, true, kTick);
+            require(hp.lock_count() == 1, "colorless after threshold should confirm one lock");
+            require(hp.difficulty() == 2, "first confirmed lock advances to difficulty 2");
         }
 
         {
@@ -98,9 +123,12 @@ int main() {
                 hp.update(true, kTick);
             require_near(hp.progress(), 46.8F, 0.05F, "12 ticks: 0.6*(1..12)=46.8");
             require(hp.progress() < 50.0F, "P < P0 after 12 ticks");
-            hp.update(true, kTick);
-            require(hp.lock_count() == 1, "13th tick crosses P0=50");
-            require(hp.is_locked(), "lock triggered");
+            hp.update(true, false, kTick);
+            require(hp.lock_count() == 0, "13th tick reaches P0 but does not confirm");
+            require(hp.is_awaiting_colorless(), "threshold awaits colorless");
+            hp.update(false, true, kTick);
+            require(hp.lock_count() == 1, "colorless confirms the first lock");
+            require(hp.is_locked(), "lock triggered after colorless");
             require(hp.progress() == 0.0F, "P resets on lock");
             require(hp.stage() == 1, "stage advances to 1");
             require(hp.difficulty() == 2, "difficulty 2 before second lock");
@@ -149,6 +177,31 @@ int main() {
             hp.update(true, 1.0F);
             require(hp.progress() == p_before, "no change when exhausted");
             require(hp.lock_count() == 5, "lock_count stays at 5");
+        }
+
+        {
+            HitProgress hp;
+            const int expected_difficulties[] = {1, 2, 2, 3, 3};
+            for (int expected_lock = 1; expected_lock <= 5; ++expected_lock) {
+                require(
+                    hp.difficulty() == expected_difficulties[expected_lock - 1],
+                    "difficulty sequence must remain 1, 2, 2, 3, 3");
+                drive_until_locked(hp, expected_lock);
+                expire_lock(hp);
+            }
+            require(hp.is_exhausted(), "five confirmed locks exhaust progress");
+        }
+
+        {
+            HitProgress hp;
+            for (int lock = 1; lock <= 3; ++lock) {
+                drive_until_locked(hp, lock);
+                expire_lock(hp);
+            }
+            require(hp.difficulty() == 3, "third confirmation enters difficulty 3");
+            for (int i = 0; i < 64 && !hp.is_locked(); ++i)
+                hp.update(false, true, kTick);
+            require(hp.lock_count() == 4, "colorless HitProgress confirms fourth lock");
         }
 
         {

@@ -12,7 +12,8 @@ namespace rmcs_laser_guidance {
 ///   Stage 4  第五次反制前: difficulty=3, P0=100, 纵向 1/5, 不发光 → 相机 unlit (第二套)
 ///   锁定 5 次后: 耗尽, 不再计算
 ///
-/// 进度由本地视觉 Purple HIT (class_id==2) 驱动, 非裁判系统。
+/// 前三阶段由 Purple HIT (class_id==2) 累计并等待 Colorless (class_id==3)
+/// 确认；difficulty 3 阶段由 Colorless 持续检测驱动。该状态来自本地视觉，非裁判系统。
 ///
 /// P 值规则:
 ///   - 未命中时: P 以 0.5/s 衰减至 0, t/n 归零
@@ -23,9 +24,14 @@ public:
     HitProgress() = default;
 
     /// 每帧更新
-    /// @param is_hit  当前帧目标是否为紫色 (class_id == 2)
+    /// @param is_purple  当前帧目标是否为紫色 (class_id == 2)
+    /// @param is_colorless 当前帧是否识别为无色 (class_id == 3)
     /// @param dt_s    帧间隔 (秒)
-    void update(bool is_hit, float dt_s);
+    void update(bool is_purple, bool is_colorless, float dt_s);
+
+    // Compatibility for existing non-competition diagnostics that model a hit
+    // as both the illumination and completion signal.
+    void update(bool is_purple, float dt_s) { update(is_purple, is_purple, dt_s); }
 
     [[nodiscard]] float progress() const noexcept { return p_; }
     [[nodiscard]] float progress_ratio() const noexcept;
@@ -37,6 +43,7 @@ public:
     [[nodiscard]] int difficulty() const noexcept { return difficulty_; }
     [[nodiscard]] float p0() const noexcept { return p0_; }
     [[nodiscard]] bool is_exhausted() const noexcept { return exhausted_; }
+    [[nodiscard]] bool is_awaiting_colorless() const noexcept { return awaiting_colorless_; }
 
 private:
     void trigger_lock();
@@ -52,6 +59,7 @@ private:
     bool locked_ = false;
     bool exhausted_ = false;
     bool hitting_ = false;
+    bool awaiting_colorless_ = false;
     float lock_timer_ = 0.0F;
 };
 

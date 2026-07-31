@@ -131,7 +131,7 @@ Each model artifact should carry:
 - INT8, CUDA Graph runtime, CPU affinity tuning.
 - Automatic GPU/CPU backend switching.
 - Local model training.
-- Separate ROI color classifier (the model already predicts `Red`, `Blue`, `Purple`, `Colorless`; runtime only applies enemy-color filtering and Purple HIT hysteresis).
+- Separate ROI color classifier (the model already predicts `Red`, `Blue`, `Purple`, `Colorless`; runtime passes all model classes to guidance and uses Purple/Colorless for countermeasure state).
 
 ## References
 

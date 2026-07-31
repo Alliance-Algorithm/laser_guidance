@@ -1,12 +1,9 @@
 #include "runtime/perception_runner.hpp"
 
-#include <algorithm>
 #include <utility>
 
 namespace rmcs_laser_guidance::runtime_internal {
 namespace {
-
-auto to_enemy_class_id(const EnemyColor color) -> int { return static_cast<int>(color); }
 
 auto to_enemy_color(const int class_id) -> EnemyColor {
     switch (class_id) {
@@ -29,26 +26,10 @@ auto to_detection(const ModelCandidate& candidate) -> Detection {
     };
 }
 
-// Model ids: 0=Red, 1=Blue, 2=Purple(HIT), 3=Colorless(reject).
-// Keep only the selected enemy armor color and purple hits.
-auto filter_detections(std::vector<Detection>& detections, const EnemyColor enemy_color) -> void {
-    const int enemy_class_id = to_enemy_class_id(enemy_color);
-    if (enemy_class_id < 0) {
-        detections.erase(
-            std::remove_if(
-                detections.begin(), detections.end(),
-                [](const Detection& detection) { return detection.class_id == 3; }),
-            detections.end());
-        return;
-    }
-    detections.erase(
-        std::remove_if(
-            detections.begin(), detections.end(),
-            [enemy_class_id](const Detection& detection) {
-                return detection.class_id != 2 && detection.class_id != enemy_class_id;
-            }),
-        detections.end());
-}
+// Keep every model class available to guidance. Enemy color is a control-plane
+// setting, not a reason to discard a detection from the physical guidance path.
+auto filter_detections(std::vector<Detection>& /*detections*/, const EnemyColor /*enemy_color*/)
+    -> void {}
 
 auto to_detection_batch(const ModelInferResult& result) -> DetectionBatch {
     DetectionBatch batch;
