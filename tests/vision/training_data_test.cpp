@@ -174,7 +174,8 @@ int main() {
             .operator_note_present = false,
         };
         rmcs_laser_guidance::VideoSessionRecorder slow_capture_recorder(
-            temp_root / "slow_sessions", slow_capture_metadata);
+            temp_root / "slow_sessions", slow_capture_metadata, /*h264_qp=*/23,
+            /*queue_capacity=*/1024);
         for (int i = 0; i < 80; ++i)
             slow_capture_recorder.record_frame(make_frame({0, 0, 0}, i % 2 == 0));
         slow_capture_recorder.flush(slow_capture_metadata.duration_ms);

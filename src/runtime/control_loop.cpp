@@ -119,7 +119,6 @@ auto ControlLoop::start() -> std::expected<void, Error> {
     main_thread_ = std::jthread([this] { run_loop(); });
     return {};
 }
-
 auto ControlLoop::run() -> std::expected<void, Error> {
     {
         std::scoped_lock lock(state_mutex_);
@@ -156,15 +155,12 @@ auto ControlLoop::join() -> void {
 auto ControlLoop::submit_command(const RuntimeCommand& command)
     -> std::expected<void, Error> {
     // Backend switch may run outside the state lock (matches current order:
-    // validate backend first, then update state).
+    // validate backend first, then update state). set_active_backend() is a
+    // single locked check-and-set, so no TOCTOU with a concurrent stop().
     if (const auto* set_backend = std::get_if<CmdSetBackend>(&command)) {
-        if (!perception_.has_backend(set_backend->backend)) {
-            return std::unexpected(
-                make_error(ErrorKind::unavailable, "requested backend is not available"));
-        }
         if (!perception_.set_active_backend(set_backend->backend)) {
             return std::unexpected(
-                make_error(ErrorKind::unavailable, "failed to switch active backend"));
+                make_error(ErrorKind::unavailable, "requested backend is not available"));
         }
     }
 
@@ -292,7 +288,12 @@ auto ControlLoop::run_loop() -> void {
                     negotiated_format_ = std::move(new_format);
                 }
                 // reconnect re-applies lit profile in HikBackend::open(); force resync.
-                active_hik_profile_difficulty_ = 1;
+                active_hik_profile_difficulty_.store(1);
+                profile_switch_fail_until_.store(Clock::time_point{});
+                // Drop any in-flight profile switch; it would apply to the
+                // freshly reconnected camera with a stale format.
+                profile_switch_thread_ = {};
+                profile_switch_pending_.store(false);
 
                 if (guidance_enabled_in_profile()) {
                     {
@@ -353,22 +354,60 @@ auto ControlLoop::run_loop() -> void {
         }
 
         // Poll latest inference result and push current frame to the worker.
-        {
+        if (!perception_.degraded()) {
             const auto perception_result = perception_.poll();
             frame.detection = perception_result.detection;
             frame.ekf_state = perception_result.ekf_state;
             frame.dropped_frames = perception_.overwrite_count();
-        }
-        if (!perception_.degraded()) {
             perception_.submit(frame.frame);
+        } else {
+            // Degraded (backend missing or worker died): never let stale
+            // detection/EKF drive the state machine, or the laser would keep
+            // firing at a frozen target.
+            frame.detection = {};
+            frame.ekf_state.reset();
+            frame.dropped_frames = 0;
         }
 
         // Compute track and guidance before overlay so boxes use the age-compensated position.
         frame.track = select_target_track(
             frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms,
             frame.frame.timestamp);
-        if (guidance_) {
-            frame.guidance = guidance_->execute(frame.track);
+
+        // The guidance-init thread may assign guidance_ at any time; take the
+        // pointer under the state lock and execute outside it. Safe because
+        // guidance_ is only reset on this thread (reconnect/teardown) and the
+        // init thread returns right after its single assignment.
+        GuidanceSession* guidance = nullptr;
+        {
+            std::scoped_lock lock(state_mutex_);
+            guidance = guidance_.has_value() ? &*guidance_ : nullptr;
+        }
+        if (guidance != nullptr) {
+            frame.guidance = guidance->execute(frame.track);
+            static auto last_guide_diag = Clock::time_point{};
+            const auto diag_now = Clock::now();
+            if (last_guide_diag == Clock::time_point{}
+                || diag_now - last_guide_diag >= std::chrono::seconds(1)) {
+                last_guide_diag = diag_now;
+                const auto& ao = frame.guidance.aim_output;
+                const cv::Point2f px = frame.track.raw_center;
+                const auto& sel = frame.track.selected_detection;
+                std::println(
+                    stderr,
+                    "[GUIDE-DIAG] detected={} ekf_init={} lost={} cmd={} msg='{}' "
+                    "pix=({:.0f},{:.0f}) cls={} score={:.2f} "
+                    "angles=({:.3f},{:.3f}) volts=({:.3f},{:.3f}) depth_valid={} depth={:.0f}",
+                    frame.track.detected, frame.track.initialized, frame.track.lost,
+                    ao.command_issued, ao.message, px.x, px.y,
+                    sel.has_value() ? sel->class_id : -1,
+                    sel.has_value() ? sel->score : 0.0F,
+                    ao.output_angles.has_value() ? ao.output_angles->x : -99.0F,
+                    ao.output_angles.has_value() ? ao.output_angles->y : -99.0F,
+                    ao.output_voltages.has_value() ? ao.output_voltages->x : -99.0F,
+                    ao.output_voltages.has_value() ? ao.output_voltages->y : -99.0F,
+                    ao.depth_valid, ao.depth_mm);
+            }
         }
 
         update_hit_progress(frame.detection);
@@ -383,8 +422,8 @@ auto ControlLoop::run_loop() -> void {
         overlay_.render(
             frame,
             OverlayRenderContext{
-                .guidance_enabled = guidance_.has_value(),
-                .guidance_ready = guidance_.has_value(),
+                .guidance_enabled = guidance != nullptr,
+                .guidance_ready = guidance != nullptr,
                 .calibration_mode = false,
                 .command_model = config_.guidance.command_model,
                 .calibration_state = nullptr,
@@ -415,26 +454,28 @@ auto ControlLoop::run_loop() -> void {
             ros_bridge_->publish_snapshot(latest_snapshot);
         }
 
-        // Streaming UI is ffplay: move the overlay mat into RTP (no second 5MP clone).
-        // Local OpenCV window only when not streaming.
-        if (output_status.streaming_active) {
+        // Local window shows the same overlay mat the stream carries. When the
+        // window is enabled we cannot move the mat into RTP (imshow needs it),
+        // so publish by copy; without a window, move into RTP to avoid a second
+        // 5MP clone. The window must be refreshed even while streaming, or it
+        // stays blank from creation until streaming stops.
+        if (show_window()) {
+            outputs_.publish_frame(frame.display);
+            cv::imshow(window_name(), frame.display);
+            const int key = cv::waitKey(1);
+            bool window_visible = true;
+            try {
+                window_visible = cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
+            } catch (const cv::Exception&) {
+                window_visible = false;
+            }
+            if (should_exit_from_key(key) || !window_visible) {
+                request_stop();
+            }
+        } else if (output_status.streaming_active) {
             outputs_.publish_frame(std::move(frame.display));
         } else {
             outputs_.publish_frame(frame.display);
-            if (show_window()) {
-                cv::imshow(window_name(), frame.display);
-                const int key = cv::waitKey(1);
-                bool window_visible = true;
-                try {
-                    window_visible =
-                        cv::getWindowProperty(window_name(), cv::WND_PROP_VISIBLE) >= 1.0;
-                } catch (const cv::Exception&) {
-                    window_visible = false;
-                }
-                if (should_exit_from_key(key) || !window_visible) {
-                    request_stop();
-                }
-            }
         }
     }
 
@@ -445,6 +486,9 @@ auto ControlLoop::teardown_components() -> void {
     // Stop the background guidance-init thread before touching guidance_ so the
     // thread never races with the reset below.
     guidance_init_thread_ = {};
+    // Stop any in-flight Hik profile switch before closing the camera.
+    profile_switch_thread_ = {};
+    profile_switch_pending_.store(false);
 
     perception_.stop();
     if (guidance_) {
@@ -508,6 +552,7 @@ auto ControlLoop::sync_last_error(std::string error) -> void {
 
 auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
     if (options_.profile != CompetitionProfile::main || !negotiated_format_) {
+        last_hit_progress_time_ = Clock::time_point{};
         return;
     }
     const auto has_class = [&detection](const int class_id) {
@@ -517,10 +562,18 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
     };
     const bool is_purple = has_class(2);
     const bool is_colorless = has_class(3);
-    const float frame_dt_s = negotiated_format_->framerate > 0.0
-                               ? 1.0F / static_cast<float>(negotiated_format_->framerate)
-                               : 1.0F / 60.0F;
-    hit_progress_.update(is_purple, is_colorless, frame_dt_s);
+    // Use real elapsed time between loop iterations: the loop runs slower
+    // than the nominal camera rate under RTP/overlay/recording load, and
+    // HitProgress counts real seconds per the RM2026 §5.6.3 rules.
+    const auto now = Clock::now();
+    float dt_s = 1.0F / 60.0F;
+    if (last_hit_progress_time_ != Clock::time_point{}) {
+        const float elapsed =
+            std::chrono::duration<float>(now - last_hit_progress_time_).count();
+        dt_s = std::clamp(elapsed, 0.0F, 0.5F);
+    }
+    last_hit_progress_time_ = now;
+    hit_progress_.update(is_purple, is_colorless, dt_s);
 }
 
 auto ControlLoop::maybe_switch_hik_profile() -> void {
@@ -538,28 +591,42 @@ auto ControlLoop::maybe_switch_hik_profile() -> void {
     const int difficulty = hit_progress_.difficulty();
     const bool want_unlit = difficulty >= 3;
     const int target = want_unlit ? 3 : 1;
-    if (target == active_hik_profile_difficulty_) {
+    if (target == active_hik_profile_difficulty_.load()) {
         return;
     }
 
-    const HikRuntimeProfile profile =
-        want_unlit ? config_.hik.unlit : config_.hik.lit_profile();
-    if (auto applied = capture_.apply_runtime_profile(profile); !applied) {
-        std::println(
-            stderr, "Hik profile switch to {} failed: {}", want_unlit ? "unlit" : "lit",
-            format_error(applied.error()));
+    // Back off after a failed switch so a persistent SDK error does not
+    // spawn a new attempt on every frame.
+    if (Clock::now() < profile_switch_fail_until_.load()) {
         return;
     }
 
-    active_hik_profile_difficulty_ = target;
-    if (negotiated_format_ && profile.framerate > 0.0F) {
-        negotiated_format_->framerate = static_cast<double>(profile.framerate);
+    bool expected = false;
+    if (!profile_switch_pending_.compare_exchange_strong(expected, true)) {
+        return; // a switch is already in flight
     }
-    std::println(
-        stderr,
-        "Hik profile -> {} (difficulty={}) exposure_us={} gain={} fps={} wb={}",
-        want_unlit ? "unlit" : "lit", difficulty, profile.exposure_us, profile.gain,
-        profile.framerate, profile.set_white_balance);
+
+    const HikRuntimeProfile profile = want_unlit ? config_.hik.unlit : config_.hik.lit_profile();
+    profile_switch_thread_ = std::jthread([this, profile, target, difficulty] {
+        if (auto applied = capture_.apply_runtime_profile(profile); !applied) {
+            std::println(
+                stderr, "Hik profile switch to {} failed: {}", target == 3 ? "unlit" : "lit",
+                format_error(applied.error()));
+            profile_switch_fail_until_.store(Clock::now() + std::chrono::seconds(1));
+        } else {
+            if (negotiated_format_ && profile.framerate > 0.0F) {
+                std::scoped_lock lock(state_mutex_);
+                negotiated_format_->framerate = static_cast<double>(profile.framerate);
+            }
+            active_hik_profile_difficulty_.store(target);
+            std::println(
+                stderr,
+                "Hik profile -> {} (difficulty={}) exposure_us={} gain={} fps={} wb={}",
+                target == 3 ? "unlit" : "lit", difficulty, profile.exposure_us, profile.gain,
+                profile.framerate, profile.set_white_balance);
+        }
+        profile_switch_pending_.store(false);
+    });
 }
 
 auto ControlLoop::show_window() const -> bool { return config_.debug.show_window; }

@@ -51,13 +51,6 @@ void HitProgress::update(bool is_purple, bool is_colorless, float dt_s) {
         return;
     }
 
-    if (awaiting_colorless_) {
-        hitting_ = false;
-        if (is_colorless)
-            trigger_lock();
-        return;
-    }
-
     const bool is_hitting_target = is_purple || (difficulty_ >= 3 && is_colorless);
     if (!is_hitting_target) {
         hitting_ = false;
@@ -79,13 +72,10 @@ void HitProgress::update(bool is_purple, bool is_colorless, float dt_s) {
         t_ -= static_cast<float>(ticks) * kTickSeconds;
     }
 
+    // RM2026 §5.6.3: reaching P0 locks the launcher immediately; P resets and
+    // the 45s lock begins. There is no local confirmation step.
     if (p_ >= p0_) {
-        if (difficulty_ >= 3) {
-            trigger_lock();
-        } else {
-            awaiting_colorless_ = true;
-            hitting_ = false;
-        }
+        trigger_lock();
     }
 }
 
@@ -97,13 +87,15 @@ void HitProgress::trigger_lock() {
     t_ = 0.0F;
     n_ = 0;
     hitting_ = false;
-    awaiting_colorless_ = false;
     advance_stage();
 }
 
 void HitProgress::advance_stage() {
     stage_ = std::min(lock_count_, kMaxLocks - 1);
-    p0_ = lock_count_ == 0 ? 50.0F : 100.0F;
+    // The first lock (stage 0) runs against the constructor default p0_=50;
+    // every lock after it requires the full bar. trigger_lock() has already
+    // incremented lock_count_, so lock_count_ is never 0 here.
+    p0_ = 100.0F;
     difficulty_ = difficulty_for_stage(stage_);
 }
 

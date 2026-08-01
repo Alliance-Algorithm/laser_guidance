@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <sstream>
 #include <utility>
+#include <vector>
 
 #include "streaming/rtp_streamer.hpp"
 #include "streaming/udp_sender.hpp"
@@ -177,6 +179,36 @@ auto FifoControlServer::parse_command(std::string_view text)
     }
     if (normalized == "ekf off") {
         return runtime_command::set_ekf(false);
+    }
+    if (normalized.starts_with("offset")) {
+        const auto rest = trim_copy(std::string_view(normalized).substr(6));
+        if (rest.empty()) {
+            return std::unexpected(make_error(ErrorKind::config, "offset requires a value"));
+        }
+        std::vector<float> values;
+        std::stringstream stream(rest);
+        std::string token;
+        while (stream >> token) {
+            try {
+                std::size_t consumed = 0;
+                values.push_back(std::stof(token, &consumed));
+                if (consumed != token.size()) {
+                    return std::unexpected(
+                        make_error(ErrorKind::config, "invalid offset value: " + token));
+                }
+            } catch (const std::exception&) {
+                return std::unexpected(
+                    make_error(ErrorKind::config, "invalid offset value: " + token));
+            }
+        }
+        if (values.size() == 1) {
+            return runtime_command::set_offset(values[0], 0.0F);
+        }
+        if (values.size() == 2) {
+            return runtime_command::set_offset(values[0], values[1]);
+        }
+        return std::unexpected(
+            make_error(ErrorKind::config, "offset expects <x_deg> [y_deg]"));
     }
     return std::unexpected(
         make_error(ErrorKind::config, "unsupported FIFO command: " + normalized));

@@ -60,9 +60,12 @@ inline auto select_target_track(
         track.ekf_position = ekf_state->position;
         track.velocity = ekf_state->velocity;
         track.ekf_acceleration = ekf_state->acceleration;
-        if (ekf_enabled && ekf_state->initialized && !ekf_state->lost) {
+        if (ekf_enabled && ekf_state->initialized) {
             // Advance filter state from detection capture time to the frame being shown,
             // then add configured lookahead (guidance / stream glass-to-glass).
+            // During loss (ekf_state->lost) the prediction is still advanced so the
+            // beam stays on the estimated target position, preserving illumination
+            // continuity for the RM2026 §5.6.3 P accumulation.
             float age_s = 0.0F;
             if (display_time != Clock::time_point{}
                 && batch.capture_time != Clock::time_point{}) {

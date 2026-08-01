@@ -3,7 +3,8 @@ set -euo pipefail
 FIFO="/tmp/laser_cmd"
 
 daemon_running() {
-    pgrep -f "tool_competition" >/dev/null 2>&1 || pgrep -f "tool_preview" >/dev/null 2>&1
+    pgrep -f "tool_competition" >/dev/null 2>&1 || pgrep -f "tool_preview" >/dev/null 2>&1 \
+        || pgrep -f "ffplay.*laser_guidance" >/dev/null 2>&1
 }
 
 if daemon_running; then
@@ -11,11 +12,15 @@ if daemon_running; then
         timeout 1 bash -c "echo 'quit' > '$FIFO'" 2>/dev/null || true
     fi
     sleep 1
-    pkill -f "tool_competition" 2>/dev/null || true
-    pkill -f "tool_preview" 2>/dev/null || true
-    rm -f "$FIFO"
+    pkill -9 -f "tool_competition" 2>/dev/null || true
+    pkill -9 -f "tool_preview" 2>/dev/null || true
+    # ffplay / ffmpeg 残留会占住 RTP/UDP 端口（5004 等），导致下次启动时
+    # SDP 无效、ffplay 绑定失败并连带退出守护进程，必须一并清理。
+    pkill -9 -f "ffplay.*laser_guidance" 2>/dev/null || true
+    pkill -9 -f "ffmpeg.*5004" 2>/dev/null || true
+    rm -f "$FIFO" /tmp/laser_guidance.sdp
     echo "已停止"
 else
-    rm -f "$FIFO"
+    rm -f "$FIFO" /tmp/laser_guidance.sdp
     echo "守护进程未运行"
 fi

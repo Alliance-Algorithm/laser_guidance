@@ -1,5 +1,7 @@
 #include "runtime/runtime_outputs.hpp"
 
+#include <print>
+
 namespace rmcs_laser_guidance::runtime_internal {
 
 RuntimeOutputs::RuntimeOutputs(
@@ -72,8 +74,16 @@ auto RuntimeOutputs::publish_frame(cv::Mat&& frame) -> void {
 }
 
 auto RuntimeOutputs::record_current(const cv::Mat& frame) -> void {
-    if (recorder_) {
+    if (!recorder_) {
+        return;
+    }
+    try {
         recorder_->record_frame(frame);
+    } catch (const std::exception& e) {
+        // Never let a recording hiccup escape into the hot loop (it would
+        // terminate the runtime thread); log and drop frames instead.
+        std::println(stderr, "recording: {}", e.what());
+        recorder_.reset();
     }
 }
 
@@ -155,7 +165,7 @@ auto RuntimeOutputs::begin_recording(const CaptureFormat& format) -> void {
             .operator_note_present = false,
             .h264_qp = record_options_.h264_qp,
         },
-        record_options_.h264_qp);
+        record_options_.h264_qp, config_.runtime.record_queue_size);
     recording_start_ = std::chrono::steady_clock::now();
 }
 
@@ -163,10 +173,14 @@ auto RuntimeOutputs::stop_recording() -> void {
     if (!recorder_) {
         return;
     }
-    const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now() - recording_start_)
-                                 .count();
-    recorder_->flush(duration_ms);
+    try {
+        const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now() - recording_start_)
+                                     .count();
+        recorder_->flush(duration_ms);
+    } catch (const std::exception& e) {
+        std::println(stderr, "recording flush failed: {}", e.what());
+    }
     recorder_.reset();
 }
 

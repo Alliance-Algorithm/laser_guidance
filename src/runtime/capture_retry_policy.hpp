@@ -39,6 +39,8 @@ public:
         }
         consecutive_errors_ = max_consecutive_errors_;
         next_reconnect_at_ = now + reconnect_retry_delay_;
+        // next_guidance_retry_at_ is consumed by GuidanceOpsApp only;
+        // ControlLoop retries guidance on its own background init thread.
         next_guidance_retry_at_ = now + guidance_retry_delay_;
         return true;
     }

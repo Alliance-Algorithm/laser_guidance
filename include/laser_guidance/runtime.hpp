@@ -35,6 +35,7 @@ struct CmdSetRecording { bool enabled = false; };
 struct CmdSetEnemyColor { EnemyColor enemy_color = EnemyColor::auto_select; };
 struct CmdSetBackend { RuntimeBackend backend = RuntimeBackend::onnx; };
 struct CmdSetEkf { bool enabled = false; };
+struct CmdSetOffset { float x_deg = 0.0F; float y_deg = 0.0F; };
 struct CmdShutdown {};
 
 using RuntimeCommand = std::variant<
@@ -43,6 +44,7 @@ using RuntimeCommand = std::variant<
     CmdSetEnemyColor,
     CmdSetBackend,
     CmdSetEkf,
+    CmdSetOffset,
     CmdShutdown>;
 
 namespace runtime_command {
@@ -51,6 +53,7 @@ auto set_recording(bool enabled) -> RuntimeCommand;
 auto set_enemy_color(EnemyColor color) -> RuntimeCommand;
 auto set_backend(RuntimeBackend backend) -> RuntimeCommand;
 auto set_ekf(bool enabled) -> RuntimeCommand;
+auto set_offset(float x_deg, float y_deg) -> RuntimeCommand;
 auto shutdown() -> RuntimeCommand;
 } // namespace runtime_command
 

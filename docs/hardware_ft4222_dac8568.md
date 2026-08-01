@@ -758,3 +758,62 @@ XY 正弦图形示例：
 7. 再发 `-1V`
 
 这个方案最容易定位问题，也最不容易因为外围复杂度把问题放大。
+
+## 实测接线记录（2026-08-01）
+
+> 以下为实机验证过的接线与配置，作为后续改动的基准。改动接线或换机时，先核对本表。
+
+### 本机 DAC 通道 → 振镜驱动输入 映射
+
+实测确认（标定模式 WASD 能动 + competition 自动跟踪验证通过）的真实接线是：
+
+| DAC8568 输出 | 振镜驱动输入 | 软件 channel |
+|---|---|---|
+| `C` | `X+` | `x_plus_channel: 2` |
+| `A` | `X-` | `x_minus_channel: 0` |
+| `D` | `Y+` | `y_plus_channel: 3` |
+| `B` | `Y-` | `y_minus_channel: 1` |
+
+`config/hik.yaml` 与 `config/calib.yaml` 中 `wiring` 段必须保持一致：
+
+```yaml
+wiring:
+  mode: differential
+  x_plus_channel: 2
+  x_minus_channel: 0
+  y_plus_channel: 3
+  y_minus_channel: 1
+```
+
+> ⚠️ 注意：`tool_galvo_smoke` 的默认映射是 `X+=A, X-=C, Y+=B, Y-=D`（与本节实测接线**相反**）。用它测试本机时需显式指定：
+>
+> ```bash
+> ./build/tool_galvo_smoke --target xp \
+>   --x-plus C --x-minus A --y-plus D --y-minus B
+> ```
+
+### 已解决的问题记录
+
+| 日期 | 问题 | 根因 | 修复 |
+|---|---|---|---|
+| 2026-08-01 | competition 自动跟踪振镜不动，但标定模式 WASD 能动 | `config/hik.yaml` 的 `wiring` 通道映射与实际接线不符（原为 A/C/B/D，实际是 C/A/D/B），软件把电压写到未接线的通道上 | 将 `hik.yaml` wiring 改为 `x+=2(C), x-=0(A), y+=3(D), y-=1(B)` |
+| 2026-08-01 | competition 运行期间 SPI 写入间歇性失败（约 45%，`FT4222_FAILED_TO_WRITE_DEVICE=10`） | FT4222 与相机等设备共享 USB 控制器，高负载下单次写超时 | `Ft4222Spi::write()` 增加 3 次重试（`src/io/ft4222_spi.cpp`） |
+| 2026-08-01 | 两台 Hik 相机同时插入时报 `device_id is required to disambiguate` | `device_id` 为空时多设备无法自动选择 | `config/hik.yaml` 与 `config/calib.yaml` 设置 `device_id: 'DB0864607'`（MV-CS050-10UC，2448×2048） |
+| 2026-08-01 | 激光落点偏左 | 解算角度未补偿安装偏差 | `config/hik.yaml` 调 `angle_offset_x_deg: 0.3`（当前值，按需微调） |
+
+### 多相机枚举选择
+
+本机插两台 Hik 相机时枚举结果为：
+
+| serial | 型号 | 分辨率 |
+|---|---|---|
+| `DB0067863` | MV-CS200-10UC | 5472×3648 |
+| `DB0864607` | MV-CS050-10UC | 2448×2048（当前使用，与标定内参一致） |
+
+`device_id` 匹配支持：`device_id` / `user_defined_name` / `serial_number` / `model_name` 四字段任一匹配即可。
+
+### 后续改动提醒
+
+- 修改任意一个配置文件的 `wiring` 时，必须同步修改另一个，否则会出现"标定能动、比赛不动"或反之的问题
+- 换振镜驱动板或重接线后，先用 `tool_galvo_smoke` 显式指定通道验证方向，再改配置
+- 调整激光落点时改 `angle_offset_x_deg` / `angle_offset_y_deg`（正值把激光往正方向移）

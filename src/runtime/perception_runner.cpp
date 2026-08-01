@@ -1,5 +1,6 @@
 #include "runtime/perception_runner.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace rmcs_laser_guidance::runtime_internal {
@@ -26,10 +27,33 @@ auto to_detection(const ModelCandidate& candidate) -> Detection {
     };
 }
 
-// Keep every model class available to guidance. Enemy color is a control-plane
-// setting, not a reason to discard a detection from the physical guidance path.
-auto filter_detections(std::vector<Detection>& /*detections*/, const EnemyColor /*enemy_color*/)
-    -> void {}
+// Order detections so the physical guidance path prefers the RM2026
+// countermeasure targets (purple=2, colorless=3) over any other class the
+// model emits (red/blue enemy aircraft), then falls back to score order.
+// Every class stays available to guidance — this only changes selection
+// priority, never discards detections.
+auto filter_detections(std::vector<Detection>& detections, const EnemyColor /*enemy_color*/)
+    -> void {
+    const auto priority = [](const Detection& detection) -> int {
+        if (detection.class_id == 2) {
+            return 0;
+        }
+        if (detection.class_id == 3) {
+            return 1;
+        }
+        return 2;
+    };
+    std::stable_sort(
+        detections.begin(), detections.end(),
+        [&](const Detection& lhs, const Detection& rhs) {
+            const int lhs_priority = priority(lhs);
+            const int rhs_priority = priority(rhs);
+            if (lhs_priority != rhs_priority) {
+                return lhs_priority < rhs_priority;
+            }
+            return lhs.score > rhs.score;
+        });
+}
 
 auto to_detection_batch(const ModelInferResult& result) -> DetectionBatch {
     DetectionBatch batch;
@@ -80,6 +104,8 @@ auto PerceptionRunner::start() -> std::expected<void, std::string> {
         return result;
     }
 
+    worker_failed_.store(false);
+
     {
         std::scoped_lock lock(state_mutex_);
         last_error_.clear();
@@ -128,6 +154,7 @@ auto PerceptionRunner::shutdown() -> void {
 auto PerceptionRunner::stop() -> void {
     shutdown();
     worker_ = std::jthread{};
+    worker_failed_.store(false);
 
     {
         std::scoped_lock lock(state_mutex_);
@@ -152,7 +179,11 @@ auto PerceptionRunner::set_enemy_color(const EnemyColor color) -> void {
 
 auto PerceptionRunner::set_active_backend(const RuntimeBackend backend) -> bool {
     std::scoped_lock lock(state_mutex_);
-    if (!has_backend(backend)) {
+    if (backend == RuntimeBackend::tensorrt) {
+        if (infer_trt_ == nullptr) {
+            return false;
+        }
+    } else if (infer_onnx_ == nullptr) {
         return false;
     }
     active_backend_ = backend;
@@ -187,7 +218,9 @@ auto PerceptionRunner::last_error() const -> std::string {
 
 auto PerceptionRunner::degraded() const -> bool {
     std::scoped_lock lock(state_mutex_);
-    return !enabled() || !active_backend_.has_value();
+    // worker_failed_ is set without the lock by the dying worker; treat it as
+    // degraded so callers stop trusting frozen detection results.
+    return !enabled() || !active_backend_.has_value() || worker_failed_.load();
 }
 
 auto PerceptionRunner::run() -> void {
@@ -254,6 +287,12 @@ auto PerceptionRunner::run() -> void {
             const auto after_publish = stale_policy_.make_after_publish_sample(
                 queued_frame.capture_time, worker_start, infer_start, publish_time);
             if (after_publish.stale_reason != StaleReason::none) {
+                // The observation is too old to drive aiming, but the tracker
+                // has already advanced on this measurement — publish the
+                // filter state so the aim point keeps extrapolating instead of
+                // freezing on the last non-stale frame.
+                std::scoped_lock lock(result_mutex_);
+                latest_ekf_ = tracker_.state();
                 continue;
             }
 
@@ -264,6 +303,7 @@ auto PerceptionRunner::run() -> void {
     } catch (const std::exception& e) {
         std::scoped_lock lock(state_mutex_);
         last_error_ = std::string("perception worker error: ") + e.what();
+        worker_failed_.store(true);
     }
 }
 

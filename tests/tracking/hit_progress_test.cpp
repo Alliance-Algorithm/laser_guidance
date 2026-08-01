@@ -12,11 +12,8 @@ auto drive_until_locked(rmcs_laser_guidance::HitProgress& hp, const int expected
     -> void {
     using rmcs_laser_guidance::tests::require;
 
-    for (int i = 0; i < 64 && !hp.is_awaiting_colorless() && !hp.is_locked(); ++i)
+    for (int i = 0; i < 64 && !hp.is_locked(); ++i)
         hp.update(true, false, kTick);
-
-    if (hp.is_awaiting_colorless())
-        hp.update(false, true, kTick);
 
     require(hp.is_locked(), "expected lock to trigger");
     require(hp.lock_count() == expected_lock_count, "unexpected lock count after trigger");
@@ -65,17 +62,18 @@ int main() {
         }
 
         {
+            // RM2026 §5.6.3: P reaching P0 locks immediately; colorless is not
+            // part of the confirmation path (it is a rule attribute of the
+            // target, not a local detection signal).
             HitProgress hp;
-            for (int i = 0; i < 13; ++i)
+            for (int i = 0; i < 12; ++i)
                 hp.update(true, false, kTick);
-            require(hp.progress() >= hp.p0(), "purple should reach the first threshold");
-            require(hp.lock_count() == 0, "threshold alone must not lock");
-            require(hp.is_awaiting_colorless(), "threshold should await colorless");
-            hp.update(false, false, kTick);
-            require(hp.lock_count() == 0, "non-colorless must not confirm the lock");
-            hp.update(false, true, kTick);
-            require(hp.lock_count() == 1, "colorless after threshold should confirm one lock");
-            require(hp.difficulty() == 2, "first confirmed lock advances to difficulty 2");
+            require(hp.progress() < hp.p0(), "12 ticks stay below P0");
+            hp.update(true, false, kTick);
+            require(hp.lock_count() == 1, "P0 must lock immediately without colorless");
+            require(hp.is_locked(), "lock triggered at P0");
+            require(hp.difficulty() == 2, "first lock advances to difficulty 2");
+            require(hp.progress() == 0.0F, "P resets on lock");
         }
 
         {
@@ -124,11 +122,8 @@ int main() {
             require_near(hp.progress(), 46.8F, 0.05F, "12 ticks: 0.6*(1..12)=46.8");
             require(hp.progress() < 50.0F, "P < P0 after 12 ticks");
             hp.update(true, false, kTick);
-            require(hp.lock_count() == 0, "13th tick reaches P0 but does not confirm");
-            require(hp.is_awaiting_colorless(), "threshold awaits colorless");
-            hp.update(false, true, kTick);
-            require(hp.lock_count() == 1, "colorless confirms the first lock");
-            require(hp.is_locked(), "lock triggered after colorless");
+            require(hp.lock_count() == 1, "13th tick crosses P0 and locks");
+            require(hp.is_locked(), "lock triggered at P0");
             require(hp.progress() == 0.0F, "P resets on lock");
             require(hp.stage() == 1, "stage advances to 1");
             require(hp.difficulty() == 2, "difficulty 2 before second lock");

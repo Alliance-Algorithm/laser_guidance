@@ -10,7 +10,7 @@ debug:
   draw_overlay: true
 runtime:
   max_input_age_ms: 25
-  max_observation_age_ms: 35
+  max_observation_age_ms: 50
   max_infer_fps: 60
   warmup_frames: 30
   engine_path: models/exp.engine
@@ -70,6 +70,9 @@ guidance:
     width_mm: 50.0
     height_mm: 72.0
   - class_id: 2
+    width_mm: 50.0
+    height_mm: 72.0
+  - class_id: 3
     width_mm: 50.0
     height_mm: 72.0
   voltage_model_path: models/vision_voltage_poly_v4.yaml

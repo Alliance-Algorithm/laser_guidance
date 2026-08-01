@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
 #include <expected>
 #include <mutex>
 #include <optional>
@@ -81,7 +83,16 @@ private:
     std::optional<GuidanceSession> guidance_{};
     std::jthread guidance_init_thread_{};
     HitProgress hit_progress_{};
-    int active_hik_profile_difficulty_ = 1;
+    // Real elapsed time between update_hit_progress calls; HitProgress must
+    // not assume the loop runs at the camera's nominal framerate.
+    Clock::time_point last_hit_progress_time_{};
+    // Hik lit/unlit profile switching runs off the hot path: the main loop
+    // only arms the switch, a background thread applies it (can block on the
+    // backend mutex up to the camera read timeout).
+    std::atomic<int> active_hik_profile_difficulty_{1};
+    std::atomic<bool> profile_switch_pending_{false};
+    std::atomic<Clock::time_point> profile_switch_fail_until_{};
+    std::jthread profile_switch_thread_{};
     std::optional<CaptureFormat> negotiated_format_{};
     OverlayRenderer overlay_{};
     bool window_open_ = false;

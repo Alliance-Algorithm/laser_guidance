@@ -236,18 +236,28 @@ auto Ft4222Spi::open(Ft4222Config config) -> std::expected<Ft4222Spi, Error> {
 
 auto Ft4222Spi::write(const uint8_t* data, uint16_t len) -> std::expected<void, Error> {
     auto& api = ft4222_api();
-    uint16_t transferred = 0;
-    FT4222_STATUS status = api.ft4222_spi_master_single_write(
-        static_cast<FT_HANDLE>(handle_), const_cast<uint8_t*>(data), len, &transferred, 1);
+    // FT4222 shares a USB controller with other devices (cameras etc.); a busy
+    // controller can delay the transaction past the device timeout and report
+    // FAILED_TO_WRITE_DEVICE. Retry briefly before surfacing the error.
+    constexpr int kMaxWriteAttempts = 3;
+    for (int attempt = 1; attempt <= kMaxWriteAttempts; ++attempt) {
+        uint16_t transferred = 0;
+        FT4222_STATUS status = api.ft4222_spi_master_single_write(
+            static_cast<FT_HANDLE>(handle_), const_cast<uint8_t*>(data), len, &transferred, 1);
 
-    if (status != FT4222_OK)
-        return std::unexpected(make_error(
-            ErrorKind::device, "SPI write error: " + std::to_string(status)));
-    if (transferred != len)
-        return std::unexpected(make_error(
-            ErrorKind::device,
-            "SPI write short: " + std::to_string(transferred) + "/" + std::to_string(len)));
-    return {};
+        if (status == FT4222_OK && transferred == len)
+            return {};
+
+        if (attempt == kMaxWriteAttempts) {
+            if (status != FT4222_OK)
+                return std::unexpected(make_error(
+                    ErrorKind::device, "SPI write error: " + std::to_string(status)));
+            return std::unexpected(make_error(
+                ErrorKind::device,
+                "SPI write short: " + std::to_string(transferred) + "/" + std::to_string(len)));
+        }
+    }
+    __builtin_unreachable();
 }
 
 auto Ft4222Spi::transfer(const uint8_t* tx_buf, uint16_t tx_len, uint8_t* rx_buf, uint16_t rx_len)

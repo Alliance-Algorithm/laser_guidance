@@ -38,7 +38,11 @@ struct DebugConfig {
 
 struct RuntimeConfig {
     int max_input_age_ms = 25;
-    int max_observation_age_ms = 35;
+    // Observation budget: inference time plus queue wait before a result is
+    // considered too old to drive aiming. Must leave headroom for the real
+    // inference latency (5MP frames), or every result gets dropped and the
+    // runtime silently stops tracking.
+    int max_observation_age_ms = 50;
     int max_infer_fps = 60;
     int warmup_frames = 30;
     std::filesystem::path engine_path{};

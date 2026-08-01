@@ -12,7 +12,7 @@ debug:
 
 runtime:
   max_input_age_ms: 25
-  max_observation_age_ms: 35
+  max_observation_age_ms: 50
   max_infer_fps: 60
   warmup_frames: 30
   engine_path: "models/exp.engine"

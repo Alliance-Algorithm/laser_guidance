@@ -26,9 +26,12 @@ int main() {
             TargetTrack track;
             track.detected = false;
             track.ekf_enabled = false;
+            // Continuous illumination is required to accumulate P; a brief loss
+            // must not drop the beam to center. Without EKF the solver keeps
+            // steering the last cached aim point when depth is available.
             require(
-                state_machine.decide(track, false, 1200.0F).action == GuidanceAction::recenter,
-                "raw loss with valid depth should recenter");
+                state_machine.decide(track, false, 1200.0F).action == GuidanceAction::solve,
+                "raw loss with valid depth should keep solving");
             require(
                 state_machine.decide(track, false, 0.0F).action == GuidanceAction::idle,
                 "raw loss without depth should idle");
@@ -49,12 +52,14 @@ int main() {
             track.ekf_enabled = true;
             track.initialized = true;
             track.lost = true;
+            // Keep the beam on the EKF-predicted aim point during loss instead
+            // of recentering: hitting continuity is what drives P accumulation.
             require(
-                state_machine.decide(track, false, 0.0F).action == GuidanceAction::recenter,
-                "first lost EKF frame should recenter");
+                state_machine.decide(track, false, 0.0F).action == GuidanceAction::solve,
+                "first lost EKF frame should keep solving on prediction");
             require(
-                state_machine.decide(track, true, 0.0F).action == GuidanceAction::idle,
-                "steady lost EKF state should idle");
+                state_machine.decide(track, true, 0.0F).action == GuidanceAction::solve,
+                "steady lost EKF state should keep solving");
         }
 
         {
@@ -69,8 +74,8 @@ int main() {
             TargetTrack lost_again = recovered;
             lost_again.lost = true;
             require(
-                state_machine.decide(lost_again, false, 0.0F).action == GuidanceAction::recenter,
-                "new EKF loss edge should recenter again");
+                state_machine.decide(lost_again, false, 0.0F).action == GuidanceAction::solve,
+                "new EKF loss edge should keep solving");
         }
 
         return 0;

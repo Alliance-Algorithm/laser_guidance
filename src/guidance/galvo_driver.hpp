@@ -1,6 +1,7 @@
 #pragma once
 
 #include <expected>
+#include <mutex>
 #include <string>
 
 #include "config.hpp"
@@ -33,6 +34,10 @@ private:
     Ft4222Spi& spi_;
     GuidanceConfig config_;
     bool reference_enabled_ = false;
+    // Serializes SPI transactions: the ScanController thread and the
+    // guidance main-loop thread share this driver, and FT4222 handles are
+    // not safe for concurrent writes.
+    mutable std::mutex io_mutex_{};
 };
 
 } // namespace rmcs_laser_guidance

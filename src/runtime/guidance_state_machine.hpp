@@ -21,21 +21,24 @@ public:
     [[nodiscard]] auto decide(
         const TargetTrack& track, bool ekf_was_lost, float last_valid_depth_mm) const
         -> GuidanceDecision {
+        // Continuous illumination accumulates P (RM2026 §5.6.3); a brief
+        // detection loss must not drop the beam to center. Keep solving on
+        // the EKF-predicted aim point (or the last cached aim when the EKF is
+        // disabled) so the next detected frame resumes irradiation instantly.
         if (!track.ekf_enabled) {
             if (track.detected) {
                 return GuidanceDecision{.action = GuidanceAction::solve};
             }
             if (last_valid_depth_mm > 0.0F) {
-                return GuidanceDecision{.action = GuidanceAction::recenter};
+                return GuidanceDecision{.action = GuidanceAction::solve};
             }
             return {};
         }
 
-        if (track.initialized && !track.lost) {
+        if (track.initialized) {
+            // Healthy or lost: keep solving on the EKF-predicted aim point so
+            // the beam stays on the target during brief detection loss.
             return GuidanceDecision{.action = GuidanceAction::solve};
-        }
-        if (track.lost && !ekf_was_lost) {
-            return GuidanceDecision{.action = GuidanceAction::recenter};
         }
         return {};
     }

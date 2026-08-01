@@ -1,11 +1,16 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include <cstdio>
@@ -54,7 +59,8 @@ struct VideoEncodingInfo {
 class VideoSessionRecorder {
 public:
     VideoSessionRecorder(
-        std::filesystem::path output_root, VideoSessionMetadata metadata, int h264_qp = 23);
+        std::filesystem::path output_root, VideoSessionMetadata metadata, int h264_qp = 23,
+        int queue_capacity = 16);
     ~VideoSessionRecorder();
 
     VideoSessionRecorder(const VideoSessionRecorder&) = delete;
@@ -80,6 +86,9 @@ public:
     [[nodiscard]] auto recorded_frames() const noexcept -> std::size_t { return recorded_frames_; }
 
 private:
+    auto writer_run() -> void;
+    auto write_frame(const cv::Mat& image) -> bool;
+
     std::filesystem::path session_root_{};
     std::filesystem::path video_path_{};
     std::filesystem::path metadata_path_{};
@@ -88,6 +97,14 @@ private:
     std::FILE* pipe_ = nullptr;
     std::size_t recorded_frames_ = 0;
     bool flushed_ = false;
+
+    std::jthread writer_{};
+    std::mutex queue_mutex_{};
+    std::condition_variable queue_cv_{};
+    std::deque<cv::Mat> queue_{};
+    int queue_capacity_ = 16;
+    bool writer_stop_ = false;
+    std::atomic<bool> writer_failed_{false};
 };
 
 auto format_session_id(std::chrono::system_clock::time_point capture_start) -> std::string;

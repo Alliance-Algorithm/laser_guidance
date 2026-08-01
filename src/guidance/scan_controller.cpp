@@ -1,7 +1,9 @@
 #include "guidance/scan_controller.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <print>
+#include <thread>
 
 #include "guidance/galvo_driver.hpp"
 #include "guidance/galvo_executor.hpp"
@@ -91,6 +93,9 @@ auto ScanController::scan_rectangle_once(const float cx_deg, const float cy_deg)
             if (auto result = driver->set_angles(x, y); !result) {
                 return "scan write failed: " + format_error(result.error());
             }
+            // Pace the scan so it never saturates the shared SPI bus and
+            // starves concurrent aim writes from the main loop.
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
@@ -128,6 +133,7 @@ auto ScanController::scan_rectangle_once_voltage(const float cx_v, const float c
             if (auto result = driver->set_voltages(x, y); !result) {
                 return "scan voltage write failed: " + format_error(result.error());
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 

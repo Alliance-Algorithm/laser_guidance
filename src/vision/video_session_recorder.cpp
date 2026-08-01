@@ -141,8 +141,10 @@ auto retime_video_in_place(const std::filesystem::path& video_path, const double
 } // namespace
 
 VideoSessionRecorder::VideoSessionRecorder(
-    std::filesystem::path output_root, VideoSessionMetadata metadata, const int h264_qp)
-    : metadata_(std::move(metadata)) {
+    std::filesystem::path output_root, VideoSessionMetadata metadata, const int h264_qp,
+    const int queue_capacity)
+    : metadata_(std::move(metadata))
+    , queue_capacity_(std::max(1, queue_capacity)) {
     (void)std::signal(SIGPIPE, SIG_IGN);
     validate_video_session_metadata(metadata_);
     metadata_.h264_qp = clamp_h264_qp(h264_qp);
@@ -166,9 +168,20 @@ VideoSessionRecorder::VideoSessionRecorder(
     std::println(
         stderr, "VideoSessionRecorder: {}x{} @ {:.1f}fps h264_qp={}", metadata_.width,
         metadata_.height, metadata_.framerate, metadata_.h264_qp);
+
+    writer_ = std::jthread([this](std::stop_token) { writer_run(); });
 }
 
 VideoSessionRecorder::~VideoSessionRecorder() {
+    if (!flushed_) {
+        {
+            std::scoped_lock lock(queue_mutex_);
+            writer_stop_ = true;
+        }
+        queue_cv_.notify_all();
+        if (writer_.joinable())
+            writer_.join();
+    }
     if (pipe_)
         (void)pclose(pipe_);
 }
@@ -176,8 +189,8 @@ VideoSessionRecorder::~VideoSessionRecorder() {
 auto VideoSessionRecorder::record_frame(const cv::Mat& image) -> void {
     if (flushed_)
         throw std::runtime_error("cannot record frame after video session flush");
-    if (!pipe_)
-        throw std::runtime_error("video session pipe is not open");
+    if (writer_failed_.load())
+        return;
     if (image.empty())
         throw std::runtime_error("cannot record empty session frame");
     if (image.type() != CV_8UC3)
@@ -186,18 +199,51 @@ auto VideoSessionRecorder::record_frame(const cv::Mat& image) -> void {
         throw std::runtime_error("session frame size does not match negotiated video dimensions");
     }
 
+    {
+        std::scoped_lock lock(queue_mutex_);
+        if (queue_capacity_ > 0 && queue_.size() >= static_cast<std::size_t>(queue_capacity_)) {
+            queue_.pop_front(); // drop the oldest frame under backpressure
+        }
+        queue_.emplace_back(image.clone());
+    }
+    queue_cv_.notify_one();
+}
+
+auto VideoSessionRecorder::writer_run() -> void {
+    while (true) {
+        cv::Mat frame;
+        {
+            std::unique_lock lock(queue_mutex_);
+            queue_cv_.wait(lock, [this] { return writer_stop_ || !queue_.empty(); });
+            if (writer_stop_ && queue_.empty())
+                break;
+            if (queue_.empty())
+                continue;
+            frame = std::move(queue_.front());
+            queue_.pop_front();
+        }
+        if (!write_frame(frame)) {
+            writer_failed_ = true;
+            std::println(stderr, "VideoSessionRecorder: writer stopped (ffmpeg exited?)");
+            break;
+        }
+    }
+}
+
+auto VideoSessionRecorder::write_frame(const cv::Mat& image) -> bool {
     const std::size_t row_bytes = static_cast<std::size_t>(image.cols) * image.elemSize();
     if (image.isContinuous()) {
         const std::size_t size = image.total() * image.elemSize();
         if (std::fwrite(image.data, 1, size, pipe_) != size)
-            throw std::runtime_error("recording pipe write failed (ffmpeg exited?)");
+            return false;
     } else {
         for (int row = 0; row < image.rows; ++row) {
             if (std::fwrite(image.ptr(row), 1, row_bytes, pipe_) != row_bytes)
-                throw std::runtime_error("recording pipe write failed (ffmpeg exited?)");
+                return false;
         }
     }
     ++recorded_frames_;
+    return true;
 }
 
 auto VideoSessionRecorder::flush(const std::int64_t duration_ms) -> void {
@@ -205,6 +251,15 @@ auto VideoSessionRecorder::flush(const std::int64_t duration_ms) -> void {
         throw std::runtime_error("video session already flushed");
     if (duration_ms < 0)
         throw std::runtime_error("video session duration must be non-negative");
+
+    // Stop the writer and drain whatever frames are still queued.
+    {
+        std::scoped_lock lock(queue_mutex_);
+        writer_stop_ = true;
+    }
+    queue_cv_.notify_all();
+    if (writer_.joinable())
+        writer_.join();
 
     if (pipe_) {
         const int rc = pclose(pipe_);

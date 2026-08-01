@@ -14,7 +14,11 @@ auto open_ft4222() -> std::expected<Ft4222Spi, Error> {
     return Ft4222Spi::open(
         Ft4222Config{
             .sys_clock = Ft4222SysClock::k60MHz,
-            .clock_div = Ft4222SpiDiv::kDiv2,
+            // kDiv64 (937.5 kHz) matches tool_galvo_smoke, which is proven to
+            // drive the DAC reliably over the FT4222→DAC8568 wiring. 30 MHz
+            // (kDiv2) writes are acknowledged by FT4222 but can be corrupted
+            // on the line, leaving the DAC silent.
+            .clock_div = Ft4222SpiDiv::kDiv64,
             .cpol = Ft4222Cpol::kIdleLow,
             .cpha = Ft4222Cpha::kTrailing,
             .cs_active = Ft4222CsActive::kLow,

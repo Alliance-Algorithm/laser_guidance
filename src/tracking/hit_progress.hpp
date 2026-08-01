@@ -43,7 +43,6 @@ public:
     [[nodiscard]] int difficulty() const noexcept { return difficulty_; }
     [[nodiscard]] float p0() const noexcept { return p0_; }
     [[nodiscard]] bool is_exhausted() const noexcept { return exhausted_; }
-    [[nodiscard]] bool is_awaiting_colorless() const noexcept { return awaiting_colorless_; }
 
 private:
     void trigger_lock();
@@ -59,7 +58,6 @@ private:
     bool locked_ = false;
     bool exhausted_ = false;
     bool hitting_ = false;
-    bool awaiting_colorless_ = false;
     float lock_timer_ = 0.0F;
 };
 

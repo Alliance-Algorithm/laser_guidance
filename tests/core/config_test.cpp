@@ -26,7 +26,7 @@ int main() {
         require(default_config.debug.draw_overlay, "default draw_overlay mismatch");
         require(default_config.runtime.max_input_age_ms == 25, "default max_input_age_ms mismatch");
         require(
-            default_config.runtime.max_observation_age_ms == 35,
+            default_config.runtime.max_observation_age_ms == 50,
             "default max_observation_age_ms mismatch");
         require(default_config.runtime.max_infer_fps == 60, "default max_infer_fps mismatch");
         require(default_config.runtime.warmup_frames == 30, "default warmup_frames mismatch");

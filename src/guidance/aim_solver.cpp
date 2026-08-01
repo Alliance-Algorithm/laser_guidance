@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <print>
 #include <stdexcept>
 #include <utility>
 
@@ -224,6 +225,11 @@ auto AimSolver::solve_geometry(const AimInput& input) -> AimSolveResult {
         result.aim_output.message = "kinematics failed";
         return result;
     }
+    std::println(
+        stderr, "[SOLVE-DIAG] pixel=({:.1f},{:.1f}) P_c=({:.1f},{:.1f},{:.1f}) "
+                "theta=({:.3f},{:.3f}) depth={:.0f}",
+        proj_pixel.x, proj_pixel.y, P_c.x, P_c.y, P_c.z, angles.theta_x_optical_deg,
+        angles.theta_y_optical_deg, *result.telemetry.active_depth_mm);
 
     const cv::Point2f output_angles{
         angles.theta_x_optical_deg + config_.angle_offset_x_deg,

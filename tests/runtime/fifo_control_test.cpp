@@ -71,6 +71,32 @@ int main() {
             require(!ekf->enabled, "ekf off enabled mismatch");
         }
 
+        // offset 0.5 -0.3
+        {
+            const auto command = FifoControlServer::parse_command("offset 0.5 -0.3");
+            require(command.has_value(), "offset should parse");
+            const auto* offset = std::get_if<CmdSetOffset>(&*command);
+            require(offset != nullptr, "offset type mismatch");
+            require_near(offset->x_deg, 0.5F, 1e-4F, "offset x value");
+            require_near(offset->y_deg, -0.3F, 1e-4F, "offset y value");
+        }
+
+        // offset with single value keeps y
+        {
+            const auto command = FifoControlServer::parse_command("offset 0.2");
+            require(command.has_value(), "offset single should parse");
+            const auto* offset = std::get_if<CmdSetOffset>(&*command);
+            require(offset != nullptr, "offset single type mismatch");
+            require_near(offset->x_deg, 0.2F, 1e-4F, "offset single x value");
+            require_near(offset->y_deg, 0.0F, 1e-4F, "offset single y default");
+        }
+
+        // invalid offset
+        {
+            const auto command = FifoControlServer::parse_command("offset abc");
+            require(!command.has_value(), "invalid offset should fail");
+        }
+
         // quit
         {
             const auto command = FifoControlServer::parse_command("quit");
