@@ -229,6 +229,7 @@ set(laser_guidance_runtime_SOURCES
   src/runtime/overlay_renderer.cpp
   src/runtime/perception_runner.cpp
   src/runtime/runtime_outputs.cpp
+  src/runtime/referee_link.cpp
   src/io/ft4222_spi.cpp)
 
 # ---- libraries ---------------------------------------------------------------
