@@ -101,6 +101,18 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 - 最终残差使用与运行时一致的近场模型 `p_G = R_GC * (p_C - t)`；Wahba 只作诊断或显式备用初值。
 - 四列无深度和历史五列格式不再作为有效外参标定输入。
 
+## 裁判信号层
+
+`RefereeLink` 通过 ZMQ SUB 订阅裁判系统转发（radar-egui，默认 `tcp://127.0.0.1:5558`），主循环每帧非阻塞轮询并按 `cmd_id` 解析 JSON：
+
+- `0x0001` game_status：`game_type` / `game_progress` / `stage_remain_time` → 喂入比赛窗口状态机；
+- `0x020C` radar_mark_data：`opponent_aerial_targeted` / `opponent_aerial_countered` → 存最新值并产生反制边沿；
+- 其他 cmd_id 忽略；解析失败忽略该帧并计数（透出到 snapshot 便于诊断）。
+
+窗口状态机由本地 `steady_clock` 驱动（不依赖裁判时钟/NTP）：`game_progress==4` 进入比赛窗口，`==5` 或本地计时超过 `referee.match_duration_s`（默认 420s）退出；本地硬超时后须收到 `game_progress==5` 才允许下一局 re-arm。窗口内放行引导执行与 HitProgress 累计，窗口外门控（引导关闭、HitProgress 冻结）；`match_started` 边沿触发 `HitProgress::reset()`（每局开局清零，防赛前紫色污染），`countered` 边沿触发 `HitProgress::note_official_countered()` 校核本地锁定次数。断流保持当前窗口状态续导（不熄灯、不提前退出），超过 `referee.signal_timeout_s`（默认 5s）未收到合法消息时置 `signal_stale` 看门狗告警（只告警，不改门控状态）。
+
+无信号降级：从未收到合法消息 → 不门控，维持旧行为；`referee.enabled: false` → `poll()` 空转，行为与现状完全一致。相机 lit/unlit 阶段切换继续由 `maybe_switch_hik_profile` 读取 `hit_progress_.difficulty()` 驱动（裁判信号可用时该值已被校核同步）。
+
 ## 配置边界
 
 当前有效配置包括：

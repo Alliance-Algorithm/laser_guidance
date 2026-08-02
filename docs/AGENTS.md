@@ -20,6 +20,7 @@
 - FT4222H USB-to-SPI 振镜控制
 - Direct voltage 视觉到电压映射
 - `HitProgress`、EKF 跟踪、敌方颜色过滤
+- `RefereeLink` 订阅裁判系统 ZMQ（0x0001/0x020C），门控引导与 HitProgress；无信号时退化为不门控；`tools/referee_sim` 提供本地 mock。
 
 当前明确不包含：
 
