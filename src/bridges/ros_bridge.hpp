@@ -11,7 +11,6 @@ struct DetectionBatch;
 struct TargetTrack;
 struct AimOutput;
 struct RuntimeSnapshot;
-struct RefereeSnapshot;
 
 class RosBridge {
 public:
@@ -26,8 +25,6 @@ public:
 
     /// Publish all relevant data from the runtime snapshot to ROS2 topics.
     auto publish_snapshot(const RuntimeSnapshot& snapshot) -> void;
-
-    auto publish_referee(const RefereeSnapshot& referee) -> void;
 
     /// Spin ROS2 internal state (call once per frame).
     auto spin() -> void;

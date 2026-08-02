@@ -206,6 +206,19 @@ struct RosBridge::Impl {
         hit_pub->publish(msg);
     }
 
+    auto publish_referee(const RefereeSnapshot& referee) -> void {
+        if (!initialized || !referee_pub) return;
+        std_msgs::msg::Float64MultiArray msg;
+        msg.data = {
+            static_cast<double>(referee.game_progress),
+            static_cast<double>(referee.match_elapsed_s),
+            referee.guidance_gated ? 1.0 : 0.0,
+            referee.official_aerial_targeted ? 1.0 : 0.0,
+            referee.official_aerial_countered ? 1.0 : 0.0,
+        };
+        referee_pub->publish(msg);
+    }
+
     auto spin() -> void {
         if (initialized && node) {
             rclcpp::spin_some(node);
@@ -233,20 +246,7 @@ auto RosBridge::publish_snapshot(const RuntimeSnapshot& snapshot) -> void {
     }
     impl_->publish_aim(snapshot.aim);
     impl_->publish_hit(snapshot.hit_progress.progress);
-    publish_referee(snapshot.referee);
-}
-
-auto RosBridge::publish_referee(const RefereeSnapshot& referee) -> void {
-    if (!impl_->initialized || !impl_->referee_pub) return;
-    std_msgs::msg::Float64MultiArray msg;
-    msg.data = {
-        static_cast<double>(referee.game_progress),
-        static_cast<double>(referee.match_elapsed_s),
-        referee.guidance_gated ? 1.0 : 0.0,
-        referee.official_aerial_targeted ? 1.0 : 0.0,
-        referee.official_aerial_countered ? 1.0 : 0.0,
-    };
-    impl_->referee_pub->publish(msg);
+    impl_->publish_referee(snapshot.referee);
 }
 
 auto RosBridge::spin() -> void { impl_->spin(); }
