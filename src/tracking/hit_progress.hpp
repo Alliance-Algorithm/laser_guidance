@@ -44,6 +44,11 @@ public:
     [[nodiscard]] float p0() const noexcept { return p0_; }
     [[nodiscard]] bool is_exhausted() const noexcept { return exhausted_; }
 
+    /// 整局归零（开局调用）：P/t/n/P0/stage/difficulty/lock_count/锁定/耗尽 全部复位
+    void reset();
+    /// 裁判系统 0x020C 官方反制状态上升沿校核。返回 true 表示本地漏检、补计一次锁定。
+    [[nodiscard]] auto note_official_countered() -> bool;
+
 private:
     void trigger_lock();
     void advance_stage();

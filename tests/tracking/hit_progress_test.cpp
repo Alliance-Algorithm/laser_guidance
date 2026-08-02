@@ -207,6 +207,56 @@ int main() {
             require(hp.progress_ratio() < 1.0F, "ratio < 1.0 during decay");
         }
 
+        {
+            HitProgress hp;
+            for (int i = 0; i < 20; ++i)
+                hp.update(true, kTick);
+            hp.update(false, 2.0F);
+            require(hp.lock_count() > 0 || hp.progress() > 0.0F, "state dirty before reset");
+            hp.reset();
+            require(hp.progress() == 0.0F, "reset clears P");
+            require(hp.stage() == 0, "reset clears stage");
+            require(hp.difficulty() == 1, "reset restores difficulty 1");
+            require(hp.p0() == 50.0F, "reset restores P0 50");
+            require(hp.lock_count() == 0, "reset clears lock_count");
+            require(!hp.is_locked(), "reset clears locked");
+            require(!hp.is_exhausted(), "reset clears exhausted");
+            require(!hp.is_hitting(), "reset clears hitting");
+        }
+
+        {
+            HitProgress hp;
+            hp.update(true, 45.0F);
+            require(hp.is_locked(), "precondition: locked");
+            require(!hp.note_official_countered(), "already locked -> no correction");
+            require(hp.lock_count() == 1, "lock_count unchanged when already counted");
+        }
+
+        {
+            HitProgress hp;
+            hp.update(true, 0.5F);              // P = 9.0, 未锁定
+            require(hp.note_official_countered(), "missed lock -> corrected");
+            require(hp.is_locked(), "correction enters locked state");
+            require(hp.lock_count() == 1, "correction increments lock_count");
+            require(hp.stage() == 1, "correction advances stage");
+            require(hp.difficulty() == 2, "correction advances difficulty");
+            require(hp.progress() == 0.0F, "correction resets P");
+            require_near(hp.lock_remaining_s(), 45.0F, 0.5F, "correction starts 45s lock");
+            hp.update(false, 45.1F);
+            require(!hp.is_locked(), "corrected lock expires after 45s");
+        }
+
+        {
+            HitProgress hp;
+            for (int lock = 1; lock <= 5; ++lock) {
+                drive_until_locked(hp, lock);
+                expire_lock(hp);
+            }
+            require(hp.is_exhausted(), "precondition: exhausted");
+            require(!hp.note_official_countered(), "exhausted -> no correction");
+            require(hp.lock_count() == 5, "lock_count capped at 5");
+        }
+
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "hit_progress_test failed: {}", e.what());

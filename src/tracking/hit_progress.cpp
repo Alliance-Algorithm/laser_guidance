@@ -30,6 +30,31 @@ auto HitProgress::progress_ratio() const noexcept -> float {
     return std::clamp(p_ / p0_, 0.0F, 1.0F);
 }
 
+void HitProgress::reset() {
+    p_ = 0.0F;
+    t_ = 0.0F;
+    n_ = 0;
+    p0_ = 50.0F;
+    stage_ = 0;
+    difficulty_ = 1;
+    lock_count_ = 0;
+    locked_ = false;
+    exhausted_ = false;
+    hitting_ = false;
+    lock_timer_ = 0.0F;
+}
+
+auto HitProgress::note_official_countered() -> bool {
+    if (exhausted_ || locked_)
+        return false;
+    if (lock_count_ >= kMaxLocks) {
+        exhausted_ = true;
+        return false;
+    }
+    trigger_lock();
+    return true;
+}
+
 void HitProgress::update(bool is_purple, float dt_s) {
     update(is_purple, is_purple, dt_s);
 }
