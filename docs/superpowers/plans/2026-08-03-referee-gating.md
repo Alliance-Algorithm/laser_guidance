@@ -1196,10 +1196,126 @@ git commit -m "docs: referee gating configuration and verification tooling"
 
 ---
 
+### Task 8: 取消引导门控（全程引导 + 赛外本地计算）
+
+**用户裁决（2026-08-03）：** 引导执行与 HitProgress 本地计算永不门控；`game_progress` 只用于每局开局 HitProgress 重置、0x020C 校核、相机阶段切换、看门狗与显示。本任务撤销 Task 5 的门控接线，保留状态机/边沿/校核/看门狗。
+
+**Files:**
+- Modify: `src/runtime/referee_link.hpp` / `referee_link.cpp`
+- Modify: `include/laser_guidance/runtime.hpp`
+- Modify: `src/runtime/control_loop.cpp`
+- Modify: `src/core/debug_renderer.cpp`
+- Modify: `src/bridges/ros_bridge.cpp`
+- Modify: `tests/runtime/referee_link_test.cpp`
+- Modify: `tests/runtime/overlay_renderer_test.cpp`
+- Modify: 文档（AGENTS.md、docs/AGENTS.md、docs/architecture.md、docs/runtime_operations.md、README.md）
+
+**Interfaces:**
+- Consumes: Task 2/3 的 `RefereeWindow`（保留 update/consume_match_started/match_elapsed_s/expire_if_over/in_window/signal_available）、`RefereeLink`（保留 poll/consume_match_started/consume_countered_edge/snapshot）、Task 4 的 HitProgress reset/note_official_countered。
+- Produces: 删除 `RefereeWindow::allowed()`、`RefereeLink::guidance_allowed()`/`hit_progress_allowed()`；`RefereeSnapshot` 删除 `guidance_gated`；ROS 话题 4 元素数组。
+
+- [ ] **Step 1: 更新测试（referee_link_test.cpp，先改后实现）**
+
+删除以下断言（依赖已删 API）：
+- 状态机区：`w.allowed()` 的全部调用（"no signal -> ungated"、准备阶段、比赛进入、超时、断流、re-arm 用例）改为断言 `w.in_window()` + `w.signal_available()`：
+  - `require(!w.signal_available(), "no signal flag");` 保持不变
+  - 准备阶段：`require(!w.in_window(), "prep phase not in window");`
+  - 4 进入：`require(w.in_window(), "match enters window");`
+  - 5 退出：`require(!w.in_window(), "settle exits window");`
+  - 420s 超时：`require(!w.in_window(), "exits at 420s despite progress still 4");`
+  - 断流：`require(w.in_window(), "stale signal keeps window");` / `require(!w.in_window(), "stale signal still expires at 420s");`
+  - timed_out 用例：`!w.in_window()` 与 `!w.consume_match_started()` 断言保留，`allowed()` 调用替换
+- RefereeLink 禁用用例：`require(link.guidance_allowed(), ...)` 删除，改为 `require(!link.snapshot().signal_available, "disabled link no signal");`
+
+- [ ] **Step 2: 构建确认失败**
+
+Run: `./.script/build-laser && ctest --test-dir build -R referee_link_test --output-on-failure`
+Expected: FAIL（allowed/guidance_allowed 未定义）。
+
+- [ ] **Step 3: 实现 API 删除（referee_link.hpp/.cpp）**
+
+`RefereeWindow` 删除 `allowed()` 声明与实现；`RefereeLink` 删除 `guidance_allowed()`/`hit_progress_allowed()` 声明与实现（`window_.allowed()` 的实现行一并删除）。其余保留。
+
+- [ ] **Step 4: RefereeSnapshot 删除 guidance_gated（include/laser_guidance/runtime.hpp）**
+
+删除 `bool guidance_gated = false;` 行及注释。
+
+- [ ] **Step 5: ControlLoop 撤销门控（src/runtime/control_loop.cpp）**
+
+- 删除 `const bool guidance_allowed = referee_link_.guidance_allowed();` 行，`if (guidance != nullptr && guidance_allowed) {` 还原为 `if (guidance != nullptr) {`
+- `update_hit_progress` 中删除：
+```cpp
+    if (!referee_link_.hit_progress_allowed()) {
+        last_hit_progress_time_ = now;
+        return;
+    }
+```
+（`const auto now = Clock::now();` 之后的 dt 计算恢复原样，HitProgress 赛外照常本地计算）
+
+- [ ] **Step 6: overlay 去掉 [GATED]（src/core/debug_renderer.cpp）**
+
+`draw_referee_status` 改为：
+
+```cpp
+auto draw_referee_status(cv::Mat& image, const RefereeSnapshot& referee) -> void {
+    std::string line;
+    if (!referee.signal_available) {
+        line = "REF: no signal (local calc)";
+    } else {
+        line = std::format(
+            "REF: pg={} t={}s {}{}",
+            static_cast<int>(referee.game_progress),
+            referee.match_elapsed_s,
+            referee.signal_stale ? "[STALE] " : "",
+            referee.official_aerial_countered ? "[CT]" : "");
+    }
+    cv::putText(
+        image, line, {10, 130}, cv::FONT_HERSHEY_SIMPLEX, 0.5, {200, 200, 200}, 1);
+}
+```
+
+- [ ] **Step 7: ROS 4 元素数组（src/bridges/ros_bridge.cpp）**
+
+`publish_referee` 的 `msg.data` 改为：
+
+```cpp
+    msg.data = {
+        static_cast<double>(referee.game_progress),
+        static_cast<double>(referee.match_elapsed_s),
+        referee.official_aerial_targeted ? 1.0 : 0.0,
+        referee.official_aerial_countered ? 1.0 : 0.0,
+    };
+```
+
+- [ ] **Step 8: overlay 测试去掉 guidance_gated（tests/runtime/overlay_renderer_test.cpp）**
+
+删除 `referee.guidance_gated = true;` 行；其余（`.referee = &referee` 传参与 norm 断言）保留。
+
+- [ ] **Step 9: 构建 + 全部相关测试**
+
+Run: `./.script/build-laser && ctest --test-dir build -R "referee_link_test|hit_progress_test|overlay_renderer_test|config_test" --output-on-failure`
+Expected: 全部 PASS；全量 `ctest --test-dir build --output-on-failure` 27/27。
+
+- [ ] **Step 10: 文档同步**
+
+- AGENTS.md / docs/AGENTS.md 的状态行改为：`RefereeLink` 订阅裁判系统 ZMQ（0x0001/0x020C），全程引导；game_progress 用于每局 HitProgress 重置与 0x020C 锁定校核，无信号/赛外退化纯本地计算；`tools/referee_sim` 提供本地 mock。
+- docs/architecture.md：RefereeLink 小节改为"全程引导，不门控；用于每局重置/校核/相机阶段切换/看门狗"。
+- docs/runtime_operations.md：referee 节说明"引导永不门控；overlay REF 行显示 pg/计时/STALE/CT；referee_sim 用法不变"。
+- README.md：如提及门控，同步改为全程引导表述。
+
+- [ ] **Step 11: 提交**
+
+```bash
+git add src/runtime/referee_link.hpp src/runtime/referee_link.cpp include/laser_guidance/runtime.hpp src/runtime/control_loop.cpp src/core/debug_renderer.cpp src/bridges/ros_bridge.cpp tests/runtime/referee_link_test.cpp tests/runtime/overlay_renderer_test.cpp AGENTS.md docs/AGENTS.md docs/architecture.md docs/runtime_operations.md README.md
+git commit -m "feat(runtime): always-on guidance, referee data for per-match reset and lock verification only"
+```
+
+---
+
 ## 自审记录
 
-- **Spec 覆盖**：§1 RefereeLink（Task 2/3）、§2 ControlLoop 集成（Task 5）、§3 HitProgress（Task 4）、§4 配置（Task 1 + Task 3 Step 4a 的 signal_timeout_s）、§5 快照/overlay/ROS（Task 3 Step 3 + Task 5）、§6 mock 工具（Task 6）、§7 测试（各任务 Step 1）、§8 排除项（无任务，符合 YAGNI）。看门狗（断流续导 + STALE 告警）在 Task 3/5 落地，相机难度阶段切换由现有 `maybe_switch_hik_profile` 读取已校核同步的 `hit_progress_.difficulty()` 天然覆盖。
-- **类型一致性**：`RefereeConfig`（Task 1）→ `RefereeLink(RefereeConfig)`（Task 3）；`RefereeSnapshot` 在 Task 3 Step 3 统一定义，Task 5 只消费不重复；`consume_match_started/consume_countered_edge/guidance_allowed/hit_progress_allowed` 三处使用签名一致。
+- **Spec 覆盖**：§1 RefereeLink（Task 2/3）、§2 ControlLoop 集成（Task 5 门控 + Task 8 撤销门控改全程引导）、§3 HitProgress（Task 4）、§4 配置（Task 1 + Task 3 Step 4a 的 signal_timeout_s）、§5 快照/overlay/ROS（Task 3 Step 3 + Task 5 + Task 8 移除 guidance_gated）、§6 mock 工具（Task 6）、§7 测试（各任务 Step 1）、§8 排除项（无任务，符合 YAGNI）。看门狗（断流告警）在 Task 3/5 落地，相机难度阶段切换由现有 `maybe_switch_hik_profile` 读取已校核同步的 `hit_progress_.difficulty()` 天然覆盖。
+- **类型一致性**：`RefereeConfig`（Task 1）→ `RefereeLink(RefereeConfig)`（Task 3）；`RefereeSnapshot` 在 Task 3 Step 3 统一定义，Task 5 消费、Task 8 移除 `guidance_gated`；`consume_match_started/consume_countered_edge` 三处使用签名一致；Task 8 删除 `allowed()/guidance_allowed()/hit_progress_allowed()` 时同步更新其全部调用点与测试。
 - **无占位**：所有代码块为完整实现；Task 5 Step 5 的 guidance 块仅改条件、内部逻辑不变。
 - **头文件卫生**：`RefereeLink` 用 Impl PIMPL（referee_link.cpp 内持有 zmq::context_t/socket_t），公共头不暴露 libzmq，与 `ZmqSender`/`RosBridge` 的既有 PIMPL 风格一致。
 - **构建注意**：`src/runtime/referee_link.cpp` 手动加入 `laser_guidance_runtime_SOURCES`（CMakeLists.txt:221-231）；`referee_link_` 成员在构造列表按声明顺序初始化。

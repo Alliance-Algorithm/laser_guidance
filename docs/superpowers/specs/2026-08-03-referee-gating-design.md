@@ -74,21 +74,17 @@ referee_snapshot() -> RefereeSnapshot     // 透出数据
 
 ```cpp
 referee_link_.poll();
-if (referee_link_.consume_match_started()) hit_progress_.reset();
-if (referee_link_.consume_countered_edge()) hit_progress_.note_official_countered();
-if (referee_link_.guidance_allowed())
-    frame.guidance = guidance->execute(frame.track);
-if (referee_link_.hit_progress_allowed()) {
-    hit_progress_.update(is_purple, is_colorless, dt_s);
-} else {
-    last_hit_progress_time_ = now;   // 冻结期不累计 dt，防恢复瞬间 P 突变
-}
+if (referee_link_.consume_match_started()) hit_progress_.reset();   // 每局开局重置（防赛前紫色污染）
+if (referee_link_.consume_countered_edge()) hit_progress_.note_official_countered(); // 官方锁定校核
+frame.guidance = guidance->execute(frame.track);   // 全程引导，永不门控
+hit_progress_.update(is_purple, is_colorless, dt_s);  // 赛外也用本地计算
 ```
+
+**全程引导语义（2026-08-03 用户裁决）：** 引导执行（`GuidanceSession::execute`）与 HitProgress 本地计算**永不门控**——无论裁判系统有无信号、是否在比赛窗口内都持续运行。`game_progress` 的用途收窄为：① 每局开局 `match_started` 边沿触发 `HitProgress::reset()`（防赛前紫色污染，每局 5 次锁定全新计数）；② 0x020C 官方反制状态校核锁定计数与难度阶段（裁判可用时难度由官方同步，无裁判时纯本地 hit 计算）；③ 相机 lit/unlit 阶段切换（`maybe_switch_hik_profile` 读 `hit_progress_.difficulty()`）；④ 看门狗断流告警与比赛状态显示（snapshot/overlay/ROS）。
 
 说明：
 - GuidanceSession 初始化线程与生命周期保持不变（不反复开关 FT4222）；
-- 门控只作用于 `execute()` 调用点与 `update_hit_progress` 调用点；
-- `referee_link_` 为 ControlLoop 成员，始终构造；`config_.referee.enabled=false` 时 `poll()` 空转（不连 socket、不解析），`allowed()` 恒 true，行为与现状完全一致。
+- `RefereeWindow` 状态机保留（窗口内/计时/420s 本地超时/终端锁/re-arm），只服务于 `match_started` 边沿、`match_elapsed_s` 显示与校核语义，不再作为引导开关；
 
 ### 3. HitProgress 新增方法（src/tracking/hit_progress.{hpp,cpp}）
 
@@ -118,7 +114,6 @@ referee:
 struct RefereeSnapshot {
     bool signal_available = false;
     bool signal_stale = false;        // 超过 signal_timeout_s 未收到合法消息（看门狗告警）
-    bool guidance_gated = false;      // true = 引导当前被门控禁止（窗口外）
     uint8_t game_progress = 0;
     uint8_t game_type = 0;
     int64_t match_elapsed_s = -1;     // 窗口内已计时；窗口外 -1
@@ -130,7 +125,7 @@ struct RefereeSnapshot {
 };
 ```
 
-- overlay：新增一行状态显示（game_progress / elapsed / gated / STALE 告警 / 官方位）；
+- overlay：新增一行状态显示（game_progress / elapsed / STALE 告警 / 官方位）；
 - RosBridge 随 snapshot 自动发布；
 - ZMQ 遥测（TargetObservation 结构）不扩展（字段为检测数据，语义不符）。
 
@@ -177,7 +172,7 @@ radar-egui (ZMQ PUB tcp://*:5558)
 
 ## 验收标准
 
-1. `referee.enabled: false` 或 ZMQ 无人发布：行为与现状完全一致（始终引导、HitProgress 照常累计）；
-2. mock 裁判器发布完整流程：比赛前 overlay 显示 gated、引导不执行、HitProgress 不累计；game_progress==4 时进入引导、HitProgress 重置后开始累计；420s 或 5 时退出；
-3. mock 触发 countered 置位：本地 HitProgress 校核生效（漏检时补计锁定）；
+1. `referee.enabled: false` 或 ZMQ 无人发布：行为与现状完全一致（始终引导、HitProgress 照常本地计算）；
+2. mock 裁判器发布完整流程：全程引导不中断（无 [GATED] 门控显示）；`game_progress==4` 时 HitProgress 重置后开始累计；每局 match_started 边沿重置；420s 或 5 后窗口退出（仅影响计时显示与重置语义，不影响引导）；
+3. mock 触发 countered 置位：本地 HitProgress 校核生效（漏检时补计锁定，难度随官方锁定次数推进）；
 4. 全部单测通过（referee_link + hit_progress 追加用例）。
