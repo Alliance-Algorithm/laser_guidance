@@ -33,6 +33,8 @@ public:
     explicit RefereeWindow(int match_duration_s = 420);
 
     void update(std::uint8_t game_progress, std::int64_t now_ns);
+    /// 每帧调用：窗口内且本地计时已超过 match_duration_s 时强制退出（断流场景也生效）
+    void expire_if_over(std::int64_t now_ns);
     [[nodiscard]] auto signal_available() const -> bool { return signal_available_; }
     [[nodiscard]] auto in_window() const -> bool { return in_window_; }
     // 无信号不门控（旧行为）；有信号时仅在比赛窗口内放行

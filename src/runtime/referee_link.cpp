@@ -83,6 +83,16 @@ void RefereeWindow::update(std::uint8_t game_progress, std::int64_t now_ns) {
     }
 }
 
+void RefereeWindow::expire_if_over(std::int64_t now_ns) {
+    if (!in_window_)
+        return;
+    if (now_ns - start_ns_ >= static_cast<std::int64_t>(match_duration_s_) * 1'000'000'000) {
+        in_window_ = false;
+        start_ns_ = 0;
+        timed_out_ = true;
+    }
+}
+
 auto RefereeWindow::consume_match_started() -> bool {
     const bool pending = match_started_pending_;
     match_started_pending_ = false;
@@ -129,6 +139,9 @@ RefereeLink::~RefereeLink() = default;
 auto RefereeLink::poll() -> void {
     if (!impl_->config.enabled)
         return;
+    // Stream-death safety: even with no 0x0001 arriving, the local clock still
+    // closes the match window at match_duration_s.
+    impl_->window.expire_if_over(now_ns());
     if (!impl_->sub) {
         impl_->sub = std::make_unique<zmq::socket_t>(impl_->ctx, zmq::socket_type::sub);
         impl_->sub->connect(impl_->config.zmq_address);

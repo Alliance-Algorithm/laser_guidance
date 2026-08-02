@@ -440,6 +440,9 @@ auto ControlLoop::run_loop() -> void {
         const auto output_status = outputs_.status();
 
         // One clone for overlay draw + encode; render overlay in all modes (local + stream).
+        // REF row needs the referee snapshot: take it locally so the pointer stays
+        // valid for the whole render call (assemble_snapshot takes its own copy).
+        const RefereeSnapshot referee_snapshot = referee_link_.snapshot();
         frame.display = frame.frame.image.clone();
         overlay_.render(
             frame,
@@ -456,6 +459,7 @@ auto ControlLoop::run_loop() -> void {
                 .enemy_color = enemy_color,
                 .using_tensorrt =
                     perception_.active_backend() == RuntimeBackend::tensorrt,
+                .referee = &referee_snapshot,
             });
 
         outputs_.record_current(frame.display);

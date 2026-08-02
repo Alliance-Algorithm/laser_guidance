@@ -104,6 +104,26 @@ int main() {
             require(!w.allowed(), "stale signal still expires at 420s");
         }
 
+        // ---- 断流且无任何消息：仅 expire_if_over 按本地时钟到期 ----
+        {
+            RefereeWindow w;
+            w.update(4, 4'000'000'000);     // 窗口开启，start=4s
+            w.consume_match_started();
+            // 此后不再调用 update()，模拟发布方死亡
+            w.expire_if_over(423'000'000'000);   // 419s
+            require(w.allowed(), "no-message window still open at 419s");
+            require(w.match_elapsed_s(423'000'000'000) == 419, "elapsed tracks local clock");
+            w.expire_if_over(424'100'000'000);   // 420.1s
+            require(!w.allowed(), "no-message window expires at 420s");
+            require(!w.consume_match_started(), "no match_started edge on expiry");
+            w.expire_if_over(500'000'000'000);
+            require(!w.allowed(), "expired window stays closed on repeated calls");
+            w.update(5, 501'000'000'000);   // 5 清除 timed_out_
+            w.update(4, 600'000'000'000);
+            require(w.allowed(), "5 clears timeout, next 4 re-arms after expiry");
+            require(w.consume_match_started(), "re-arm after expiry fires edge");
+        }
+
         // ---- RefereeLink enabled=false 空转不抛异常、不门控 ----
         {
             rmcs_laser_guidance::RefereeConfig cfg;
