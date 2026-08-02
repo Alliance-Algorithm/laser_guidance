@@ -83,6 +83,13 @@ int main() {
             require(w.allowed(), "within window at 419s");
             w.update(4, 424'100'000'000);   // 420.1s
             require(!w.allowed(), "exits at 420s despite progress still 4");
+            w.update(4, 425'000'000'000);
+            require(!w.allowed(), "timeout is terminal: 4 does not re-open window");
+            require(!w.consume_match_started(), "no edge after timeout");
+            w.update(5, 426'000'000'000);
+            w.update(4, 500'000'000'000);
+            require(w.allowed(), "5 clears timeout, next 4 re-arms");
+            require(w.consume_match_started(), "re-arm after 5 fires edge");
         }
 
         // ---- 断流：窗口判定继续由本地时钟驱动 ----

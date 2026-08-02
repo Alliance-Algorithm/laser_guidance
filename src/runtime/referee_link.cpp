@@ -59,16 +59,19 @@ void RefereeWindow::update(std::uint8_t game_progress, std::int64_t now_ns) {
     if (game_progress == 5) {
         in_window_ = false;
         start_ns_ = 0;
+        match_started_pending_ = false;
+        timed_out_ = false;
         return;
     }
     if (in_window_) {
         if (now_ns - start_ns_ >= static_cast<std::int64_t>(match_duration_s_) * 1'000'000'000) {
             in_window_ = false;
             start_ns_ = 0;
+            timed_out_ = true;
         }
         return;
     }
-    if (game_progress == 4) {
+    if (game_progress == 4 && !timed_out_) {
         in_window_ = true;
         start_ns_ = now_ns;
         match_started_pending_ = true;

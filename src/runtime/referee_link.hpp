@@ -45,6 +45,8 @@ private:
     bool in_window_ = false;
     std::int64_t start_ns_ = 0;
     bool match_started_pending_ = false;
+    // 420s 硬超时后窗口终结，须收到 progress 5 才允许 re-arm
+    bool timed_out_ = false;
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal
