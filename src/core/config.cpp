@@ -214,6 +214,15 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.zmq.port = zmq_cfg["port"].as<int>();
     }
 
+    if (const YAML::Node referee_cfg = yaml["referee"]) {
+        if (referee_cfg["enabled"])
+            config.referee.enabled = referee_cfg["enabled"].as<bool>();
+        if (referee_cfg["zmq_address"])
+            config.referee.zmq_address = referee_cfg["zmq_address"].as<std::string>();
+        if (referee_cfg["match_duration_s"])
+            config.referee.match_duration_s = referee_cfg["match_duration_s"].as<int>();
+    }
+
     if (const YAML::Node ekf = yaml["ekf"]) {
         if (ekf["enabled"])
             config.ekf.enabled = ekf["enabled"].as<bool>();

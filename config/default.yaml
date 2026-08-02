@@ -49,6 +49,11 @@ zmq:
   host: "127.0.0.1"
   port: 5555
 
+referee:
+  enabled: true
+  zmq_address: "tcp://127.0.0.1:5558"
+  match_duration_s: 420
+
 ekf:
   process_noise_q: 0.05
   measurement_noise_r: 0.5

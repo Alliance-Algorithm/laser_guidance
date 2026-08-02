@@ -64,6 +64,13 @@ int main() {
         require_near(
             default_config.guidance.voltage_limit_v, 5.0F, 1e-3F,
             "default guidance voltage_limit_v mismatch");
+        require(default_config.referee.enabled, "default referee enabled mismatch");
+        require(
+            default_config.referee.zmq_address == "tcp://127.0.0.1:5558",
+            "default referee zmq_address mismatch");
+        require(
+            default_config.referee.match_duration_s == 420,
+            "default referee match_duration_s mismatch");
         require(
             default_video_session_root()
                 == (default_config_path().parent_path().parent_path() / "videos"),

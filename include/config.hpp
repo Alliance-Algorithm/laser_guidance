@@ -84,6 +84,12 @@ struct ZmqConfig {
     int port = 5555;
 };
 
+struct RefereeConfig {
+    bool enabled = false;
+    std::string zmq_address = "tcp://127.0.0.1:5558";
+    int match_duration_s = 420;
+};
+
 struct EkfConfig {
     bool enabled = true;
     double process_noise_q = 0.05;
@@ -216,6 +222,7 @@ struct Config {
     UdpConfig udp{};
     ZmqConfig zmq{};
     EkfConfig ekf{};
+    RefereeConfig referee{};
     GuidanceConfig guidance{};
 };
 
