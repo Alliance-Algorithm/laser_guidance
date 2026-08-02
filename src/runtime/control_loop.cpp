@@ -87,7 +87,8 @@ ControlLoop::ControlLoop(Config config, CompetitionRuntimeOptions options)
           config,
           options.profile == CompetitionProfile::main ? options.record_options
                                                       : RecordSessionOptions{},
-          make_output_capabilities(options.profile)) {
+          make_output_capabilities(options.profile))
+    , referee_link_(config.referee) {
     state_.enemy_color = to_enemy_color(config_.inference.enemy_class_id);
     state_.ekf_enabled = config_.ekf.enabled;
     state_.streaming_requested = config_.rtp.enabled && allows_streaming();
@@ -376,6 +377,20 @@ auto ControlLoop::run_loop() -> void {
             frame.detection, frame.ekf_state, ekf_enabled, config_.ekf.lookahead_ms,
             frame.frame.timestamp);
 
+        referee_link_.poll();
+        if (referee_link_.consume_match_started()) {
+            hit_progress_.reset();
+            std::println(stderr, "[REFEREE] match started, hit progress reset");
+        }
+        if (referee_link_.consume_countered_edge()) {
+            if (hit_progress_.note_official_countered()) {
+                std::println(
+                    stderr,
+                    "[REFEREE] official countered missed locally, lock corrected to {}",
+                    hit_progress_.lock_count());
+            }
+        }
+
         // The guidance-init thread may assign guidance_ at any time; take the
         // pointer under the state lock and execute outside it. Safe because
         // guidance_ is only reset on this thread (reconnect/teardown) and the
@@ -385,7 +400,8 @@ auto ControlLoop::run_loop() -> void {
             std::scoped_lock lock(state_mutex_);
             guidance = guidance_.has_value() ? &*guidance_ : nullptr;
         }
-        if (guidance != nullptr) {
+        const bool guidance_allowed = referee_link_.guidance_allowed();
+        if (guidance != nullptr && guidance_allowed) {
             if (std::optional<std::pair<float, float>> pending_offset = take_pending_offset();
                 pending_offset.has_value()) {
                 guidance->set_offset(pending_offset->first, pending_offset->second);
@@ -579,6 +595,10 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
     // than the nominal camera rate under RTP/overlay/recording load, and
     // HitProgress counts real seconds per the RM2026 §5.6.3 rules.
     const auto now = Clock::now();
+    if (!referee_link_.hit_progress_allowed()) {
+        last_hit_progress_time_ = now;
+        return;
+    }
     float dt_s = 1.0F / 60.0F;
     if (last_hit_progress_time_ != Clock::time_point{}) {
         const float elapsed =
@@ -711,6 +731,7 @@ auto ControlLoop::assemble_snapshot(
     snapshot.hit_progress =
         options_.profile == CompetitionProfile::main ? make_hit_progress_snapshot(hit_progress_)
                                                      : HitProgressSnapshot{};
+    snapshot.referee = referee_link_.snapshot();
     snapshot.current_recording_root = output_status.recording_root;
     snapshot.active_backend_name = perception_.active_backend_name();
     snapshot.status = make_runtime_status(

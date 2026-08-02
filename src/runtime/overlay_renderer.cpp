@@ -82,6 +82,9 @@ auto OverlayRenderer::render(ControlLoopFrame& frame, const OverlayRenderContext
     if (context.hit_progress != nullptr) {
         draw_hit_progress(frame.display, *context.hit_progress);
     }
+    if (context.referee != nullptr) {
+        draw_referee_status(frame.display, *context.referee);
+    }
     draw_status_bar(
         frame.display, context.streaming_active, context.recording_active,
         to_enemy_class_id(context.enemy_color), context.using_tensorrt);

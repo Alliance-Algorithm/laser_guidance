@@ -8,6 +8,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 
 namespace rmcs_laser_guidance {
 
@@ -34,6 +35,7 @@ struct RosBridge::Impl {
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tracks_pub;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr aim_pub;
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr hit_pub;
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr referee_pub;
 
     bool initialized = false;
 
@@ -57,6 +59,8 @@ struct RosBridge::Impl {
                 std::string(kTopicPrefix) + "aim_point", 10);
             hit_pub = node->create_publisher<std_msgs::msg::Float64>(
                 std::string(kTopicPrefix) + "hit_progress", 10);
+            referee_pub = node->create_publisher<std_msgs::msg::Float64MultiArray>(
+                std::string(kTopicPrefix) + "referee", 10);
 
             initialized = true;
             RCLCPP_INFO(node->get_logger(), "ROS2 bridge initialized");
@@ -229,6 +233,20 @@ auto RosBridge::publish_snapshot(const RuntimeSnapshot& snapshot) -> void {
     }
     impl_->publish_aim(snapshot.aim);
     impl_->publish_hit(snapshot.hit_progress.progress);
+    publish_referee(snapshot.referee);
+}
+
+auto RosBridge::publish_referee(const RefereeSnapshot& referee) -> void {
+    if (!impl_->initialized || !impl_->referee_pub) return;
+    std_msgs::msg::Float64MultiArray msg;
+    msg.data = {
+        static_cast<double>(referee.game_progress),
+        static_cast<double>(referee.match_elapsed_s),
+        referee.guidance_gated ? 1.0 : 0.0,
+        referee.official_aerial_targeted ? 1.0 : 0.0,
+        referee.official_aerial_countered ? 1.0 : 0.0,
+    };
+    impl_->referee_pub->publish(msg);
 }
 
 auto RosBridge::spin() -> void { impl_->spin(); }

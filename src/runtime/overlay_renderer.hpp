@@ -18,6 +18,7 @@ struct OverlayRenderContext {
     bool recording_active = false;
     EnemyColor enemy_color = EnemyColor::auto_select;
     bool using_tensorrt = false;
+    const RefereeSnapshot* referee = nullptr;
 };
 
 class OverlayRenderer {

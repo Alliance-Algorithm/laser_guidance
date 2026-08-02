@@ -68,6 +68,32 @@ int main() {
             cv::norm(calibration_frame.display, calibration_before, cv::NORM_INF) > 0.0,
             "calibration overlay should change image");
 
+        {
+            ControlLoopFrame gated_frame;
+            gated_frame.display = cv::Mat::zeros(240, 320, CV_8UC3);
+            const auto gated_before = gated_frame.display.clone();
+            rmcs_laser_guidance::RefereeSnapshot referee;
+            referee.signal_available = true;
+            referee.guidance_gated = true;
+            referee.game_progress = 1;
+            referee.match_elapsed_s = -1;
+            renderer.render(
+                gated_frame,
+                OverlayRenderContext{
+                    .guidance_enabled = true,
+                    .guidance_ready = true,
+                    .hit_progress = nullptr,
+                    .streaming_active = false,
+                    .recording_active = false,
+                    .enemy_color = rmcs_laser_guidance::EnemyColor::red,
+                    .using_tensorrt = false,
+                    .referee = &referee,
+                });
+            require(
+                cv::norm(gated_frame.display, gated_before, cv::NORM_INF) > 0.0,
+                "referee line should be drawn when gated");
+        }
+
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "overlay_renderer_test failed: {}", e.what());

@@ -12,6 +12,8 @@
 
 namespace rmcs_laser_guidance {
 
+struct RefereeSnapshot;
+
 auto class_color(int class_id) -> cv::Scalar;
 auto class_name(int class_id) -> std::string;
 auto draw_candidates(cv::Mat& image, const std::vector<ModelCandidate>& candidates) -> void;
@@ -22,6 +24,7 @@ auto draw_guidance_status(
 auto draw_status_bar(
     cv::Mat& image, bool streaming, bool recording, int enemy_class_id, bool using_trt) -> void;
 auto draw_hit_progress(cv::Mat& image, const HitProgress& hp) -> void;
+auto draw_referee_status(cv::Mat& image, const RefereeSnapshot& referee) -> void;
 
 class DebugRenderer {
 public:

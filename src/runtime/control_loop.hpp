@@ -18,6 +18,7 @@
 #include "runtime/guidance_session.hpp"
 #include "runtime/overlay_renderer.hpp"
 #include "runtime/perception_runner.hpp"
+#include "runtime/referee_link.hpp"
 #include "runtime/runtime_outputs.hpp"
 #include "tracking/hit_progress.hpp"
 
@@ -85,6 +86,7 @@ private:
     std::optional<GuidanceSession> guidance_{};
     std::jthread guidance_init_thread_{};
     HitProgress hit_progress_{};
+    RefereeLink referee_link_{RefereeConfig{}};
     // Real elapsed time between update_hit_progress calls; HitProgress must
     // not assume the loop runs at the camera's nominal framerate.
     Clock::time_point last_hit_progress_time_{};

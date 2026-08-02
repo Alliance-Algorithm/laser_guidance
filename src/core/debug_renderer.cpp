@@ -8,6 +8,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "laser_guidance/runtime.hpp"
+
 namespace rmcs_laser_guidance {
 namespace {
 
@@ -171,6 +173,23 @@ auto draw_hit_progress(cv::Mat& image, const HitProgress& hp) -> void {
     }
     cv::putText(
         image, status_text, {bar_x, bar_y - 8}, cv::FONT_HERSHEY_SIMPLEX, 0.5, {200, 200, 200}, 1);
+}
+
+auto draw_referee_status(cv::Mat& image, const RefereeSnapshot& referee) -> void {
+    std::string line;
+    if (!referee.signal_available) {
+        line = "REF: no signal (ungated)";
+    } else {
+        line = std::format(
+            "REF: pg={} t={}s {}{}{}",
+            static_cast<int>(referee.game_progress),
+            referee.match_elapsed_s,
+            referee.guidance_gated ? "[GATED] " : "",
+            referee.signal_stale ? "[STALE] " : "",
+            referee.official_aerial_countered ? "[CT]" : "");
+    }
+    cv::putText(
+        image, line, {10, 130}, cv::FONT_HERSHEY_SIMPLEX, 0.5, {200, 200, 200}, 1);
 }
 
 DebugRenderer::DebugRenderer(const DebugConfig& debug_config)
