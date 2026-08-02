@@ -178,13 +178,12 @@ auto draw_hit_progress(cv::Mat& image, const HitProgress& hp) -> void {
 auto draw_referee_status(cv::Mat& image, const RefereeSnapshot& referee) -> void {
     std::string line;
     if (!referee.signal_available) {
-        line = "REF: no signal (ungated)";
+        line = "REF: no signal (local calc)";
     } else {
         line = std::format(
-            "REF: pg={} t={}s {}{}{}",
+            "REF: pg={} t={}s {}{}",
             static_cast<int>(referee.game_progress),
             referee.match_elapsed_s,
-            referee.guidance_gated ? "[GATED] " : "",
             referee.signal_stale ? "[STALE] " : "",
             referee.official_aerial_countered ? "[CT]" : "");
     }

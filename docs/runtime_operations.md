@@ -44,7 +44,7 @@ referee:
 - `enabled: false` 或 ZMQ 无人发布时行为与旧版完全一致（始终引导、HitProgress 照常累计）。
 - `zmq_address` 为 radar-egui 转发裁判系统的 SUB 地址；`RefereeLink` 只解析 `0x0001`（game_status）与 `0x020C`（radar_mark_data）。
 - `match_duration_s` 是本地 420s 硬窗口（本地时钟计时，不依赖裁判时钟/NTP）；`game_progress==4` 进入窗口，`==5` 或本地超时退出，本地硬超时后须收到 `==5` 才允许下一局 re-arm。
-- `signal_timeout_s` 是断流看门狗阈值：超过该秒数未收到合法消息时 overlay 显示 `[STALE]` 告警；断流不改变门控状态（窗口内续导、窗口外保持不照射）。
+- `signal_timeout_s` 是断流看门狗阈值：超过该秒数未收到合法消息时 overlay 显示 `[STALE]` 告警；引导永不门控，断流只告警、不改变任何执行。
 - 进入比赛窗口时 `HitProgress` 自动 `reset()`（防赛前紫色污染）；`0x020C` 官方反制置位边沿会校核本地锁定次数。
 
 ## Build
@@ -134,15 +134,15 @@ angle_offset_y_deg: -0.05
 ./build/tool_referee_sim --prep-s 10 --selfcheck-s 3 --countdown-s 2 --match-s 60
                                     # 缩短各阶段时长便于快速进入比赛窗口
 
-# 终端 2：跑 competition，观察 overlay REF 行与门控行为
+# 终端 2：跑 competition，观察 overlay REF 行
 ./build/tool_competition
 ```
 
-overlay REF 行含义：
+overlay REF 行含义（引导永不门控）：
 
-- `REF: no signal (ungated)` — 从未收到合法消息，不门控（旧行为）；
-- `REF: pg=1 t=-1s [GATED]` — 有信号但非比赛窗口，引导关闭、HitProgress 冻结；
-- `REF: pg=4 t=12s` — 比赛窗口内，引导放行、HitProgress 重置后累计；
+- `REF: no signal (local calc)` — 从未收到合法消息，纯本地计算；
+- `REF: pg=1 t=-1s` — 有信号但非比赛窗口（仅显示，引导与 HitProgress 不受影响）；
+- `REF: pg=4 t=12s` — 比赛窗口内，HitProgress 已按 match_started 重置并累计；
 - `[STALE]` — 断流超过 `signal_timeout_s`（只告警，续导不熄灯）；
 - `[CT]` — `0x020C` 官方反制置位中。
 

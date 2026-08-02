@@ -400,8 +400,7 @@ auto ControlLoop::run_loop() -> void {
             std::scoped_lock lock(state_mutex_);
             guidance = guidance_.has_value() ? &*guidance_ : nullptr;
         }
-        const bool guidance_allowed = referee_link_.guidance_allowed();
-        if (guidance != nullptr && guidance_allowed) {
+        if (guidance != nullptr) {
             if (std::optional<std::pair<float, float>> pending_offset = take_pending_offset();
                 pending_offset.has_value()) {
                 guidance->set_offset(pending_offset->first, pending_offset->second);
@@ -599,10 +598,6 @@ auto ControlLoop::update_hit_progress(const DetectionBatch& detection) -> void {
     // than the nominal camera rate under RTP/overlay/recording load, and
     // HitProgress counts real seconds per the RM2026 §5.6.3 rules.
     const auto now = Clock::now();
-    if (!referee_link_.hit_progress_allowed()) {
-        last_hit_progress_time_ = now;
-        return;
-    }
     float dt_s = 1.0F / 60.0F;
     if (last_hit_progress_time_ != Clock::time_point{}) {
         const float elapsed =

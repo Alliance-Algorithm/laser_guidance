@@ -142,8 +142,7 @@ struct RuntimeStatus {
 
 struct RefereeSnapshot {
     bool signal_available = false;
-    bool signal_stale = false;     // 超过 signal_timeout_s 未收到合法消息（看门狗告警，不改门控）
-    bool guidance_gated = false;   // true = 引导当前被门控禁止（窗口外）
+    bool signal_stale = false;     // 超过 signal_timeout_s 未收到合法消息（看门狗告警，不影响执行）
     std::uint8_t game_progress = 0;
     std::uint8_t game_type = 0;
     std::int64_t match_elapsed_s = -1;

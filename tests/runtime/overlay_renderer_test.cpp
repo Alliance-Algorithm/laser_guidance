@@ -74,7 +74,6 @@ int main() {
             const auto gated_before = gated_frame.display.clone();
             rmcs_laser_guidance::RefereeSnapshot referee;
             referee.signal_available = true;
-            referee.guidance_gated = true;
             referee.game_progress = 1;
             referee.match_elapsed_s = -1;
             renderer.render(

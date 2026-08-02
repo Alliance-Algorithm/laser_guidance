@@ -37,8 +37,6 @@ public:
     void expire_if_over(std::int64_t now_ns);
     [[nodiscard]] auto signal_available() const -> bool { return signal_available_; }
     [[nodiscard]] auto in_window() const -> bool { return in_window_; }
-    // 无信号不门控（旧行为）；有信号时仅在比赛窗口内放行
-    [[nodiscard]] auto allowed() const -> bool { return !signal_available_ || in_window_; }
     [[nodiscard]] auto consume_match_started() -> bool;
     [[nodiscard]] auto match_elapsed_s(std::int64_t now_ns) const -> std::int64_t;
 
@@ -66,8 +64,6 @@ public:
     explicit RefereeLink(RefereeConfig config);
     ~RefereeLink();
     auto poll() -> void;
-    [[nodiscard]] auto guidance_allowed() const -> bool;
-    [[nodiscard]] auto hit_progress_allowed() const -> bool;
     [[nodiscard]] auto consume_match_started() -> bool;
     [[nodiscard]] auto consume_countered_edge() -> bool;
     [[nodiscard]] auto snapshot() const -> RefereeSnapshot;

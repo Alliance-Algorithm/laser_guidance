@@ -212,7 +212,6 @@ struct RosBridge::Impl {
         msg.data = {
             static_cast<double>(referee.game_progress),
             static_cast<double>(referee.match_elapsed_s),
-            referee.guidance_gated ? 1.0 : 0.0,
             referee.official_aerial_targeted ? 1.0 : 0.0,
             referee.official_aerial_countered ? 1.0 : 0.0,
         };

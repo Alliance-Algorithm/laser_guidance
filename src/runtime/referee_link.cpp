@@ -168,8 +168,6 @@ auto RefereeLink::poll() -> void {
     }
 }
 
-auto RefereeLink::guidance_allowed() const -> bool { return impl_->window.allowed(); }
-auto RefereeLink::hit_progress_allowed() const -> bool { return impl_->window.allowed(); }
 auto RefereeLink::consume_match_started() -> bool { return impl_->window.consume_match_started(); }
 auto RefereeLink::consume_countered_edge() -> bool {
     const bool pending = impl_->countered_pending;
@@ -180,7 +178,6 @@ auto RefereeLink::consume_countered_edge() -> bool {
 auto RefereeLink::snapshot() const -> rmcs_laser_guidance::RefereeSnapshot {
     rmcs_laser_guidance::RefereeSnapshot snap;
     snap.signal_available = impl_->window.signal_available();
-    snap.guidance_gated = impl_->window.signal_available() && !impl_->window.in_window();
     snap.game_progress = impl_->game_state.game_progress;
     snap.game_type = impl_->game_state.game_type;
     snap.match_elapsed_s = impl_->window.match_elapsed_s(now_ns());
@@ -191,7 +188,7 @@ auto RefereeLink::snapshot() const -> rmcs_laser_guidance::RefereeSnapshot {
         const auto age = std::chrono::duration<double>(
             rmcs_laser_guidance::Clock::now() - *impl_->last_message_time).count();
         snap.last_message_age_s = age;
-        // 看门狗：断流只告警，不改门控状态（断流续导语义）
+        // 看门狗：断流只告警，不中断任何执行（断流续导语义）
         snap.signal_stale = age > static_cast<double>(impl_->config.signal_timeout_s);
     }
     snap.parse_errors = impl_->parse_errors;
