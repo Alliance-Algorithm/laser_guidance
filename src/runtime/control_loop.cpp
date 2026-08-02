@@ -181,6 +181,8 @@ auto ControlLoop::submit_command(const RuntimeCommand& command)
                     // already applied above, before acquiring the lock
                 } else if constexpr (std::is_same_v<T, CmdSetEkf>) {
                     state_.ekf_enabled = cmd.enabled;
+                } else if constexpr (std::is_same_v<T, CmdSetOffset>) {
+                    state_.pending_offset = std::pair{cmd.x_deg, cmd.y_deg};
                 } else if constexpr (std::is_same_v<T, CmdShutdown>) {
                     state_.stop_requested = true;
                     request_shutdown = true;
@@ -384,6 +386,10 @@ auto ControlLoop::run_loop() -> void {
             guidance = guidance_.has_value() ? &*guidance_ : nullptr;
         }
         if (guidance != nullptr) {
+            if (std::optional<std::pair<float, float>> pending_offset = take_pending_offset();
+                pending_offset.has_value()) {
+                guidance->set_offset(pending_offset->first, pending_offset->second);
+            }
             frame.guidance = guidance->execute(frame.track);
             static auto last_guide_diag = Clock::time_point{};
             const auto diag_now = Clock::now();
@@ -527,6 +533,13 @@ auto ControlLoop::request_stop() -> void {
 auto ControlLoop::stop_requested() const -> bool {
     std::scoped_lock lock(state_mutex_);
     return state_.stop_requested;
+}
+
+auto ControlLoop::take_pending_offset() -> std::optional<std::pair<float, float>> {
+    std::scoped_lock lock(state_mutex_);
+    auto pending = state_.pending_offset;
+    state_.pending_offset.reset();
+    return pending;
 }
 
 auto ControlLoop::update_status_locked() -> void {

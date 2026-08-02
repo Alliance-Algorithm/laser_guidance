@@ -31,6 +31,7 @@ struct ControlLoopState {
     bool ekf_enabled = false;
     bool streaming_requested = false;
     bool recording_requested = false;
+    std::optional<std::pair<float, float>> pending_offset{};
     std::string last_error{};
 };
 
@@ -68,6 +69,7 @@ private:
     [[nodiscard]] auto allows_recording() const -> bool;
     [[nodiscard]] auto guidance_enabled_in_profile() const -> bool;
     auto start_guidance_init_thread() -> void;
+    auto take_pending_offset() -> std::optional<std::pair<float, float>>;
     [[nodiscard]] auto assemble_snapshot(
         const ControlLoopFrame& frame, const RuntimeOutputsStatus& output_status) const
         -> RuntimeSnapshot;

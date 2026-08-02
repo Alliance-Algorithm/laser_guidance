@@ -39,6 +39,7 @@ int main() {
 
         {
             TargetTrack track;
+            track.detected = true;
             track.ekf_enabled = true;
             track.initialized = true;
             track.lost = false;
@@ -49,21 +50,24 @@ int main() {
 
         {
             TargetTrack track;
+            track.detected = false;
             track.ekf_enabled = true;
             track.initialized = true;
             track.lost = true;
-            // Keep the beam on the EKF-predicted aim point during loss instead
-            // of recentering: hitting continuity is what drives P accumulation.
+            // Detection loss: hold the last commanded angle instead of solving
+            // on the EKF-predicted aim point plus stale depth, which snapped
+            // the beam off-target when the depth filter drifted during loss.
             require(
-                state_machine.decide(track, false, 0.0F).action == GuidanceAction::solve,
-                "first lost EKF frame should keep solving on prediction");
+                state_machine.decide(track, false, 0.0F).action == GuidanceAction::idle,
+                "lost EKF frame without detection should hold");
             require(
-                state_machine.decide(track, true, 0.0F).action == GuidanceAction::solve,
-                "steady lost EKF state should keep solving");
+                state_machine.decide(track, false, 1200.0F).action == GuidanceAction::idle,
+                "lost EKF frame with stale depth should still hold");
         }
 
         {
             TargetTrack recovered;
+            recovered.detected = true;
             recovered.ekf_enabled = true;
             recovered.initialized = true;
             recovered.lost = false;
@@ -72,10 +76,11 @@ int main() {
                 "recovered EKF track should resume solving");
 
             TargetTrack lost_again = recovered;
+            lost_again.detected = false;
             lost_again.lost = true;
             require(
-                state_machine.decide(lost_again, false, 0.0F).action == GuidanceAction::solve,
-                "new EKF loss edge should keep solving");
+                state_machine.decide(lost_again, false, 0.0F).action == GuidanceAction::idle,
+                "new EKF loss edge should hold instead of solving");
         }
 
         return 0;

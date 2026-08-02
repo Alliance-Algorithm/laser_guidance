@@ -45,6 +45,10 @@ public:
     auto project_to_camera(const cv::Point2f& pixel, float depth_mm) const -> cv::Point3f;
     auto reset_depth_cache() noexcept -> void;
     [[nodiscard]] auto cached_depth_mm() const -> std::optional<float>;
+    auto set_offset(float x_deg, float y_deg) -> void {
+        config_.angle_offset_x_deg = x_deg;
+        config_.angle_offset_y_deg = y_deg;
+    }
 
 private:
     auto load_geometry_calibration(const std::filesystem::path& path) -> std::string;

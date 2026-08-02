@@ -14,6 +14,7 @@ int main() {
         using rmcs_laser_guidance::CmdSetBackend;
         using rmcs_laser_guidance::CmdSetEkf;
         using rmcs_laser_guidance::CmdSetEnemyColor;
+        using rmcs_laser_guidance::CmdSetOffset;
         using rmcs_laser_guidance::CmdSetRecording;
         using rmcs_laser_guidance::CmdSetStreaming;
         using rmcs_laser_guidance::CmdShutdown;
@@ -25,6 +26,7 @@ int main() {
         using rmcs_laser_guidance::tests::make_temp_dir;
         using rmcs_laser_guidance::tests::require;
         using rmcs_laser_guidance::tests::require_contains;
+        using rmcs_laser_guidance::tests::require_near;
 
         // stream on
         {

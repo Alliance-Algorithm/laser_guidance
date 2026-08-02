@@ -231,4 +231,10 @@ auto GuidanceSession::shutdown() -> void {
     (void)executor_->set_center();
 }
 
+auto GuidanceSession::set_offset(const float x_deg, const float y_deg) -> void {
+    if (solver_) {
+        solver_->set_offset(x_deg, y_deg);
+    }
+}
+
 } // namespace rmcs_laser_guidance::runtime_internal

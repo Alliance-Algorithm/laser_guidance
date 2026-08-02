@@ -181,7 +181,7 @@ auto FifoControlServer::parse_command(std::string_view text)
         return runtime_command::set_ekf(false);
     }
     if (normalized.starts_with("offset")) {
-        const auto rest = trim_copy(std::string_view(normalized).substr(6));
+        const auto rest = trim_copy(std::string(normalized).substr(6));
         if (rest.empty()) {
             return std::unexpected(make_error(ErrorKind::config, "offset requires a value"));
         }

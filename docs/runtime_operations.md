@@ -71,6 +71,21 @@ theta_x_deg,theta_y_deg,pixel_x,pixel_y,depth_mm,depth_source,depth_sigma_mm
 7. 用未参与拟合的点验证 RMS、P95 和最大角误差后，再复制高精度 `r_x/r_y/r_z`。
 8. 锁定旋转后，使用独立中心靶从零开始调整 `angle_offset_x/y_deg`。
 
+最近一次有效标定（2026-08-02，485 条记录，残差 rms=0.41° p95=0.85° max=0.91°）：
+
+```yaml
+# config/hik.yaml guidance:
+t_x_mm: 85.5
+t_y_mm: 15.0
+t_z_mm: 20.0
+r_x_deg: -0.750758059984
+r_y_deg: -0.477254806404
+r_z_deg: -0.277933218604
+mirror_separation_mm: 15.0
+angle_offset_x_deg: -0.45   # 中心靶微调，待与新外参联调后归零
+angle_offset_y_deg: -0.05
+```
+
 ### 推理后端降级
 - `PerceptionRunner::initialize_backends()` 按"先首选择后降级"策略初始化；ONNX/TensorRT 不再同时无条件构造。
 - `PerceptionRunner::degraded()` 返回 true 时（无可用后端或推理未启用），主循环跳过推理，不退出进程。

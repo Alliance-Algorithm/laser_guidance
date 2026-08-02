@@ -50,6 +50,7 @@ public:
     [[nodiscard]] auto calibration_state() const -> const GuidanceCalibrationState*;
     auto mutable_calibration_state() -> GuidanceCalibrationState*;
     auto execute(const TargetTrack& track) -> GuidanceFrameResult;
+    auto set_offset(float x_deg, float y_deg) -> void;
     auto shutdown() -> void;
 
 private:
