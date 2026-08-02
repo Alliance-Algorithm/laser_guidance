@@ -62,7 +62,7 @@ void RefereeWindow::update(std::uint8_t game_progress, std::int64_t now_ns) {
         return;
     }
     if (in_window_) {
-        if (now_ns - start_ns_ >= static_cast<std::int64_t>(match_duration_s_) * 1'000) {
+        if (now_ns - start_ns_ >= static_cast<std::int64_t>(match_duration_s_) * 1'000'000'000) {
             in_window_ = false;
             start_ns_ = 0;
         }
@@ -84,7 +84,7 @@ auto RefereeWindow::consume_match_started() -> bool {
 auto RefereeWindow::match_elapsed_s(std::int64_t now_ns) const -> std::int64_t {
     if (!in_window_)
         return -1;
-    return std::max<std::int64_t>(0, (now_ns - start_ns_) / 1'000);
+    return std::max<std::int64_t>(0, (now_ns - start_ns_) / 1'000'000'000);
 }
 
 } // namespace rmcs_laser_guidance::runtime_internal

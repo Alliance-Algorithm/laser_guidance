@@ -26,7 +26,7 @@ auto parse_game_state_json(std::string_view json) -> std::optional<GameStateSamp
 // radar-egui 0x020C JSON
 auto parse_mark_json(std::string_view json) -> std::optional<MarkSample>;
 
-// 比赛窗口状态机（纯逻辑，now_ns 为本地 steady 时钟毫秒刻度，测试可注入）
+// 比赛窗口状态机（纯逻辑，now_ns 为本地 steady 时钟纳秒，测试可注入）
 class RefereeWindow {
 public:
     explicit RefereeWindow(int match_duration_s = 420);
