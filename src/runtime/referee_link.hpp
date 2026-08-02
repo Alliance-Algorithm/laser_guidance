@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string_view>
 
@@ -47,6 +48,31 @@ private:
     bool match_started_pending_ = false;
     // 420s 硬超时后窗口终结，须收到 progress 5 才允许 re-arm
     bool timed_out_ = false;
+};
+
+} // namespace rmcs_laser_guidance::runtime_internal
+
+namespace rmcs_laser_guidance {
+struct RefereeSnapshot;
+} // namespace rmcs_laser_guidance
+
+namespace rmcs_laser_guidance::runtime_internal {
+
+// RefereeLink 内部持有 zmq 对象，通过 Impl PIMPL 隔离，公共头不暴露 libzmq 类型
+class RefereeLink {
+public:
+    explicit RefereeLink(RefereeConfig config);
+    ~RefereeLink();
+    auto poll() -> void;
+    [[nodiscard]] auto guidance_allowed() const -> bool;
+    [[nodiscard]] auto hit_progress_allowed() const -> bool;
+    [[nodiscard]] auto consume_match_started() -> bool;
+    [[nodiscard]] auto consume_countered_edge() -> bool;
+    [[nodiscard]] auto snapshot() const -> RefereeSnapshot;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal

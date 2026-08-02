@@ -140,6 +140,20 @@ struct RuntimeStatus {
     std::string last_guidance_message{};
 };
 
+struct RefereeSnapshot {
+    bool signal_available = false;
+    bool signal_stale = false;     // 超过 signal_timeout_s 未收到合法消息（看门狗告警，不改门控）
+    bool guidance_gated = false;   // true = 引导当前被门控禁止（窗口外）
+    std::uint8_t game_progress = 0;
+    std::uint8_t game_type = 0;
+    std::int64_t match_elapsed_s = -1;
+    std::uint16_t stage_remain_time = 0;
+    bool official_aerial_targeted = false;
+    bool official_aerial_countered = false;
+    double last_message_age_s = -1.0;
+    std::uint64_t parse_errors = 0;
+};
+
 struct RuntimeSnapshot {
     RuntimeStatus status{};
     std::optional<CaptureFormatSnapshot> negotiated_format{};
@@ -150,6 +164,7 @@ struct RuntimeSnapshot {
     std::size_t dropped_frames = 0;
     std::string active_backend_name{};
     std::filesystem::path current_recording_root{};
+    RefereeSnapshot referee{};
 };
 
 enum class CompetitionProfile : std::uint8_t {

@@ -88,6 +88,7 @@ struct RefereeConfig {
     bool enabled = false;
     std::string zmq_address = "tcp://127.0.0.1:5558";
     int match_duration_s = 420;
+    int signal_timeout_s = 5;   // 看门狗：超过该秒数未收到合法消息 → signal_stale
 };
 
 struct EkfConfig {

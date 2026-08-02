@@ -53,6 +53,7 @@ referee:
   enabled: true
   zmq_address: "tcp://127.0.0.1:5558"
   match_duration_s: 420
+  signal_timeout_s: 5
 
 ekf:
   process_noise_q: 0.05

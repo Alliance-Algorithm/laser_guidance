@@ -71,6 +71,7 @@ int main() {
         require(
             default_config.referee.match_duration_s == 420,
             "default referee match_duration_s mismatch");
+        require(default_config.referee.signal_timeout_s == 5, "default referee signal_timeout_s mismatch");
         require(
             default_video_session_root()
                 == (default_config_path().parent_path().parent_path() / "videos"),

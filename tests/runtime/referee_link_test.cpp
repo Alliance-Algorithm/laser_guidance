@@ -104,6 +104,17 @@ int main() {
             require(!w.allowed(), "stale signal still expires at 420s");
         }
 
+        // ---- RefereeLink enabled=false 空转不抛异常、不门控 ----
+        {
+            rmcs_laser_guidance::RefereeConfig cfg;
+            cfg.enabled = false;
+            RefereeLink link(cfg);
+            link.poll();
+            require(link.guidance_allowed(), "disabled link ungated");
+            require(!link.consume_match_started(), "no edges when disabled");
+            require(!link.consume_countered_edge(), "no countered edge when disabled");
+        }
+
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "referee_link_test failed: {}", e.what());

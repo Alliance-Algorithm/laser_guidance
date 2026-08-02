@@ -1,7 +1,12 @@
 #include "runtime/referee_link.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <nlohmann/json.hpp>
+#include <utility>
+#include <zmq.hpp>
+
+#include "laser_guidance/runtime.hpp"
 
 namespace rmcs_laser_guidance::runtime_internal {
 namespace {
@@ -88,6 +93,96 @@ auto RefereeWindow::match_elapsed_s(std::int64_t now_ns) const -> std::int64_t {
     if (!in_window_)
         return -1;
     return std::max<std::int64_t>(0, (now_ns - start_ns_) / 1'000'000'000);
+}
+
+namespace {
+
+constexpr std::int64_t kNsPerSecond = 1'000'000'000;
+
+auto now_ns() -> std::int64_t {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               rmcs_laser_guidance::Clock::now().time_since_epoch()).count();
+}
+
+} // namespace
+
+struct RefereeLink::Impl {
+    explicit Impl(RefereeConfig config)
+        : config(std::move(config))
+        , window(config.match_duration_s) {}
+
+    RefereeConfig config;
+    zmq::context_t ctx{1};
+    std::unique_ptr<zmq::socket_t> sub;
+    RefereeWindow window;
+    GameStateSample game_state;
+    MarkSample mark;
+    bool last_countered = false;
+    bool countered_pending = false;
+    std::uint64_t parse_errors = 0;
+    std::optional<rmcs_laser_guidance::Clock::time_point> last_message_time;
+};
+RefereeLink::RefereeLink(RefereeConfig config)
+    : impl_(std::make_unique<Impl>(std::move(config))) {}
+RefereeLink::~RefereeLink() = default;
+
+auto RefereeLink::poll() -> void {
+    if (!impl_->config.enabled)
+        return;
+    if (!impl_->sub) {
+        impl_->sub = std::make_unique<zmq::socket_t>(impl_->ctx, zmq::socket_type::sub);
+        impl_->sub->connect(impl_->config.zmq_address);
+        impl_->sub->set(zmq::sockopt::subscribe, "");
+    }
+    while (true) {
+        zmq::message_t message;
+        if (!impl_->sub->recv(message, zmq::recv_flags::dontwait))
+            break;
+        const std::string_view text(static_cast<const char*>(message.data()), message.size());
+        if (const auto state = parse_game_state_json(text); state.has_value()) {
+            impl_->game_state = *state;
+            impl_->window.update(state->game_progress, now_ns());
+            impl_->last_message_time = rmcs_laser_guidance::Clock::now();
+        } else if (const auto mark = parse_mark_json(text); mark.has_value()) {
+            impl_->mark = *mark;
+            if (mark->opponent_aerial_countered && !impl_->last_countered)
+                impl_->countered_pending = true;
+            impl_->last_countered = mark->opponent_aerial_countered;
+            impl_->last_message_time = rmcs_laser_guidance::Clock::now();
+        } else {
+            ++impl_->parse_errors;
+        }
+    }
+}
+
+auto RefereeLink::guidance_allowed() const -> bool { return impl_->window.allowed(); }
+auto RefereeLink::hit_progress_allowed() const -> bool { return impl_->window.allowed(); }
+auto RefereeLink::consume_match_started() -> bool { return impl_->window.consume_match_started(); }
+auto RefereeLink::consume_countered_edge() -> bool {
+    const bool pending = impl_->countered_pending;
+    impl_->countered_pending = false;
+    return pending;
+}
+
+auto RefereeLink::snapshot() const -> rmcs_laser_guidance::RefereeSnapshot {
+    rmcs_laser_guidance::RefereeSnapshot snap;
+    snap.signal_available = impl_->window.signal_available();
+    snap.guidance_gated = impl_->window.signal_available() && !impl_->window.in_window();
+    snap.game_progress = impl_->game_state.game_progress;
+    snap.game_type = impl_->game_state.game_type;
+    snap.match_elapsed_s = impl_->window.match_elapsed_s(now_ns());
+    snap.stage_remain_time = impl_->game_state.stage_remain_time;
+    snap.official_aerial_targeted = impl_->mark.opponent_aerial_targeted;
+    snap.official_aerial_countered = impl_->mark.opponent_aerial_countered;
+    if (impl_->last_message_time.has_value()) {
+        const auto age = std::chrono::duration<double>(
+            rmcs_laser_guidance::Clock::now() - *impl_->last_message_time).count();
+        snap.last_message_age_s = age;
+        // 看门狗：断流只告警，不改门控状态（断流续导语义）
+        snap.signal_stale = age > static_cast<double>(impl_->config.signal_timeout_s);
+    }
+    snap.parse_errors = impl_->parse_errors;
+    return snap;
 }
 
 } // namespace rmcs_laser_guidance::runtime_internal

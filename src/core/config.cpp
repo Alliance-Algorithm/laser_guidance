@@ -221,6 +221,8 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             config.referee.zmq_address = referee_cfg["zmq_address"].as<std::string>();
         if (referee_cfg["match_duration_s"])
             config.referee.match_duration_s = referee_cfg["match_duration_s"].as<int>();
+        if (referee_cfg["signal_timeout_s"])
+            config.referee.signal_timeout_s = referee_cfg["signal_timeout_s"].as<int>();
     }
 
     if (const YAML::Node ekf = yaml["ekf"]) {
