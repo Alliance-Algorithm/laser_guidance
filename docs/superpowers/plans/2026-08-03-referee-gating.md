@@ -14,7 +14,7 @@
 - 代码风格：C++23、`std::print/std::println`、`std::expected`、无注释或仅必要中文注释（沿用现有风格）。
 - 依赖仅限已有的 libzmq + nlohmann_json（`laser_guidance_common` 已含）；禁止新增第三方依赖。
 - `RefereeLink` 门控语义（spec §2）：从未收到合法消息 → 不门控（旧行为）；`game_progress==4` 进入窗口；`==5` 或本地计时 ≥ `match_duration_s` 退出；断流不改变窗口判定。
-- `match_duration_s` 默认 420；`referee.enabled` 默认 false（结构体默认），`config/default.yaml` 显式 `enabled: true`。
+- `match_duration_s` 默认 420；`signal_timeout_s` 默认 5（看门狗：断流告警，不改门控状态）；`referee.enabled` 默认 false（结构体默认），`config/default.yaml` 显式 `enabled: true`。
 - 所有新增测试文件自动被 CMake GLOB 拾取（tests/*_test.cpp、tools/*.cpp），无需注册；`src/runtime/referee_link.cpp` 必须手动加入 `laser_guidance_runtime_SOURCES` 列表（CMakeLists.txt:221-231）。
 
 ---
@@ -472,6 +472,7 @@ Expected: 编译失败（RefereeLink 未定义）。
 ```cpp
 struct RefereeSnapshot {
     bool signal_available = false;
+    bool signal_stale = false;     // 超过 signal_timeout_s 未收到合法消息（看门狗告警，不改门控）
     bool guidance_gated = false;   // true = 引导当前被门控禁止（窗口外）
     std::uint8_t game_progress = 0;
     std::uint8_t game_type = 0;
@@ -511,6 +512,36 @@ private:
 
 （`referee_link.hpp` 需 `#include <memory>` 与前置声明 `namespace rmcs_laser_guidance { struct RefereeSnapshot; }`，置于 `runtime_internal` 命名空间外。）
 
+- [ ] **Step 4a: 看门狗配置字段（Task 1 的配置层扩展，`signal_timeout_s`）**
+
+`include/config.hpp` 的 `RefereeConfig` 追加字段：
+
+```cpp
+    int signal_timeout_s = 5;   // 看门狗：超过该秒数未收到合法消息 → signal_stale
+```
+
+`src/core/config.cpp` 的 referee 节解析追加：
+
+```cpp
+        if (referee_cfg["signal_timeout_s"])
+            config.referee.signal_timeout_s = referee_cfg["signal_timeout_s"].as<int>();
+```
+
+`config/default.yaml` 的 referee 节追加：
+
+```yaml
+  signal_timeout_s: 5
+```
+
+`tests/core/config_test.cpp` 追加断言：
+
+```cpp
+        require(default_config.referee.signal_timeout_s == 5, "default referee signal_timeout_s mismatch");
+```
+
+Run: `./.script/build-laser && ctest --test-dir build -R config_test --output-on-failure`
+Expected: PASS。
+
 - [ ] **Step 5: 实现 RefereeLink（referee_link.cpp 末尾追加）**
 
 ```cpp
@@ -543,7 +574,6 @@ struct RefereeLink::Impl {
     std::uint64_t parse_errors = 0;
     std::optional<rmcs_laser_guidance::Clock::time_point> last_message_time;
 };
-
 RefereeLink::RefereeLink(RefereeConfig config)
     : impl_(std::make_unique<Impl>(std::move(config))) {}
 RefereeLink::~RefereeLink() = default;
@@ -597,8 +627,11 @@ auto RefereeLink::snapshot() const -> rmcs_laser_guidance::RefereeSnapshot {
     snap.official_aerial_targeted = impl_->mark.opponent_aerial_targeted;
     snap.official_aerial_countered = impl_->mark.opponent_aerial_countered;
     if (impl_->last_message_time.has_value()) {
-        snap.last_message_age_s = std::chrono::duration<double>(
+        const auto age = std::chrono::duration<double>(
             rmcs_laser_guidance::Clock::now() - *impl_->last_message_time).count();
+        snap.last_message_age_s = age;
+        // 看门狗：断流只告警，不改门控状态（断流续导语义）
+        snap.signal_stale = age > static_cast<double>(impl_->config.signal_timeout_s);
     }
     snap.parse_errors = impl_->parse_errors;
     return snap;
@@ -885,10 +918,11 @@ auto draw_referee_status(cv::Mat& image, const RefereeSnapshot& referee) -> void
         line = "REF: no signal (ungated)";
     } else {
         line = std::format(
-            "REF: pg={} t={}s {}{}",
+            "REF: pg={} t={}s {}{}{}",
             static_cast<int>(referee.game_progress),
             referee.match_elapsed_s,
             referee.guidance_gated ? "[GATED] " : "",
+            referee.signal_stale ? "[STALE] " : "",
             referee.official_aerial_countered ? "[CT]" : "");
     }
     cv::putText(
@@ -1164,7 +1198,7 @@ git commit -m "docs: referee gating configuration and verification tooling"
 
 ## 自审记录
 
-- **Spec 覆盖**：§1 RefereeLink（Task 2/3）、§2 ControlLoop 集成（Task 5）、§3 HitProgress（Task 4）、§4 配置（Task 1）、§5 快照/overlay/ROS（Task 3 Step 3 + Task 5）、§6 mock 工具（Task 6）、§7 测试（各任务 Step 1）、§8 排除项（无任务，符合 YAGNI）。
+- **Spec 覆盖**：§1 RefereeLink（Task 2/3）、§2 ControlLoop 集成（Task 5）、§3 HitProgress（Task 4）、§4 配置（Task 1 + Task 3 Step 4a 的 signal_timeout_s）、§5 快照/overlay/ROS（Task 3 Step 3 + Task 5）、§6 mock 工具（Task 6）、§7 测试（各任务 Step 1）、§8 排除项（无任务，符合 YAGNI）。看门狗（断流续导 + STALE 告警）在 Task 3/5 落地，相机难度阶段切换由现有 `maybe_switch_hik_profile` 读取已校核同步的 `hit_progress_.difficulty()` 天然覆盖。
 - **类型一致性**：`RefereeConfig`（Task 1）→ `RefereeLink(RefereeConfig)`（Task 3）；`RefereeSnapshot` 在 Task 3 Step 3 统一定义，Task 5 只消费不重复；`consume_match_started/consume_countered_edge/guidance_allowed/hit_progress_allowed` 三处使用签名一致。
 - **无占位**：所有代码块为完整实现；Task 5 Step 5 的 guidance 块仅改条件、内部逻辑不变。
 - **头文件卫生**：`RefereeLink` 用 Impl PIMPL（referee_link.cpp 内持有 zmq::context_t/socket_t），公共头不暴露 libzmq，与 `ZmqSender`/`RosBridge` 的既有 PIMPL 风格一致。

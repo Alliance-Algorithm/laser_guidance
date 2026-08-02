@@ -56,7 +56,9 @@ game_progress 枚举（bit 4-7）：0=未开始，1=准备阶段，2=十五秒�
 - `running` → `game_progress==5` → `idle`，复位 start_ns；
 - `running` → 本地计时 `now - start_ns >= match_duration_s`（默认 420）→ `idle`（硬窗口，不依赖裁判时钟/NTP）。
 
-断流语义：一旦收到过信号，窗口判定完全由本地时钟驱动；中途断流不提前开门、不改变退出判定。窗口退出后的下一局：`game_progress==5 → ... → 4` 再次进入（re-arm），状态机天然覆盖。
+断流语义（看门狗）：一旦收到过信号，窗口判定完全由本地时钟驱动；**断流保持当前状态续导**——窗口内断流不熄灯、不提前退出，窗口判定继续由本地时钟推进至 `match_duration_s` 或收到新消息；窗口外断流保持不照射。断流（超过 `signal_timeout_s` 未收到合法消息）在 snapshot/overlay/日志中显著告警（`signal_stale` 标志）。窗口退出后的下一局：`game_progress==5 → ... → 4` 再次进入（re-arm），状态机天然覆盖。
+
+相机参数阶段切换（RM2026 §5.6.3 难度表）：反制难度序列 1,2,2,3,3——难度 1/2 用 lit 相机参数，难度 3 用 unlit 参数。难度来源：裁判信号可用时由 0x020C 官方反制状态校核同步（`HitProgress::note_official_countered()` 在官方锁定边沿补计锁定次数，`difficulty()` 随之收敛到官方阶段）；无裁判信号时退化为纯本地 hit 计算。`maybe_switch_hik_profile` 保持读取 `hit_progress_.difficulty()` 不变（该值在有裁判时已被校核同步）。
 
 **API**
 ```
@@ -103,6 +105,7 @@ referee:
   enabled: true          # false = 不轮询、不门控、不校核（完全旧行为）
   zmq_address: "tcp://127.0.0.1:5558"
   match_duration_s: 420
+  signal_timeout_s: 5    # 看门狗：超过该秒数未收到合法消息 → signal_stale（断流告警，不改门控状态）
 ```
 
 `include/config.hpp` 新增 `RefereeConfig` 结构；`src/core/config.cpp` 增加解析。门控天然只在 main profile 生效（preview 不跑 guidance/HitProgress）。
@@ -114,6 +117,7 @@ referee:
 ```cpp
 struct RefereeSnapshot {
     bool signal_available = false;
+    bool signal_stale = false;        // 超过 signal_timeout_s 未收到合法消息（看门狗告警）
     bool guidance_gated = false;      // true = 引导当前被门控禁止（窗口外）
     uint8_t game_progress = 0;
     uint8_t game_type = 0;
@@ -126,7 +130,7 @@ struct RefereeSnapshot {
 };
 ```
 
-- overlay：新增一行状态显示（game_progress / elapsed / gated / 官方位）；
+- overlay：新增一行状态显示（game_progress / elapsed / gated / STALE 告警 / 官方位）；
 - RosBridge 随 snapshot 自动发布；
 - ZMQ 遥测（TargetObservation 结构）不扩展（字段为检测数据，语义不符）。
 
