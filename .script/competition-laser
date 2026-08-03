@@ -51,7 +51,7 @@ launch_ffplay() {
         echo "warning: ffplay not found; daemon keeps running, but local playback is skipped"
         return 0
     fi
-    ffplay -hide_banner -loglevel warning -nostats -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 5000000 -sync ext "$SDP"
+    ffplay -hide_banner -loglevel warning -nostats -protocol_whitelist file,rtp,udp -fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 -sync ext "$SDP"
 }
 
 if [ -p "$FIFO" ] && timeout 1 bash -c "echo 'stream on' > '$FIFO'" 2>/dev/null; then
@@ -110,9 +110,11 @@ if [ "$STREAMING_ENABLED" = "True" ]; then
         exit 1
     fi
     launch_ffplay
-    echo "ffplay closed, stopping daemon..."
-    echo "quit" > "$FIFO" 2>/dev/null || true
-    kill "$COMPETITION_PID" 2>/dev/null || true
+    echo "ffplay exited (likely RTP not ready at startup); daemon keeps running, use FIFO 'quit' to stop"
+    if kill -0 "$COMPETITION_PID" 2>/dev/null; then
+        exit 0
+    fi
+    exit 1
 else
     wait "$COMPETITION_PID"
 fi
