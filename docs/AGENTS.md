@@ -32,6 +32,7 @@
 
 - ROS2 bridge 为强制编译依赖（Docker 内置），`RosBridge` 构造时自行调用 `rclcpp::init()` 若尚未初始化。
 - FT4222 `libft4222.so` 由 `src/io/ft4222_spi.cpp` 通过 `dlopen` 动态加载，缺库或缺板卡时只影响 guidance，不阻塞主流程。
+- MVS SDK U3V 控制传输不 claim 接口会触发内核 reset（dmesg `did not claim interface`）；`src/io/libusb_claim_shim.cpp` 为 LD_PRELOAD 拦截层（`build/liblibusb_claim_shim.so`），由 `.script/host-runtime-env.sh` 注入 daemon 进程自动补 claim，缺失时不影响主流程。
 - `tools/dac8568_smoke` / `tools/galvo_smoke` 保留硬失败语义。
 - 推理后端初始化遵循"先首选择后降级"策略，不再同时无条件构造 ONNX 和 TensorRT。
 - `PerceptionRunner::degraded()` 反映后端实际可用性。

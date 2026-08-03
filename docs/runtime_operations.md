@@ -58,6 +58,8 @@ ctest --test-dir build/default --output-on-failure
 
 Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺失时回退系统 MVS。可显式 `HIKCAMERA_SDK_MODE=system|vendor`，系统模式下用 `-DMVS_SDK_ROOT` 指定路径。
 
+MVS SDK 的 U3V 控制传输不 claim 接口会触发内核 USB reset（dmesg `did not claim interface N before use`，相机反复中断）。`.script/host-runtime-env.sh` 会向 daemon 进程注入 `LD_PRELOAD=build/liblibusb_claim_shim.so`（`src/io/libusb_claim_shim.cpp`）自动补 claim；手动裸跑 `./build/tool_competition` 时不注入。
+
 ## Operational Notes
 
 - `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。

@@ -266,6 +266,21 @@ target_link_libraries(rmcs_laser_guidance_core INTERFACE
   laser_guidance_support laser_guidance_vision laser_guidance_tracking
   laser_guidance_guidance laser_guidance_bridges laser_guidance_runtime)
 
+# ---- libusb claim shim (LD_PRELOAD, 修复 MVS SDK U3V 控制传输不 claim 接口) ----
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(LIBUSB1 QUIET IMPORTED_TARGET libusb-1.0)
+endif()
+if(LIBUSB1_FOUND)
+  add_library(libusb_claim_shim SHARED src/io/libusb_claim_shim.cpp)
+  target_include_directories(libusb_claim_shim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src ${LIBUSB1_INCLUDE_DIRS})
+  target_link_libraries(libusb_claim_shim PRIVATE dl)
+  target_compile_features(libusb_claim_shim PRIVATE cxx_std_23)
+else()
+  message(WARNING "libusb-1.0 未找到，跳过 libusb_claim_shim（不影响主流程）")
+endif()
+
 # ---- RPATH assignments -------------------------------------------------------
 add_runtime_rpaths(laser_guidance_guidance)
 add_runtime_rpaths(laser_guidance_runtime)
