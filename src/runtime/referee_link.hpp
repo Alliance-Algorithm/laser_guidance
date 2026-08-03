@@ -40,6 +40,11 @@ public:
     [[nodiscard]] auto in_window() const -> bool { return in_window_; }
     [[nodiscard]] auto consume_match_started() -> bool;
     [[nodiscard]] auto match_elapsed_s(std::int64_t now_ns) const -> std::int64_t;
+    /// 官方反制成功计数（0x020C 上升沿），每局 match_started 归零，上限 5。
+    void note_official_counter();
+    [[nodiscard]] auto official_counter_count() const noexcept -> int {
+        return official_counter_count_;
+    }
 
 private:
     int match_duration_s_{};
@@ -49,6 +54,7 @@ private:
     bool match_started_pending_ = false;
     // 420s 硬超时后窗口终结，须收到 progress 5 才允许 re-arm
     bool timed_out_ = false;
+    int official_counter_count_ = 0;
 };
 
 } // namespace rmcs_laser_guidance::runtime_internal
@@ -67,6 +73,8 @@ public:
     auto poll() -> void;
     [[nodiscard]] auto consume_match_started() -> bool;
     [[nodiscard]] auto consume_countered_edge() -> bool;
+    [[nodiscard]] auto in_window() const -> bool;
+    [[nodiscard]] auto official_counter_count() const -> int;
     [[nodiscard]] auto snapshot() const -> RefereeSnapshot;
 
 private:

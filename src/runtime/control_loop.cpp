@@ -384,6 +384,11 @@ auto ControlLoop::run_loop() -> void {
             hit_progress_.reset();
             std::println(stderr, "[REFEREE] match started, hit progress reset");
         }
+        // 官方反制次数权威：比赛窗口内每帧用裁判计数同步阶段（离线/窗口外
+        // 退回本地累计，见 hit_progress_.update）。
+        if (referee_link_.in_window()) {
+            hit_progress_.sync_official_counter(referee_link_.official_counter_count());
+        }
         if (referee_link_.consume_countered_edge()) {
             if (hit_progress_.note_official_countered()) {
                 std::println(

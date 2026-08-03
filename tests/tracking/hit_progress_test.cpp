@@ -257,6 +257,43 @@ int main() {
             require(hp.lock_count() == 5, "lock_count capped at 5");
         }
 
+        {
+            // 官方反制次数同步：窗口内以裁判计数为准推进阶段
+            HitProgress hp;
+            hp.sync_official_counter(0);
+            require(hp.difficulty() == 1, "official 0 -> difficulty 1");
+            require_near(hp.p0(), 50.0F, 0.01F, "difficulty 1 P0 = 50");
+
+            hp.sync_official_counter(1);
+            require(hp.lock_count() == 1, "official 1 -> lock_count 1");
+            require(hp.difficulty() == 2, "official 1 -> difficulty 2");
+            require_near(hp.p0(), 100.0F, 0.01F, "difficulty 2 P0 = 100");
+            require(hp.is_locked(), "official advance triggers 45s lock");
+            require_near(hp.lock_remaining_s(), 45.0F, 0.5F, "lock timer 45s");
+
+            hp.sync_official_counter(2);
+            require(hp.difficulty() == 2, "official 2 -> difficulty 2");
+
+            hp.sync_official_counter(3);
+            require(hp.difficulty() == 3, "official 3 -> difficulty 3 (unlit)");
+
+            hp.sync_official_counter(5);
+            require(hp.lock_count() == 5, "official 5 -> lock_count 5");
+            require(hp.is_locked(), "5th counter still locks for 45s");
+            hp.update(false, 45.1F);
+            require(hp.is_exhausted(), "exhausted after 5th lock expires");
+        }
+
+        {
+            // 官方同步不丢边沿：本地锁定期内同步新计数仍生效
+            HitProgress hp;
+            hp.update(true, 0.5F);              // P = 9.0
+            hp.sync_official_counter(1);        // 官方已反制一次（本地可能漏检）
+            require(hp.lock_count() == 1, "sync works even if local missed");
+            require(hp.is_locked(), "sync starts lock");
+            require(hp.progress() == 0.0F, "sync resets P");
+        }
+
         return 0;
     } catch (const std::exception& e) {
         std::println(stderr, "hit_progress_test failed: {}", e.what());

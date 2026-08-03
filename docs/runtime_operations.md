@@ -47,6 +47,7 @@ referee:
 - `match_duration_s` 是断流兜底时长（本地时钟计时）：`game_progress==4` 进入比赛窗口；有实时信号时窗口以裁判 `stage_remain_time` 为权威（技术暂停时裁判停表，本地墙钟不适用），`stage_remain_time==0` 或收到 `==5` 退出；断流（超过 `signal_timeout_s` 无合法消息）时退化为本地 `match_duration_s` 兜底，兜底超时后须收到 `==5` 才允许下一局 re-arm。
 - `signal_timeout_s` 是断流看门狗阈值：超过该秒数未收到合法消息时 overlay 显示 `[STALE]` 告警；引导永不门控，断流只告警、不改变任何执行。
 - 进入比赛窗口时 `HitProgress` 自动 `reset()`（防赛前紫色污染）；`0x020C` 官方反制置位边沿会校核本地锁定次数。
+- 比赛窗口内以**官方反制成功次数**（0x020C 上升沿计数，每局 `match_started` 归零、上限 5）权威同步阶段（难度/P0/锁定），官方边沿不被本地锁定期门控；离线或窗口外退回本地紫色累计（`HitProgress::sync_official_counter`）。
 
 ## Build
 

@@ -115,6 +115,26 @@ void HitProgress::trigger_lock() {
     advance_stage();
 }
 
+void HitProgress::sync_official_counter(const int count) {
+    const int clamped = std::clamp(count, 0, kMaxLocks);
+    const bool advanced = clamped > lock_count_;
+    lock_count_ = clamped;
+    stage_ = std::min(clamped, kMaxLocks - 1);
+    difficulty_ = difficulty_for_stage(stage_);
+    p0_ = difficulty_ == 1 ? 50.0F : 100.0F;
+    if (advanced) {
+        // 官方确认新一次反制成功：重置 P 并进入 45s 锁定（与本地触发一致）。
+        // 官方边沿不被本地锁定期门控，避免漏计。
+        locked_ = true;
+        lock_timer_ = 45.0F;
+        p_ = 0.0F;
+        t_ = 0.0F;
+        n_ = 0;
+        hitting_ = false;
+    }
+    // exhausted_ 不在此设置：第 5 次锁定仍持续 45s，由 update() 在锁定期结束后置位
+}
+
 void HitProgress::advance_stage() {
     stage_ = std::min(lock_count_, kMaxLocks - 1);
     // The first lock (stage 0) runs against the constructor default p0_=50;

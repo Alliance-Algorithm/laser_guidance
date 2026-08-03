@@ -136,6 +136,39 @@ int main() {
             require(w.consume_match_started(), "re-arm after expiry fires edge");
         }
 
+        // ---- 官方反制计数（0x020C 边沿，每局归零，上限 5，不丢边沿）----
+        {
+            RefereeWindow w;
+            require(w.official_counter_count() == 0, "initial official count 0");
+            w.note_official_counter();
+            w.note_official_counter();
+            require(w.official_counter_count() == 2, "edges accumulate");
+            for (int i = 0; i < 6; ++i)
+                w.note_official_counter();
+            require(w.official_counter_count() == 5, "capped at 5 (per-round max locks)");
+        }
+
+        // ---- 每局开局（progress 4）归零官方计数 ----
+        {
+            RefereeWindow w;
+            w.note_official_counter();
+            w.note_official_counter();
+            w.update(4, 300, 4'000'000'000);   // 窗口开启 = 新一局
+            require(w.official_counter_count() == 0, "match start resets official count");
+            w.note_official_counter();
+            w.update(5, 0, 424'000'000'000);    // 首局结束
+            w.update(4, 300, 500'000'000'000);  // 第二局
+            require(w.official_counter_count() == 0, "second round starts fresh");
+        }
+
+        // ---- 窗口外计数不触发（边沿本身由 RefereeLink 判断，这里验证计数独立）----
+        {
+            RefereeWindow w;
+            w.update(1, 0, 1'000'000'000);      // 准备阶段
+            w.note_official_counter();
+            require(w.official_counter_count() == 1, "count tracks edges regardless of phase");
+        }
+
         // ---- RefereeLink enabled=false 空转不抛异常 ----
         {
             rmcs_laser_guidance::RefereeConfig cfg;

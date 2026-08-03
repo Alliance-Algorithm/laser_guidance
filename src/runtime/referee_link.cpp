@@ -83,7 +83,13 @@ void RefereeWindow::update(
         in_window_ = true;
         start_ns_ = now_ns;
         match_started_pending_ = true;
+        official_counter_count_ = 0;
     }
+}
+
+void RefereeWindow::note_official_counter() {
+    if (official_counter_count_ < 5)
+        ++official_counter_count_;
 }
 
 void RefereeWindow::expire_if_over(std::int64_t now_ns) {
@@ -167,8 +173,11 @@ auto RefereeLink::poll() -> void {
             impl_->last_message_time = rmcs_laser_guidance::Clock::now();
         } else if (const auto mark = parse_mark_json(text); mark.has_value()) {
             impl_->mark = *mark;
-            if (mark->opponent_aerial_countered && !impl_->last_countered)
+            if (mark->opponent_aerial_countered && !impl_->last_countered) {
                 impl_->countered_pending = true;
+                // 官方反制次数：不被本地锁定期门控，官方报一次计一次
+                impl_->window.note_official_counter();
+            }
             impl_->last_countered = mark->opponent_aerial_countered;
             impl_->last_message_time = rmcs_laser_guidance::Clock::now();
         } else {
@@ -178,6 +187,10 @@ auto RefereeLink::poll() -> void {
 }
 
 auto RefereeLink::consume_match_started() -> bool { return impl_->window.consume_match_started(); }
+auto RefereeLink::in_window() const -> bool { return impl_->window.in_window(); }
+auto RefereeLink::official_counter_count() const -> int {
+    return impl_->window.official_counter_count();
+}
 auto RefereeLink::consume_countered_edge() -> bool {
     const bool pending = impl_->countered_pending;
     impl_->countered_pending = false;

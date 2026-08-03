@@ -48,6 +48,9 @@ public:
     void reset();
     /// 裁判系统 0x020C 官方反制状态上升沿校核。返回 true 表示本地漏检、补计一次锁定。
     [[nodiscard]] auto note_official_countered() -> bool;
+    /// 用官方反制成功次数（0x020C 边沿计数，每局归零）权威同步阶段：次数
+    /// 增加时进入 45s 锁定并重置 P；比赛窗口内每帧调用，离线/窗口外不用。
+    void sync_official_counter(int count);
 
 private:
     void trigger_lock();
