@@ -9,10 +9,12 @@ hik:
   software_sync: false
   trigger_mode: false
   fixed_framerate: true
+  white_balance_auto: off
   profile_unlit:
     exposure_us: 20000
     gain: 16.9
     framerate: 50.0
+    white_balance_auto: continuous
 v4l2:
   device_path: /dev/v4l/by-id/usb-MACROSILICON_Hagibis_20210623-video-index0
   width: 1920

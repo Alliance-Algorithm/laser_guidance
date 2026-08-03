@@ -111,15 +111,28 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
             read_opt(hik, "white_balance_ratio_green", config.hik.white_balance_ratio_green);
             read_opt(hik, "white_balance_ratio_blue", config.hik.white_balance_ratio_blue);
         }
+        if (hik["white_balance_auto"]) {
+            if (hik["white_balance_auto"].as<std::string>() == "off")
+                config.hik.white_balance_off = true;
+            else if (hik["white_balance_auto"].as<std::string>() == "continuous")
+                config.hik.white_balance_off = false;
+        }
 
         if (const YAML::Node unlit = hik["profile_unlit"]) {
             config.hik.has_unlit_profile = true;
             config.hik.unlit.exposure_us = config.hik.exposure_us;
             config.hik.unlit.gain = config.hik.gain;
             config.hik.unlit.framerate = config.hik.framerate;
+            config.hik.unlit.white_balance_off = config.hik.white_balance_off;
             read_opt(unlit, "exposure_us", config.hik.unlit.exposure_us);
             read_opt(unlit, "gain", config.hik.unlit.gain);
             read_opt(unlit, "framerate", config.hik.unlit.framerate);
+            if (unlit["white_balance_auto"]) {
+                if (unlit["white_balance_auto"].as<std::string>() == "off")
+                    config.hik.unlit.white_balance_off = true;
+                else if (unlit["white_balance_auto"].as<std::string>() == "continuous")
+                    config.hik.unlit.white_balance_off = false;
+            }
             if (unlit["white_balance_ratio_red"] || unlit["white_balance_ratio_green"]
                 || unlit["white_balance_ratio_blue"]) {
                 config.hik.unlit.set_white_balance = true;

@@ -60,9 +60,14 @@ auto apply_hik_runtime_profile(hikcamera::Camera& camera, const HikRuntimeProfil
                 profile.white_balance_ratio_blue);
             !ret)
             return std::unexpected(make_error(ErrorKind::device, ret.error()));
-    } else {
+    } else if (profile.white_balance_off) {
         if (auto ret = camera.parameter<hikcamera::param::white_balance_auto>().set(
                 auto_mode::off);
+            !ret)
+            return std::unexpected(make_error(ErrorKind::device, ret.error()));
+    } else {
+        if (auto ret = camera.parameter<hikcamera::param::white_balance_auto>().set(
+                auto_mode::continuous);
             !ret)
             return std::unexpected(make_error(ErrorKind::device, ret.error()));
     }

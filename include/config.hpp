@@ -178,6 +178,7 @@ struct HikRuntimeProfile {
     float gain = 16.9807F;
     float framerate = 80.0F;
     bool set_white_balance = false;
+    bool white_balance_off = false;
     int white_balance_ratio_red = 1024;
     int white_balance_ratio_green = 1024;
     int white_balance_ratio_blue = 1024;
@@ -198,6 +199,7 @@ struct HikCameraConfig {
     bool has_unlit_profile = false;
     HikRuntimeProfile unlit{};
     bool set_white_balance = false;
+    bool white_balance_off = false;
     int white_balance_ratio_red = 1024;
     int white_balance_ratio_green = 1024;
     int white_balance_ratio_blue = 1024;
@@ -209,6 +211,7 @@ struct HikCameraConfig {
             .gain = gain,
             .framerate = framerate,
             .set_white_balance = set_white_balance,
+            .white_balance_off = white_balance_off,
             .white_balance_ratio_red = white_balance_ratio_red,
             .white_balance_ratio_green = white_balance_ratio_green,
             .white_balance_ratio_blue = white_balance_ratio_blue,
