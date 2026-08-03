@@ -30,6 +30,7 @@ runtime:
 - `streaming`、`recording`、`enemy`、`backend`、`ekf` 都通过 `RuntimeCommand` 动态控制。
 - `guidance.depth_source`、`guidance.lidar_*`、`ws30` 已删除。
 - `HitProgress` 使用 RoboMaster 2026 空中机器人反制规则：未照射按 `0.5/s` 衰减，连续照射每 `0.1s` 增加 `0.6*n`，最多 5 次锁定。
+- 第三阶段（难度 3，第 4/5 次锁定前）lit→unlit 相机切换经 `hik.profile_switch_delay_s`（默认 5s）去抖，防止计数抖动来回切参数；`game_progress==4` 每局开启时立即回 lit。
 
 ```yaml
 referee:
