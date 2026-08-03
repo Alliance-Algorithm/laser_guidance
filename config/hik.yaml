@@ -2,9 +2,9 @@ capture_backend: hikcamera
 hik:
   device_id: 'DB0864607'
   timeout_ms: 1000
-  exposure_us: 500
+  exposure_us: 20000
   framerate: 80.0
-  gain: 10
+  gain: 16.9
   invert_image: false
   software_sync: false
   trigger_mode: false
@@ -98,14 +98,14 @@ guidance:
   depth_initial_vel_std: 2000.0
   depth_max_missed_frames: 5
   depth_scale: 1.007
-  voltage_gain_x: 1.25
+  voltage_gain_x: 1.24
   voltage_gain_y: 1.22
   t_x_mm: 85.5
   t_y_mm: 15.0
   t_z_mm: 20.0
-  r_x_deg: -0.750758059984
-  r_y_deg: -0.477254806404
-  r_z_deg: -0.277933218604
+  r_x_deg: -0.696762022014
+  r_y_deg: -0.483095395072
+  r_z_deg: -0.324690055497
   mirror_separation_mm: 15.0
   max_optical_angle_deg: 30.0
   input_voltage_range_v: 5.0
@@ -116,8 +116,8 @@ guidance:
     x_minus_channel: 0
     y_plus_channel: 3
     y_minus_channel: 1
-  angle_offset_x_deg: -0.45
-  angle_offset_y_deg: 0
+  angle_offset_x_deg: -0.30
+  angle_offset_y_deg: 0.02
   scan_mode: single
   scan_width_deg: 0.8
   scan_height_deg: 0.8

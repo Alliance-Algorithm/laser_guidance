@@ -197,6 +197,10 @@ struct HikCameraConfig {
     bool fixed_framerate = true;
     bool has_unlit_profile = false;
     HikRuntimeProfile unlit{};
+    bool set_white_balance = false;
+    int white_balance_ratio_red = 1024;
+    int white_balance_ratio_green = 1024;
+    int white_balance_ratio_blue = 1024;
     HikProfileKind startup_profile_kind = HikProfileKind::lit;
 
     [[nodiscard]] auto lit_profile() const -> HikRuntimeProfile {
@@ -204,10 +208,10 @@ struct HikCameraConfig {
             .exposure_us = exposure_us,
             .gain = gain,
             .framerate = framerate,
-            .set_white_balance = false,
-            .white_balance_ratio_red = 1024,
-            .white_balance_ratio_green = 1024,
-            .white_balance_ratio_blue = 1024,
+            .set_white_balance = set_white_balance,
+            .white_balance_ratio_red = white_balance_ratio_red,
+            .white_balance_ratio_green = white_balance_ratio_green,
+            .white_balance_ratio_blue = white_balance_ratio_blue,
         };
     }
 };
