@@ -42,7 +42,7 @@ int main() {
             require(!w.in_window(), "no signal not in window");
             require(w.signal_available() == false, "no signal flag");
             require(w.match_elapsed_s(1'000'000'000) == -1, "no elapsed before start");
-            w.update(1, 5'000'000'000'000);  // 准备阶段
+            w.update(1, 0, 5'000'000'000'000);  // 准备阶段
             require(!w.in_window(), "prep phase not in window");
             require(w.signal_available(), "signal now available");
         }
@@ -50,11 +50,11 @@ int main() {
         // ---- 4 进入 + 边沿 + 计时 ----
         {
             RefereeWindow w;
-            w.update(1, 1'000'000'000);
-            w.update(2, 2'000'000'000);
-            w.update(3, 3'000'000'000);
+            w.update(1, 0, 1'000'000'000);
+            w.update(2, 0, 2'000'000'000);
+            w.update(3, 0, 3'000'000'000);
             require(!w.consume_match_started(), "no edge before match");
-            w.update(4, 4'000'000'000);
+            w.update(4, 300, 4'000'000'000);
             require(w.in_window(), "match enters window");
             require(w.consume_match_started(), "match_started edge fired");
             require(!w.consume_match_started(), "edge consumed once");
@@ -64,51 +64,62 @@ int main() {
         // ---- 5 退出 + re-arm ----
         {
             RefereeWindow w;
-            w.update(4, 4'000'000'000);
+            w.update(4, 300, 4'000'000'000);
             w.consume_match_started();
-            w.update(5, 424'000'000'000);
+            w.update(5, 0, 424'000'000'000);
             require(!w.in_window(), "settle exits window");
             require(w.match_elapsed_s(425'000'000'000) == -1, "elapsed reset");
-            w.update(1, 430'000'000'000);
-            w.update(4, 500'000'000'000);
+            w.update(1, 0, 430'000'000'000);
+            w.update(4, 300, 500'000'000'000);
             require(w.in_window(), "next round re-arms");
             require(w.consume_match_started(), "re-arm fires edge again");
         }
 
-        // ---- 420s 硬窗口超时 ----
+        // ---- 比赛窗口以裁判 stage_remain_time 为权威（技术暂停时本地墙钟会误判）----
         {
             RefereeWindow w;
-            w.update(4, 4'000'000'000);
+            w.update(4, 300, 4'000'000'000);
             w.consume_match_started();
-            w.update(4, 423'000'000'000);   // 419s
-            require(w.in_window(), "within window at 419s");
-            w.update(4, 424'100'000'000);   // 420.1s
-            require(!w.in_window(), "exits at 420s despite progress still 4");
-            w.update(4, 425'000'000'000);
-            require(!w.in_window(), "timeout is terminal: 4 does not re-open window");
-            require(!w.consume_match_started(), "no edge after timeout");
-            w.update(5, 426'000'000'000);
-            w.update(4, 500'000'000'000);
-            require(w.in_window(), "5 clears timeout, next 4 re-arms");
+            // 暂停冻结：裁判仍报剩余 100s，但本地墙钟已过 420s
+            w.update(4, 100, 430'000'000'000);   // 墙钟 426s > 420
+            require(w.in_window(), "live signal stays in window past 420s wall clock");
+            require(w.match_elapsed_s(430'000'000'000) == 426, "elapsed still tracks local clock");
+            // 裁判剩余时间归零 → 权威关窗
+            w.update(4, 0, 431'000'000'000);
+            require(!w.in_window(), "stage_remain_time==0 exits window");
+            require(!w.consume_match_started(), "no edge on authoritative close");
+            // 关窗是终态的：收到 5 之前 4 不再重开
+            w.update(4, 100, 432'000'000'000);
+            require(!w.in_window(), "authoritative close is terminal until 5");
+            w.update(5, 0, 433'000'000'000);
+            w.update(4, 300, 500'000'000'000);
+            require(w.in_window(), "5 clears, next 4 re-arms");
             require(w.consume_match_started(), "re-arm after 5 fires edge");
         }
 
-        // ---- 断流：窗口判定继续由本地时钟驱动 ----
+        // ---- 断流兜底：update 不再按墙钟关窗，只有 expire_if_over 兜底 ----
         {
             RefereeWindow w;
-            w.update(4, 4'000'000'000);
+            w.update(4, 300, 4'000'000'000);
             w.consume_match_started();
-            w.update(4, 10'000'000'000);    // 6s
-            w.update(4, 200'000'000'000);   // 196s（模拟断流后仅本地时钟推进）
-            require(w.in_window(), "stale signal keeps window");
-            w.update(4, 500'000'000'000);   // 496s > 420
-            require(!w.in_window(), "stale signal still expires at 420s");
+            // 断流后仅本地时钟推进（消息陈旧，stage_remain_time 不再可信）
+            w.update(4, 300, 500'000'000'000);   // 墙钟 496s > 420
+            require(w.in_window(), "update alone never wall-clock expires");
+            // 断流兜底由 expire_if_over 承担
+            w.expire_if_over(501'000'000'000);
+            require(!w.in_window(), "no-signal fallback expires at 420s wall clock");
+            w.expire_if_over(502'000'000'000);
+            require(!w.in_window(), "expired window stays closed");
+            w.update(5, 0, 503'000'000'000);
+            w.update(4, 300, 600'000'000'000);
+            require(w.in_window(), "5 clears timeout, next 4 re-arms");
+            require(w.consume_match_started(), "re-arm after expiry fires edge");
         }
 
         // ---- 断流且无任何消息：仅 expire_if_over 按本地时钟到期 ----
         {
             RefereeWindow w;
-            w.update(4, 4'000'000'000);     // 窗口开启，start=4s
+            w.update(4, 300, 4'000'000'000);     // 窗口开启，start=4s
             w.consume_match_started();
             // 此后不再调用 update()，模拟发布方死亡
             w.expire_if_over(423'000'000'000);   // 419s
@@ -119,8 +130,8 @@ int main() {
             require(!w.consume_match_started(), "no match_started edge on expiry");
             w.expire_if_over(500'000'000'000);
             require(!w.in_window(), "expired window stays closed on repeated calls");
-            w.update(5, 501'000'000'000);   // 5 清除 timed_out_
-            w.update(4, 600'000'000'000);
+            w.update(5, 0, 501'000'000'000);   // 5 清除 timed_out_
+            w.update(4, 300, 600'000'000'000);
             require(w.in_window(), "5 clears timeout, next 4 re-arms after expiry");
             require(w.consume_match_started(), "re-arm after expiry fires edge");
         }

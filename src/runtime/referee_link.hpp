@@ -32,8 +32,9 @@ class RefereeWindow {
 public:
     explicit RefereeWindow(int match_duration_s = 420);
 
-    void update(std::uint8_t game_progress, std::int64_t now_ns);
-    /// 每帧调用：窗口内且本地计时已超过 match_duration_s 时强制退出（断流场景也生效）
+    void update(std::uint8_t game_progress, std::uint16_t stage_remain_time, std::int64_t now_ns);
+    /// 断流兜底（每帧调用，仅无合法消息流时生效）：窗口内且本地计时已超过
+    /// match_duration_s 时强制退出；有实时信号时窗口由裁判 stage_remain_time 判定。
     void expire_if_over(std::int64_t now_ns);
     [[nodiscard]] auto signal_available() const -> bool { return signal_available_; }
     [[nodiscard]] auto in_window() const -> bool { return in_window_; }

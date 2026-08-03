@@ -59,7 +59,8 @@ auto parse_mark_json(std::string_view json) -> std::optional<MarkSample> {
 RefereeWindow::RefereeWindow(int match_duration_s)
     : match_duration_s_(std::max(1, match_duration_s)) {}
 
-void RefereeWindow::update(std::uint8_t game_progress, std::int64_t now_ns) {
+void RefereeWindow::update(
+    std::uint8_t game_progress, std::uint16_t stage_remain_time, std::int64_t now_ns) {
     signal_available_ = true;
     if (game_progress == 5) {
         in_window_ = false;
@@ -69,7 +70,9 @@ void RefereeWindow::update(std::uint8_t game_progress, std::int64_t now_ns) {
         return;
     }
     if (in_window_) {
-        if (now_ns - start_ns_ >= static_cast<std::int64_t>(match_duration_s_) * 1'000'000'000) {
+        // 裁判剩余时间归零 → 局结束。stage_remain_time 在技术暂停时冻结，
+        // 比本地墙钟可靠；本地 match_duration_s 只作断流兜底（expire_if_over）。
+        if (stage_remain_time == 0) {
             in_window_ = false;
             start_ns_ = 0;
             timed_out_ = true;
@@ -139,9 +142,15 @@ RefereeLink::~RefereeLink() = default;
 auto RefereeLink::poll() -> void {
     if (!impl_->config.enabled)
         return;
-    // Stream-death safety: even with no 0x0001 arriving, the local clock still
-    // closes the match window at match_duration_s.
-    impl_->window.expire_if_over(now_ns());
+    // 断流兜底只在无合法消息流时生效（超过 signal_timeout_s）：有实时信号时
+    // 比赛窗口由裁判 stage_remain_time 判定，本地 match_duration_s 兜底会误关
+    // 技术暂停中的比赛窗口。
+    const bool stream_alive = impl_->last_message_time.has_value()
+        && std::chrono::duration<double>(
+               rmcs_laser_guidance::Clock::now() - *impl_->last_message_time).count()
+               <= static_cast<double>(impl_->config.signal_timeout_s);
+    if (!stream_alive)
+        impl_->window.expire_if_over(now_ns());
     if (!impl_->sub) {
         impl_->sub = std::make_unique<zmq::socket_t>(impl_->ctx, zmq::socket_type::sub);
         impl_->sub->connect(impl_->config.zmq_address);
@@ -154,7 +163,7 @@ auto RefereeLink::poll() -> void {
         const std::string_view text(static_cast<const char*>(message.data()), message.size());
         if (const auto state = parse_game_state_json(text); state.has_value()) {
             impl_->game_state = *state;
-            impl_->window.update(state->game_progress, now_ns());
+            impl_->window.update(state->game_progress, state->stage_remain_time, now_ns());
             impl_->last_message_time = rmcs_laser_guidance::Clock::now();
         } else if (const auto mark = parse_mark_json(text); mark.has_value()) {
             impl_->mark = *mark;
