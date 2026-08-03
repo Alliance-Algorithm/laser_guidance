@@ -60,6 +60,13 @@ Hik 子模块默认 `HIKCAMERA_SDK_MODE=AUTO`，优先使用 vendored SDK，缺�
 
 MVS SDK 的 U3V 控制传输不 claim 接口会触发内核 USB reset（dmesg `did not claim interface N before use`，相机反复中断）。`.script/host-runtime-env.sh` 会向 daemon 进程注入 `LD_PRELOAD=build/liblibusb_claim_shim.so`（`src/io/libusb_claim_shim.cpp`）自动补 claim；手动裸跑 `./build/tool_competition` 时不注入。
 
+真机验证结论（2026-08-04，MV-CS050-10UC / MV-CS200-10UC）：
+
+- 每次 MVS SDK open 必触发一次内核 reset（10/10 轮压力测试确定触发），SDK 自愈、功能无损；两台相机、SDK 4.6.x/4.8.x 行为一致。
+- dmesg 时序为 `reset` → `LPM disabled` → `did not claim`：reset 会清空 usbfs 的 claim 状态，`did not claim` 是 reset 的**症状**而非原因；纯 open/close 设备 fd 不触发任何事件。
+- 现场反复 reset 均锚定在应用 open 时刻（daemon 重启 / 雷达驱动启动 / MVS 示例），无运行中自发 reset 证据；比赛单次启动只 reset 一次，后续稳定。
+- 因此该现象按 SDK 固有行为接受，无需修复；shim 的价值是消除正常运行期的未 claim 告警。
+
 ## Operational Notes
 
 - `ControlLoop` 负责 capture、perception、guidance、overlay、outputs 和 snapshot。
