@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -23,7 +24,7 @@ struct Options {
     int countdown_s = 5;     // progress 3
     int match_s = 420;       // progress 4
     int settle_s = 10;       // progress 5
-    int counter_at_s = 60;   // 比赛开始后第几秒触发 0x020C 反制
+    std::vector<int> counter_at_s{60};   // 比赛开始后第几秒触发 0x020C 反制（逗号分隔多个）
     int counter_duration_s = 45;
     bool loop = false;
     bool show_help = false;
@@ -33,7 +34,23 @@ auto print_help() -> void {
     std::println(
         "usage: tool_referee_sim [--bind tcp://*:5558] [--interval-ms 1000] "
         "[--prep-s 300] [--selfcheck-s 15] [--countdown-s 5] [--match-s 420] "
-        "[--settle-s 10] [--counter-at-s 60] [--counter-duration-s 45] [--loop]");
+        "[--settle-s 10] [--counter-at-s 60,130,200] [--counter-duration-s 5] [--loop]");
+}
+
+auto parse_counter_times(const char* value) -> std::vector<int> {
+    std::vector<int> times;
+    std::string_view view(value);
+    while (!view.empty()) {
+        const auto comma = view.find(',');
+        const auto piece = view.substr(0, comma);
+        times.push_back(std::atoi(std::string(piece).c_str()));
+        if (comma == std::string_view::npos)
+            break;
+        view.remove_prefix(comma + 1);
+    }
+    if (times.empty())
+        times.push_back(60);
+    return times;
 }
 
 auto parse_options(int argc, char** argv) -> Options {
@@ -54,7 +71,7 @@ auto parse_options(int argc, char** argv) -> Options {
         else if (arg == "--countdown-s") opt.countdown_s = std::atoi(need_value(i, "--countdown-s").c_str());
         else if (arg == "--match-s") opt.match_s = std::atoi(need_value(i, "--match-s").c_str());
         else if (arg == "--settle-s") opt.settle_s = std::atoi(need_value(i, "--settle-s").c_str());
-        else if (arg == "--counter-at-s") opt.counter_at_s = std::atoi(need_value(i, "--counter-at-s").c_str());
+        else if (arg == "--counter-at-s") opt.counter_at_s = parse_counter_times(need_value(i, "--counter-at-s").c_str());
         else if (arg == "--counter-duration-s") opt.counter_duration_s = std::atoi(need_value(i, "--counter-duration-s").c_str());
         else if (arg == "--loop") opt.loop = true;
         else if (arg == "--help" || arg == "-h") opt.show_help = true;
@@ -123,8 +140,9 @@ int main(int argc, char** argv) {
                 const int remain = progress == 4 ? opt.match_s - s : duration_s - s;
                 publish(game_state_json(progress, remain));
                 if (progress == 4) {
-                    const bool in_counter =
-                        s >= opt.counter_at_s && s < opt.counter_at_s + opt.counter_duration_s;
+                    const bool in_counter = std::ranges::any_of(
+                        opt.counter_at_s,
+                        [&](const int t) { return s >= t && s < t + opt.counter_duration_s; });
                     publish(mark_json(in_counter, in_counter));
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(opt.interval_ms));
