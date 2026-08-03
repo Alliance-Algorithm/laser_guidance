@@ -198,6 +198,7 @@ struct HikCameraConfig {
     bool fixed_framerate = true;
     bool has_unlit_profile = false;
     HikRuntimeProfile unlit{};
+    float profile_switch_delay_s = 5.0F;
     bool set_white_balance = false;
     bool white_balance_off = false;
     int white_balance_ratio_red = 1024;

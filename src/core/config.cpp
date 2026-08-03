@@ -104,6 +104,7 @@ auto load_config(const std::filesystem::path& config_path) -> Config {
         read_opt(hik, "software_sync", config.hik.software_sync);
         read_opt(hik, "trigger_mode", config.hik.trigger_mode);
         read_opt(hik, "fixed_framerate", config.hik.fixed_framerate);
+        read_opt(hik, "profile_switch_delay_s", config.hik.profile_switch_delay_s);
         if (hik["white_balance_ratio_red"] || hik["white_balance_ratio_green"]
             || hik["white_balance_ratio_blue"]) {
             config.hik.set_white_balance = true;

@@ -96,6 +96,10 @@ private:
     std::atomic<int> active_hik_profile_difficulty_{1};
     std::atomic<bool> profile_switch_pending_{false};
     std::atomic<Clock::time_point> profile_switch_fail_until_{};
+    // Debounce deadline: once local/referee lock count reaches stage 3, wait
+    // profile_switch_delay_s before switching to unlit so a jittery counter
+    // does not flip the camera profile mid-lock.
+    Clock::time_point profile_switch_deadline_{};
     std::jthread profile_switch_thread_{};
     std::optional<CaptureFormat> negotiated_format_{};
     OverlayRenderer overlay_{};

@@ -10,6 +10,8 @@
 
 #include <opencv2/highgui.hpp>
 
+#include "runtime/profile_switch_gate.hpp"
+
 #include "laser_guidance/support.hpp"
 #include "runtime/capture_retry_policy.hpp"
 
@@ -623,7 +625,13 @@ auto ControlLoop::maybe_switch_hik_profile() -> void {
     const int difficulty = hit_progress_.difficulty();
     const bool want_unlit = difficulty >= 3;
     const int target = want_unlit ? 3 : 1;
-    if (target == active_hik_profile_difficulty_.load()) {
+
+    // Debounce the stage-3 edge (jittery referee/local counter must not flip
+    // the camera profile mid-lock); downswing (next-match reset) is immediate.
+    const auto gate = decide_profile_switch(
+        want_unlit, active_hik_profile_difficulty_.load(), Clock::now(),
+        profile_switch_deadline_, config_.hik.profile_switch_delay_s);
+    if (gate != ProfileSwitchGate::proceed) {
         return;
     }
 
