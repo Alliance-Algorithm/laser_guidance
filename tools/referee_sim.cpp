@@ -17,7 +17,7 @@ namespace {
 using namespace std::chrono_literals;
 
 struct Options {
-    std::string bind = "tcp://*:5558";
+    std::string bind = "tcp://*:5561";
     int interval_ms = 1000;
     int prep_s = 300;        // progress 1
     int selfcheck_s = 15;    // progress 2
@@ -32,7 +32,7 @@ struct Options {
 
 auto print_help() -> void {
     std::println(
-        "usage: tool_referee_sim [--bind tcp://*:5558] [--interval-ms 1000] "
+        "usage: tool_referee_sim [--bind tcp://*:5561] [--interval-ms 1000] "
         "[--prep-s 300] [--selfcheck-s 15] [--countdown-s 5] [--match-s 420] "
         "[--settle-s 10] [--counter-at-s 60,130,200] [--counter-duration-s 5] [--loop]");
 }
