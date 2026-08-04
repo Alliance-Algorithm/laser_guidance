@@ -124,3 +124,9 @@ guidance:
   scan_width_deg: 0.8
   scan_height_deg: 0.8
   scan_grid_n: 5
+
+referee:
+  enabled: true
+  zmq_address: "tcp://127.0.0.1:5558"
+  match_duration_s: 420
+  signal_timeout_s: 5
