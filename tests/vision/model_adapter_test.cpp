@@ -7,8 +7,31 @@
 #include "test_utils.hpp"
 #include "vision/model_adapter.hpp"
 #include "vision/model_runtime.hpp"
+#include "vision/model_threshold.hpp"
 
 namespace {
+
+// ---- 类别置信度阈值：红蓝(0/1)调高抑制误报，紫色/无色(2/3)保持低阈值 ----
+auto test_confidence_thresholds() -> bool {
+    using rmcs_laser_guidance::tests::require;
+    using rmcs_laser_guidance::confidence_threshold_for;
+    using rmcs_laser_guidance::kConfidenceThreshold;
+    using rmcs_laser_guidance::kEnemyColorConfidenceThreshold;
+
+    require(kEnemyColorConfidenceThreshold > kConfidenceThreshold,
+        "enemy color threshold must be stricter than the base threshold");
+    require(confidence_threshold_for(0) == kEnemyColorConfidenceThreshold,
+        "class 0 (red) uses raised threshold");
+    require(confidence_threshold_for(1) == kEnemyColorConfidenceThreshold,
+        "class 1 (blue) uses raised threshold");
+    require(confidence_threshold_for(2) == kConfidenceThreshold,
+        "class 2 (purple counter target) keeps base threshold");
+    require(confidence_threshold_for(3) == kConfidenceThreshold,
+        "class 3 (colorless counter target) keeps base threshold");
+    require(confidence_threshold_for(99) == kConfidenceThreshold,
+        "unknown class keeps base threshold");
+    return true;
+}
 
 auto make_frame() -> rmcs_laser_guidance::Frame {
     cv::Mat image = cv::Mat::zeros(100, 100, CV_8UC3);
@@ -36,6 +59,8 @@ auto identity_transform() -> rmcs_laser_guidance::ModelImageTransform {
 int main() {
     try {
         using namespace rmcs_laser_guidance::tests;
+
+        test_confidence_thresholds();
 
         const auto frame = make_frame();
 

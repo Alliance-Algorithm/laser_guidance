@@ -16,11 +16,11 @@
 
 #include "core/frame_format.hpp"
 #include "vision/model_runtime.hpp"
+#include "vision/model_threshold.hpp"
 
 namespace rmcs_laser_guidance {
 namespace {
 
-constexpr float kConfidenceThreshold = 0.25F;
 constexpr float kNmsIouThreshold = 0.45F;
 constexpr float kMaxAspectRatio = 1.5F;
 
@@ -260,7 +260,7 @@ auto decode_raw_output(
             score = score * (*best_class);
             class_id = static_cast<std::int32_t>(std::distance(class_begin, best_class));
         }
-        if (score < kConfidenceThreshold)
+        if (score < confidence_threshold_for(class_id))
             continue;
 
         const float center_x = values[0];
@@ -360,7 +360,7 @@ auto decode_nms_rows(
             return failure_result("YOLO NMS output with 7 columns is not a supported layout");
         }
 
-        if (score < kConfidenceThreshold || x2 <= x1 || y2 <= y1)
+        if (score < confidence_threshold_for(class_id) || x2 <= x1 || y2 <= y1)
             continue;
 
         cv::Rect2f input_bbox{x1, y1, x2 - x1, y2 - y1};
@@ -408,7 +408,8 @@ auto decode_split_nms_outputs(const Frame& frame, const ModelRunResult& run_resu
     detections.reserve(detection_count);
     for (std::size_t index = 0; index < detection_count; ++index) {
         const float score = scores.values[index];
-        if (score < kConfidenceThreshold)
+        const int class_id = static_cast<std::int32_t>(classes.values[index]);
+        if (score < confidence_threshold_for(class_id))
             continue;
 
         const float* box = boxes.values.data() + index * 4;
@@ -420,7 +421,7 @@ auto decode_split_nms_outputs(const Frame& frame, const ModelRunResult& run_resu
         detections.push_back(
             DecodedDetection{
                 .score = score,
-                .class_id = static_cast<std::int32_t>(classes.values[index]),
+                .class_id = class_id,
                 .bbox = *bbox,
             });
     }
