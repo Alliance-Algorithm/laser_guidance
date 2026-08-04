@@ -24,6 +24,8 @@ struct ZmqSender::Impl {
     bool enabled = false;
 };
 
+// ⚠️ 禁止启用（ZmqConfig 注释）：端口与 SDR bridge(:5555)/radar_bridge(:5556)
+// 冲突，且 egui 端未消费该数据。请勿将 yaml 的 zmq.enabled 设为 true。
 ZmqSender::ZmqSender(ZmqConfig config)
     : impl_(std::make_unique<Impl>()) {
     if (!config.enabled)

@@ -78,6 +78,11 @@ struct UdpConfig {
     int port = 5002;
 };
 
+// ⚠️ 禁止启用本通道（勿把 yaml 的 zmq.enabled 设为 true）：
+// - 默认端口 5555 与 SDR bridge 的 ZMQ PUB 冲突（同端口第二个 bind 必失败）；
+//   docs 约定的 5556 已被 radar_bridge 占用。
+// - egui 端 LaserMsg 分支未消费该数据（空实现），发了也没人读。
+// 如需对外广播激光检测结果，先定独立端口（如 5561）并同步 radar-egui。
 struct ZmqConfig {
     bool enabled = false;
     std::string host = "127.0.0.1";
