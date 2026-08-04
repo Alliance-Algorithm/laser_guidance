@@ -66,7 +66,7 @@ int main() {
             "default guidance voltage_limit_v mismatch");
         require(default_config.referee.enabled, "default referee enabled mismatch");
         require(
-            default_config.referee.zmq_address == "tcp://127.0.0.1:5558",
+            default_config.referee.zmq_address == "tcp://127.0.0.1:5561",
             "default referee zmq_address mismatch");
         require(
             default_config.referee.match_duration_s == 420,

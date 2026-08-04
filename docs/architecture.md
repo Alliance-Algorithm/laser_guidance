@@ -103,7 +103,7 @@ Hik backend 继续被视为主仓库内置能力：`CaptureDevice` 直接依赖 
 
 ## 裁判信号层
 
-`RefereeLink` 通过 ZMQ SUB 订阅裁判系统转发（radar-egui，默认 `tcp://127.0.0.1:5558`），主循环每帧非阻塞轮询并按 `cmd_id` 解析 JSON：
+`RefereeLink` 通过 ZMQ SUB 订阅裁判系统转发（radar-egui，默认 `tcp://127.0.0.1:5561`（egui PUB 5557/5558/5561 三端口广播）），主循环每帧非阻塞轮询并按 `cmd_id` 解析 JSON：
 
 - `0x0001` game_status：`game_type` / `game_progress` / `stage_remain_time` → 喂入比赛窗口状态机；
 - `0x020C` radar_mark_data：`opponent_aerial_targeted` / `opponent_aerial_countered` → 存最新值并产生反制边沿；

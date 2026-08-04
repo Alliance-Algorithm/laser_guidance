@@ -35,7 +35,7 @@ runtime:
 ```yaml
 referee:
   enabled: true
-  zmq_address: "tcp://127.0.0.1:5558"
+  zmq_address: "tcp://127.0.0.1:5561"
   match_duration_s: 420
   signal_timeout_s: 5
 ```
